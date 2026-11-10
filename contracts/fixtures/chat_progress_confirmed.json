@@ -1,0 +1,63 @@
+{
+  "reply": {
+    "kind": "progress_confirmed",
+    "text_ar": "تم تسجيل أنشطة اليوم 30 كمكتملة. نسبة الإنجاز الآن 38٪.",
+    "text_en": null,
+    "status": null,
+    "band": null,
+    "sources": [],
+    "scenario": null,
+    "feedback": null,
+    "proposal": null,
+    "progress": {
+      "percent": 38,
+      "done": 3,
+      "total": 8,
+      "completed_ids": [
+        "SA-D1-read-company",
+        "SA-D30-quiz",
+        "SA-D30-s01"
+      ]
+    },
+    "plan": null,
+    "quiz": null,
+    "reason": null,
+    "label_ar": null
+  },
+  "state": {
+    "active_scenario": null
+  },
+  "mode": "offline",
+  "trace": {
+    "request_id": "930415263748",
+    "mode": "offline",
+    "model": null,
+    "guards": {
+      "employment": null,
+      "contact": null
+    },
+    "router": {
+      "tool": "propose_progress",
+      "confidence": 0.7,
+      "reason": "confirm turn"
+    },
+    "agent": {
+      "used": false,
+      "tool": null,
+      "args": null,
+      "latency_ms": null,
+      "cached": false,
+      "fallback_reason": null
+    },
+    "retrieval": null,
+    "answer": null,
+    "feedback": null,
+    "injection_suspected": false,
+    "steps": [
+      "confirm:Day 30",
+      "validate:2",
+      "render"
+    ],
+    "latency_ms": 4
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "reply": {
+    "kind": "scenario_feedback",
+    "text_ar": "هذه ملاحظات تدريبية على اختيارك.",
+    "text_en": null,
+    "status": null,
+    "band": null,
+    "sources": [],
+    "scenario": null,
+    "feedback": {
+      "scenario_id": "S02",
+      "option_id": "S02-O1",
+      "strengths_ar": [
+        "اخترت ألا تخترع مواصفات، وأن تتحقق من مصدر موثوق ثم تعود للزبون. هذا يعكس قيمة النزاهة."
+      ],
+      "improve_ar": null,
+      "value": "Integrity",
+      "value_ar": "النزاهة",
+      "tip_ar": null,
+      "suggested_good_response_ar": "لا تخترع مواصفات؛ تحقق من مصدر موثوق أو اسأل المسؤول.",
+      "mode": "offline",
+      "label_ar": "ملاحظات تدريبية، ليست تقييماً"
+    },
+    "proposal": null,
+    "progress": null,
+    "plan": null,
+    "quiz": null,
+    "reason": null,
+    "label_ar": "ملاحظات تدريبية، ليست تقييماً"
+  },
+  "state": {
+    "active_scenario": "S02"
+  },
+  "mode": "offline",
+  "trace": {
+    "request_id": "607182930415",
+    "mode": "offline",
+    "model": null,
+    "guards": {
+      "employment": null,
+      "contact": null
+    },
+    "router": {
+      "tool": "give_scenario_feedback",
+      "confidence": 0.7,
+      "reason": "option S02-O1"
+    },
+    "agent": {
+      "used": false,
+      "tool": null,
+      "args": null,
+      "latency_ms": null,
+      "cached": false,
+      "fallback_reason": null
+    },
+    "retrieval": null,
+    "answer": null,
+    "feedback": {
+      "llm_used": false,
+      "verifier": null,
+      "tip_dropped": false,
+      "latency_ms": null,
+      "cached": false
+    },
+    "injection_suspected": false,
+    "steps": [
+      "guards:none",
+      "state:active_scenario",
+      "option:S02-O1",
+      "render"
+    ],
+    "latency_ms": 6
+  }
+}

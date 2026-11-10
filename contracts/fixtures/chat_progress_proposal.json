@@ -1,0 +1,72 @@
+{
+  "reply": {
+    "kind": "progress_proposal",
+    "text_ar": "هل تريد تسجيل أنشطة «اليوم 30» كمكتملة؟",
+    "text_en": null,
+    "status": null,
+    "band": null,
+    "sources": [],
+    "scenario": null,
+    "feedback": null,
+    "proposal": {
+      "milestone": "Day 30",
+      "activity_ids": [
+        "SA-D30-quiz",
+        "SA-D30-s01"
+      ],
+      "titles_ar": [
+        "اختبار قصير",
+        "موقف عملي: زبون يسأل عن ثلاجة"
+      ],
+      "current_percent": 12,
+      "proposed_percent": 38
+    },
+    "progress": {
+      "percent": 12,
+      "done": 1,
+      "total": 8,
+      "completed_ids": null
+    },
+    "plan": null,
+    "quiz": null,
+    "reason": null,
+    "label_ar": null
+  },
+  "state": {
+    "active_scenario": null
+  },
+  "mode": "offline",
+  "trace": {
+    "request_id": "829304152637",
+    "mode": "offline",
+    "model": null,
+    "guards": {
+      "employment": null,
+      "contact": null
+    },
+    "router": {
+      "tool": "propose_progress",
+      "confidence": 0.7,
+      "reason": "completion + milestone Day 30"
+    },
+    "agent": {
+      "used": false,
+      "tool": null,
+      "args": null,
+      "latency_ms": null,
+      "cached": false,
+      "fallback_reason": null
+    },
+    "retrieval": null,
+    "answer": null,
+    "feedback": null,
+    "injection_suspected": false,
+    "steps": [
+      "guards:none",
+      "router:propose_progress",
+      "milestone:Day 30",
+      "render"
+    ],
+    "latency_ms": 5
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "status": "ok",
+  "version": "1.0.0",
+  "build": "a710663",
+  "mode": "llm",
+  "llm_available": true,
+  "model": "deepseek/deepseek-v4.1-flash",
+  "llm_probe": {
+    "ok": true,
+    "latency_ms": 530,
+    "checked_at": "2026-11-13T19:02:11Z",
+    "reason": null
+  },
+  "encoder": {
+    "model_id": "intfloat/multilingual-e5-small",
+    "dim": 384,
+    "sha_ok": true
+  },
+  "kb": {
+    "rows": 19,
+    "version": "9e52d1f8b3ca",
+    "edited": 2
+  },
+  "budget": {
+    "spent_usd": 0.41,
+    "cap_usd": 3.0
+  },
+  "cache": {
+    "hits": 112,
+    "calls": 37,
+    "failures": 0
+  },
+  "store": "supabase",
+  "store_probe": {
+    "ok": true,
+    "latency_ms": 184,
+    "checked_at": "2026-11-13T19:02:10Z",
+    "reason": null
+  },
+  "uptime_s": 312
+}

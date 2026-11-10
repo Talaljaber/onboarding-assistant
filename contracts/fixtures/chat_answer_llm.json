@@ -1,0 +1,158 @@
+{
+  "reply": {
+    "kind": "answer",
+    "text_ar": "يُقدَّم طلب الإجازة عبر نظام الموارد البشرية، ويستلزم موافقة المدير المباشر قبل بدء الإجازة.",
+    "text_en": null,
+    "status": "answered",
+    "band": null,
+    "sources": [
+      {
+        "id": "K16",
+        "topic": "Policy",
+        "answer_ar": "يُقدَّم طلب الإجازة عبر نظام الموارد البشرية ويستلزم موافقة المدير المباشر قبل بدء الإجازة.",
+        "source_document": "General Policies",
+        "source_page": 2,
+        "edited": false,
+        "status": "official"
+      }
+    ],
+    "scenario": null,
+    "feedback": null,
+    "proposal": null,
+    "progress": null,
+    "plan": null,
+    "quiz": null,
+    "reason": null,
+    "label_ar": null
+  },
+  "state": {
+    "active_scenario": null
+  },
+  "mode": "llm",
+  "trace": {
+    "request_id": "7f3a9c2e41b0",
+    "mode": "llm",
+    "model": "deepseek/deepseek-v4.1-flash",
+    "guards": {
+      "employment": null,
+      "contact": null
+    },
+    "router": {
+      "tool": "answer_from_rows",
+      "confidence": 0.7,
+      "reason": "default: knowledge question"
+    },
+    "agent": {
+      "used": true,
+      "tool": "answer_from_rows",
+      "args": {
+        "question": "كيف أقدم طلب إجازة؟",
+        "list_topic": null
+      },
+      "latency_ms": 412,
+      "cached": false,
+      "fallback_reason": null
+    },
+    "retrieval": {
+      "query": "كيف أقدم طلب إجازة؟",
+      "hits": [
+        {
+          "id": "K16",
+          "topic": "Policy",
+          "dense": 0.901,
+          "bm25": 3.42,
+          "rrf": 0.0328,
+          "rank": 1
+        },
+        {
+          "id": "K12",
+          "topic": "Onboarding",
+          "dense": 0.87,
+          "bm25": 2.32,
+          "rrf": 0.0323,
+          "rank": 2
+        },
+        {
+          "id": "K15",
+          "topic": "Policy",
+          "dense": 0.839,
+          "bm25": 1.22,
+          "rrf": 0.0317,
+          "rank": 3
+        },
+        {
+          "id": "K10",
+          "topic": "Onboarding",
+          "dense": 0.808,
+          "bm25": 0.12,
+          "rrf": 0.0156,
+          "rank": 4
+        },
+        {
+          "id": "K14",
+          "topic": "Onboarding",
+          "dense": 0.777,
+          "bm25": 0.0,
+          "rrf": 0.0154,
+          "rank": 5
+        },
+        {
+          "id": "K11",
+          "topic": "Onboarding",
+          "dense": 0.746,
+          "bm25": 0.0,
+          "rrf": 0.0152,
+          "rank": 6
+        },
+        {
+          "id": "K17",
+          "topic": "Policy",
+          "dense": 0.715,
+          "bm25": 0.0,
+          "rrf": 0.0149,
+          "rank": 7
+        },
+        {
+          "id": "K13",
+          "topic": "Onboarding",
+          "dense": 0.684,
+          "bm25": 0.0,
+          "rrf": 0.0147,
+          "rank": 8
+        }
+      ],
+      "margin": {
+        "best_row": "K16",
+        "best_row_cos": 0.901,
+        "best_oos": "OOS07",
+        "best_oos_cos": 0.812,
+        "margin": 0.089
+      },
+      "list_question": false,
+      "topic_expanded": null,
+      "kb_version": "3c9e5a1f0b7d"
+    },
+    "answer": {
+      "llm_status": "answered",
+      "verifier": {
+        "ok": true,
+        "reason": null
+      },
+      "escalated": false,
+      "band": null,
+      "latency_ms": 688,
+      "cached": false
+    },
+    "feedback": null,
+    "injection_suspected": false,
+    "steps": [
+      "guards:none",
+      "agent:answer_from_rows",
+      "retrieve:18",
+      "llm:answer",
+      "verify:ok",
+      "render"
+    ],
+    "latency_ms": 1140
+  }
+}

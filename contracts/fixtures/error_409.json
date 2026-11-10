@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "kb_conflict",
+    "message": "row id already exists: K19",
+    "request_id": "7f3a9c2e41b0",
+    "field": "id"
+  }
+}

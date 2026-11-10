@@ -1,0 +1,41 @@
+{
+  "status": "ok",
+  "version": "1.0.0",
+  "build": "a710663",
+  "mode": "offline",
+  "llm_available": false,
+  "model": null,
+  "llm_probe": {
+    "ok": false,
+    "latency_ms": null,
+    "checked_at": "2026-11-13T19:02:11Z",
+    "reason": "offline_forced"
+  },
+  "encoder": {
+    "model_id": "intfloat/multilingual-e5-small",
+    "dim": 384,
+    "sha_ok": true
+  },
+  "kb": {
+    "rows": 18,
+    "version": "3c9e5a1f0b7d",
+    "edited": 0
+  },
+  "budget": {
+    "spent_usd": 0.0,
+    "cap_usd": 3.0
+  },
+  "cache": {
+    "hits": 0,
+    "calls": 0,
+    "failures": 0
+  },
+  "store": "local",
+  "store_probe": {
+    "ok": false,
+    "latency_ms": null,
+    "checked_at": "2026-11-13T19:02:09Z",
+    "reason": "store_local_forced"
+  },
+  "uptime_s": 12
+}

@@ -1,0 +1,220 @@
+{
+  "rows": [
+    {
+      "id": "K01",
+      "topic": "Company",
+      "answer_ar": "تأسست مجموعة الدادا عام 1991.",
+      "keyword_en": "1991",
+      "source_document": "Company Profile 2026",
+      "source_page": 3,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K02",
+      "topic": "Company",
+      "answer_ar": "تمتلك المجموعة 17 معرضاً في عمان والسلط وإربد والزرقاء والعقبة.",
+      "keyword_en": "17 showrooms",
+      "source_document": "Company Profile 2026",
+      "source_page": 4,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K03",
+      "topic": "Company",
+      "answer_ar": "رؤية المجموعة: نثري الحياة اليومية بمزيد من الراحة.",
+      "keyword_en": "Vision",
+      "source_document": "Company Profile 2026",
+      "source_page": 5,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K04",
+      "topic": "Company",
+      "answer_ar": "رسالة المجموعة: نقدم قيمة لعملائنا من خلال منتجات عالية الجودة وعلامات تجارية موثوقة وحلول تلبي احتياجاتهم وتثري تجربتهم.",
+      "keyword_en": "Mission",
+      "source_document": "Company Profile 2026",
+      "source_page": 5,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K05",
+      "topic": "Values",
+      "answer_ar": "النزاهة من القيم المشتركة للمجموعة.",
+      "keyword_en": "Integrity",
+      "source_document": "Company Profile 2026",
+      "source_page": 6,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K06",
+      "topic": "Values",
+      "answer_ar": "فريق واحد من القيم المشتركة للمجموعة.",
+      "keyword_en": "One Team",
+      "source_document": "Company Profile 2026",
+      "source_page": 6,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K07",
+      "topic": "Values",
+      "answer_ar": "المثابرة من القيم المشتركة للمجموعة.",
+      "keyword_en": "Perseverance",
+      "source_document": "Company Profile 2026",
+      "source_page": 6,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K08",
+      "topic": "Values",
+      "answer_ar": "محورية العميل من القيم المشتركة للمجموعة.",
+      "keyword_en": "Customer Centricity",
+      "source_document": "Company Profile 2026",
+      "source_page": 6,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K09",
+      "topic": "Values",
+      "answer_ar": "المسؤولية الاجتماعية من القيم المشتركة للمجموعة.",
+      "keyword_en": "Social Responsibility",
+      "source_document": "Company Profile 2026",
+      "source_page": 6,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K10",
+      "topic": "Onboarding",
+      "answer_ar": "دائرة الموارد البشرية مسؤولة عن تطبيق سياسة انضمام وتهيئة الموظفين الجدد.",
+      "keyword_en": "HR owns onboarding",
+      "source_document": "On-Boarding Policy",
+      "source_page": 3,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K11",
+      "topic": "Onboarding",
+      "answer_ar": "قبل مباشرة العمل يتم تجهيز احتياجات الموظف وفق طبيعة عمله، مثل البريد الإلكتروني والأجهزة والصلاحيات اللازمة.",
+      "keyword_en": "Before start preparation",
+      "source_document": "On-Boarding Policy",
+      "source_page": 3,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K12",
+      "topic": "Onboarding",
+      "answer_ar": "في اليوم الأول يتم تعريف الموظف بالوصف الوظيفي وإجراءات الحضور والإجازات والسلوكيات العامة.",
+      "keyword_en": "Day 1 orientation",
+      "source_document": "On-Boarding Policy",
+      "source_page": 3,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K13",
+      "topic": "Onboarding",
+      "answer_ar": "تُرسل رسالة ترحيب خلال الأيام الثلاثة الأولى للموظفين الذين لديهم بريد إلكتروني للعمل.",
+      "keyword_en": "Welcome email (first 3 days)",
+      "source_document": "On-Boarding Policy",
+      "source_page": 4,
+      "edited": true,
+      "status": "edited",
+      "offline_edit": false
+    },
+    {
+      "id": "K14",
+      "topic": "Onboarding",
+      "answer_ar": "فترة التجربة 90 يوماً، مع تقييمات في نهاية الشهر الأول والثاني للوظائف الإدارية والإشرافية وغير التشغيلية.",
+      "keyword_en": "Probation",
+      "source_document": "On-Boarding Policy",
+      "source_page": 4,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K15",
+      "topic": "Policy",
+      "answer_ar": "يُطلب من الموظفين تسجيل الحضور والانصراف وفق الوسيلة المعتمدة لدى الشركة.",
+      "keyword_en": "Attendance",
+      "source_document": "General Policies",
+      "source_page": 2,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K16",
+      "topic": "Policy",
+      "answer_ar": "يُقدَّم طلب الإجازة عبر نظام الموارد البشرية ويستلزم موافقة المدير المباشر قبل بدء الإجازة.",
+      "keyword_en": "Leave approval",
+      "source_document": "General Policies",
+      "source_page": 2,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K17",
+      "topic": "Policy",
+      "answer_ar": "يجب المحافظة على سرية معلومات الشركة وعدم إفشائها دون تصريح.",
+      "keyword_en": "Confidentiality",
+      "source_document": "General Policies",
+      "source_page": 1,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K18",
+      "topic": "Company",
+      "answer_ar": "من العلامات التجارية المذكورة في العرض التعريفي: Beko وAriston وKärcher وDe’Longhi وElba وBraun وSona وSkyworth وAtlas وNara.",
+      "keyword_en": "Brands",
+      "source_document": "Company Profile 2026",
+      "source_page": 2,
+      "edited": false,
+      "status": "official",
+      "offline_edit": false
+    },
+    {
+      "id": "K19",
+      "topic": "Policy",
+      "answer_ar": "يلتزم الموظف بارتداء الزي الرسمي المعتمد أثناء العمل في المعرض.",
+      "keyword_en": "Dress code",
+      "source_document": "General Policies",
+      "source_page": 3,
+      "edited": true,
+      "status": "added",
+      "offline_edit": false
+    }
+  ],
+  "version": "3c9e5a1f0b7d",
+  "edited_ids": [
+    "K13",
+    "K19"
+  ],
+  "official_sha256": "5122ef4691230fd629bc35372ba72cd53a4fb199fd30ef65eeed159e130a2df9",
+  "store": "local"
+}

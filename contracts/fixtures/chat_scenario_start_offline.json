@@ -1,0 +1,76 @@
+{
+  "reply": {
+    "kind": "scenario_start",
+    "text_ar": "لنتدرّب على هذا الموقف. اختر رداً أو اكتب كيف سترد على الزبون.",
+    "text_en": null,
+    "status": null,
+    "band": null,
+    "sources": [],
+    "scenario": {
+      "id": "S02",
+      "department": "Sales",
+      "company_value": "Integrity",
+      "value_ar": "النزاهة",
+      "scenario_ar": "يسأل الزبون عن ميزة غير مؤكدة في منتج.",
+      "data_status": "SYNTHETIC_TRAINING_EXAMPLE",
+      "options": [
+        {
+          "id": "S02-O1",
+          "text_ar": "أقول له إنني لست متأكداً، وسأتحقق من الكتالوج أو أسأل المسؤول ثم أعود إليه."
+        },
+        {
+          "id": "S02-O2",
+          "text_ar": "أؤكد له أن الميزة موجودة حتى لا يذهب إلى منافس."
+        },
+        {
+          "id": "S02-O3",
+          "text_ar": "أخبره أن هذا ليس من اختصاصي."
+        }
+      ]
+    },
+    "feedback": null,
+    "proposal": null,
+    "progress": null,
+    "plan": null,
+    "quiz": null,
+    "reason": null,
+    "label_ar": "تدريب عملي، ليس تقييماً"
+  },
+  "state": {
+    "active_scenario": "S02"
+  },
+  "mode": "offline",
+  "trace": {
+    "request_id": "3d4e5f607182",
+    "mode": "offline",
+    "model": null,
+    "guards": {
+      "employment": null,
+      "contact": null
+    },
+    "router": {
+      "tool": "start_scenario",
+      "confidence": 0.7,
+      "reason": "scenario match S02 (0.86)"
+    },
+    "agent": {
+      "used": false,
+      "tool": null,
+      "args": null,
+      "latency_ms": null,
+      "cached": false,
+      "fallback_reason": null
+    },
+    "retrieval": null,
+    "answer": null,
+    "feedback": null,
+    "injection_suspected": false,
+    "steps": [
+      "guards:none",
+      "router:start_scenario",
+      "scenario:S02",
+      "render"
+    ],
+    "latency_ms": 22
+  }
+}

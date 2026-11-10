@@ -1,0 +1,15 @@
+{
+  "role": "Sales",
+  "state": {
+    "active_scenario": "S02"
+  },
+  "progress": {
+    "completed_ids": []
+  },
+  "last_user_message": null,
+  "confirm": null,
+  "option_id": "S02-O1",
+  "force_offline": true,
+  "profile_id": null,
+  "message": ""
+}

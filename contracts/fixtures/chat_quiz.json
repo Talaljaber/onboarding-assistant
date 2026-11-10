@@ -1,0 +1,105 @@
+{
+  "reply": {
+    "kind": "quiz",
+    "text_ar": "إليك اختباراً تدريبياً قصيراً من خمسة أسئلة.",
+    "text_en": null,
+    "status": null,
+    "band": null,
+    "sources": [],
+    "scenario": null,
+    "feedback": null,
+    "proposal": null,
+    "progress": null,
+    "plan": null,
+    "quiz": [
+      {
+        "id": "Q01",
+        "question_ar": "أي قيمة تعني التعاون بين الزملاء؟",
+        "options": {
+          "A": "فريق واحد",
+          "B": "المثابرة",
+          "C": "محورية العميل"
+        },
+        "source_knowledge_id": "K06"
+      },
+      {
+        "id": "Q02",
+        "question_ar": "كم مدة فترة التجربة؟",
+        "options": {
+          "A": "30 يوماً",
+          "B": "60 يوماً",
+          "C": "90 يوماً"
+        },
+        "source_knowledge_id": "K14"
+      },
+      {
+        "id": "Q03",
+        "question_ar": "من المسؤول عن تنفيذ سياسة تهيئة الموظفين؟",
+        "options": {
+          "A": "الموارد البشرية",
+          "B": "العميل",
+          "C": "المورد"
+        },
+        "source_knowledge_id": "K10"
+      },
+      {
+        "id": "Q04",
+        "question_ar": "ما الإجراء المناسب عند عدم التأكد من سياسة داخلية؟",
+        "options": {
+          "A": "اختراع إجابة",
+          "B": "الرجوع للمصدر أو الموارد البشرية",
+          "C": "تجاهل السؤال"
+        },
+        "source_knowledge_id": "K10"
+      },
+      {
+        "id": "Q05",
+        "question_ar": "متى تُرسل رسالة الترحيب لمن لديه بريد عمل؟",
+        "options": {
+          "A": "خلال أول ثلاثة أيام",
+          "B": "بعد 90 يوماً",
+          "C": "قبل سنة"
+        },
+        "source_knowledge_id": "K13"
+      }
+    ],
+    "reason": null,
+    "label_ar": "اختبار تدريبي"
+  },
+  "state": {
+    "active_scenario": null
+  },
+  "mode": "offline",
+  "trace": {
+    "request_id": "15263748596a",
+    "mode": "offline",
+    "model": null,
+    "guards": {
+      "employment": null,
+      "contact": null
+    },
+    "router": {
+      "tool": "start_quiz",
+      "confidence": 0.7,
+      "reason": "quiz keyword"
+    },
+    "agent": {
+      "used": false,
+      "tool": null,
+      "args": null,
+      "latency_ms": null,
+      "cached": false,
+      "fallback_reason": null
+    },
+    "retrieval": null,
+    "answer": null,
+    "feedback": null,
+    "injection_suspected": false,
+    "steps": [
+      "guards:none",
+      "router:start_quiz",
+      "render"
+    ],
+    "latency_ms": 3
+  }
+}

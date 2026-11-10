@@ -1,0 +1,16 @@
+{
+  "row": {
+    "id": "K13",
+    "topic": "Onboarding",
+    "answer_ar": "تُرسل رسالة ترحيب خلال الأيام الثلاثة الأولى للموظفين الذين لديهم بريد إلكتروني للعمل.",
+    "keyword_en": "Welcome email (first 3 days)",
+    "source_document": "On-Boarding Policy",
+    "source_page": 4,
+    "edited": true,
+    "status": "edited",
+    "offline_edit": false
+  },
+  "version": "8d41c0e7a2b9",
+  "reindex_ms": 210,
+  "oos_disabled": []
+}

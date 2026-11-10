@@ -1,0 +1,59 @@
+{
+  "feedback": {
+    "scenario_id": "S02",
+    "option_id": null,
+    "strengths_ar": [
+      "لم تخترع مواصفات",
+      "وعدت بالتحقق من مصدر موثوق"
+    ],
+    "improve_ar": "أخبر الزبون متى ستعود إليه بالمعلومة المؤكدة.",
+    "value": "Integrity",
+    "value_ar": "النزاهة",
+    "tip_ar": "قل للزبون إنك ستتأكد من الكتالوج أو المسؤول وتعود إليه.",
+    "suggested_good_response_ar": "لا تخترع مواصفات؛ تحقق من مصدر موثوق أو اسأل المسؤول.",
+    "mode": "llm",
+    "label_ar": "ملاحظات تدريبية، ليست تقييماً"
+  },
+  "mode": "llm",
+  "trace": {
+    "request_id": "2637485960ab",
+    "mode": "llm",
+    "model": "deepseek/deepseek-v4.1-flash",
+    "guards": {
+      "employment": null,
+      "contact": null
+    },
+    "router": {
+      "tool": "give_scenario_feedback",
+      "confidence": 0.7,
+      "reason": "scenario feedback endpoint"
+    },
+    "agent": {
+      "used": false,
+      "tool": null,
+      "args": null,
+      "latency_ms": null,
+      "cached": false,
+      "fallback_reason": null
+    },
+    "retrieval": null,
+    "answer": null,
+    "feedback": {
+      "llm_used": true,
+      "verifier": {
+        "ok": true,
+        "reason": null
+      },
+      "tip_dropped": false,
+      "latency_ms": 840,
+      "cached": false
+    },
+    "injection_suspected": false,
+    "steps": [
+      "llm:feedback",
+      "verify:ok",
+      "render"
+    ],
+    "latency_ms": 910
+  }
+}

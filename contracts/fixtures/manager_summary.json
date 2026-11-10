@@ -1,0 +1,21 @@
+{
+  "profiles": [
+    {
+      "alias": "متدرب ١",
+      "role": "Sales",
+      "percent": 38,
+      "activities_done": 3,
+      "scenarios_practised": 2,
+      "quiz_practised": 5
+    },
+    {
+      "alias": "متدرب ٢",
+      "role": "Delivery",
+      "percent": 12,
+      "activities_done": 1,
+      "scenarios_practised": 1,
+      "quiz_practised": 0
+    }
+  ],
+  "label_ar": "ملفات تجريبية، ليست موظفين حقيقيين — ليست تقييماً"
+}
