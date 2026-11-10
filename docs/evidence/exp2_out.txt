@@ -1,0 +1,59 @@
+
+=== anchors + rows, out-of-scope anchors=off ===
+  DEV floor 0.82: answered-correct 28/33  refused-correct 1/15  total 29/48
+  DEV floor 0.84: answered-correct 27/33  refused-correct 5/15  total 32/48
+  DEV floor 0.85: answered-correct 27/33  refused-correct 5/15  total 32/48
+  DEV floor 0.86: answered-correct 27/33  refused-correct 7/15  total 34/48
+  DEV floor 0.87: answered-correct 25/33  refused-correct 9/15  total 34/48
+  DEV floor 0.88: answered-correct 25/33  refused-correct 12/15  total 37/48
+  DEV floor 0.89: answered-correct 20/33  refused-correct 14/15  total 34/48
+  DEV floor 0.90: answered-correct 19/33  refused-correct 14/15  total 33/48
+
+=== anchors + rows, out-of-scope anchors=on ===
+  DEV floor 0.82: answered-correct 28/33  refused-correct 13/15  total 41/48
+  DEV floor 0.84: answered-correct 27/33  refused-correct 13/15  total 40/48
+  DEV floor 0.85: answered-correct 27/33  refused-correct 13/15  total 40/48
+  DEV floor 0.86: answered-correct 27/33  refused-correct 13/15  total 40/48
+  DEV floor 0.87: answered-correct 25/33  refused-correct 14/15  total 39/48
+  DEV floor 0.88: answered-correct 25/33  refused-correct 14/15  total 39/48
+  DEV floor 0.89: answered-correct 20/33  refused-correct 14/15  total 34/48
+  DEV floor 0.90: answered-correct 19/33  refused-correct 14/15  total 33/48
+
+chosen on DEV (neg anchors on): floor=0.830
+  DEV: answered-correct 28/33  refused-correct 13/15   errors: ['F02:K18@0.908', 'F04:K08@0.914', 'O01:VALUES@0.937', 'O16:K08@0.879', 'O20:K03@0.871', 'U07:K17@0.865', 'U08:K18@0.905']
+  HELD: answered-correct 10/14  refused-correct 6/14   errors: ['H07:K13@0.866', 'H08:K16@0.864', 'H11:K18@0.811', 'H13:K04@0.939', 'N02:K10@0.861', 'N03:K12@0.845', 'N04:K17@0.837', 'N05:K16@0.869', 'N07:K04@0.881', 'N08:K14@0.921', 'N10:K08@0.890', 'N14:K11@0.833']
+  JURY: answered-correct 4/5  refused-correct 1/1   errors: ['T02:K08@0.865']
+
+baseline rows only (no anchors, no neg) at 0.82 on HELD/JURY:
+  HELD: answered-correct 8/14  refused-correct 5/14
+  JURY: answered-correct 5/5  refused-correct 0/1
+
+HELD detail with chosen floor:
+  H01 top=K01 score=0.947 gold=['K01']
+  H02 top=K02 score=0.859 gold=['K02']
+  H03 top=K04 score=0.914 gold=['K04']
+  H04 top=VALUES score=0.860 gold=['K05', 'K06', 'K07', 'K08', 'K09']
+  H05 top=K11 score=0.888 gold=['K11']
+  H06 top=K12 score=0.941 gold=['K12']
+  H07 top=K13 score=0.866 gold=['K14']
+  H08 top=K16 score=0.864 gold=['K15']
+  H09 top=K16 score=0.903 gold=['K16']
+  H10 top=K17 score=0.843 gold=['K17']
+  H11 top=K18 score=0.811 gold=['K18']
+  H12 top=K10 score=0.892 gold=['K10']
+  H13 top=K04 score=0.939 gold=['K03']
+  H14 top=K08 score=0.905 gold=['K08']
+  N01 top=NEG score=0.865 gold=-
+  N02 top=K10 score=0.861 gold=-
+  N03 top=K12 score=0.845 gold=-
+  N04 top=K17 score=0.837 gold=-
+  N05 top=K16 score=0.869 gold=-
+  N06 top=NEG score=0.843 gold=-
+  N07 top=K04 score=0.881 gold=-
+  N08 top=K14 score=0.921 gold=-
+  N09 top=NEG score=0.840 gold=-
+  N10 top=K08 score=0.890 gold=-
+  N11 top=NEG score=0.855 gold=-
+  N12 top=NEG score=0.902 gold=-
+  N13 top=NEG score=0.854 gold=-
+  N14 top=K11 score=0.833 gold=-

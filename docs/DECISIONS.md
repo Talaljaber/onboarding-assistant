@@ -1,0 +1,16 @@
+# Decisions
+
+Append-only; supersede, never edit. Format: plan Part B §3.1.
+
+| ID | Date/time | Phase | Decision | Reasoning | Evidence (command/output/file) | Reversible? | Needs Talal? |
+|---|---|---|---|---|---|---|---|
+| D1 | 2026-11-11 02:40 | plan | The answer LLM gets all 18 live KB rows with retrieval ranks, never the role, name or history | ~400 tokens; revisit if > 5% wrong-row citations on DEV | docs/PLAN.md §A3 | yes | recorded for Talal's review |
+| D2 | 2026-11-11 02:40 | plan | Frontend Vite + React + TS + Tailwind 4; `web/dist` committed and served by FastAPI; hash routing | judges need no Node | docs/PLAN.md §A3 | yes | recorded for Talal's review |
+| D3 | 2026-11-11 02:40 | plan | Model `deepseek/deepseek-v4.1-flash`, checked once on DEV against `google/gemini-3.5-flash-lite` | higher DEV correctness wins; tie → lower p95 | docs/PLAN.md §A3 (measured in W4-A) | yes | recorded for Talal's review |
+| D4 | 2026-11-11 02:40 | plan | Bundled `runtime\python` in the release zip | `start.bat` supports it if present | docs/PLAN.md §A3 | yes | **needs Talal** |
+| D5 | 2026-11-11 02:40 | plan | Only the six official scenarios; no invented ones | fairness | docs/PLAN.md §A3 | yes | **needs Talal** |
+| D6 | 2026-11-11 02:40 | plan | Single pinned flash model; one-shot escalation behind `LLM_ESCALATION_MODEL`, enabled only if DEV verifier-rejection rate > 10% | cost and latency | docs/PLAN.md §A3 | yes | recorded for Talal's review |
+| D7 | 2026-11-11 02:40 | W0 | OpenRouter key: `.env` already had a non-empty `OPENROUTER_API_KEY`, so nothing was copied from Ai-Quest. Spend cap USD 3 enforced in code (`.cache/budget.json`) | key present | `grep -c '^OPENROUTER_API_KEY=.\+' .env` → 1 (value never printed) | yes | recorded for Talal's review |
+| D8 | 2026-11-11 02:40 | plan | API contract = Part C §3 + §A6 amendments + §A12.4, frozen in W1 before any parallel build | parallel build safety | docs/PLAN.md §A3 | yes (change request) | recorded for Talal's review |
+| D9 | 2026-11-11 02:40 | plan | Supabase is the database (KB + history, demo profiles, progress, attempts, turn logs without chat text); LocalStore fallback | Talal, 11 Nov | docs/PLAN.md §A12 | — | Talal's decision |
+| D10 | 2026-11-11 02:40 | plan | Integrator pushes `main` + gate tags to `origin` after each passing gate and a clean secret scan; never force-push or push branches | Talal, 11 Nov | docs/PLAN.md §A12.6 | — | Talal's decision |

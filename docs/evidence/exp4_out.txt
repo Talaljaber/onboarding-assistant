@@ -1,0 +1,4 @@
+anchors=False w=0.0: DEV 27/33  HELD 9/14  JURY 5/5
+anchors=False w=0.02: DEV 29/33  HELD 10/14  JURY 5/5
+anchors=True w=0.0: DEV 29/33  HELD 11/14  JURY 5/5
+anchors=True w=0.02: DEV 29/33  HELD 13/14  JURY 5/5

@@ -1,0 +1,116 @@
+
+=== dense answer_only|query: ===
+  dev: top1 27/33  any-in-top3 31/33  multi all-in-top5 1/3
+     answerable best-sim min/median: 0.798 / 0.864   lowest 5: [0.798, 0.818, 0.821, 0.823, 0.829]
+     unanswerable best-sim max/median: 0.879 / 0.835  top 5: [0.841, 0.845, 0.853, 0.853, 0.879]
+     floor 0.80: answerable kept+correct 26/33  unanswerable passed 14/15
+     floor 0.82: answerable kept+correct 26/33  unanswerable passed 11/15
+     floor 0.84: answerable kept+correct 21/33  unanswerable passed 5/15
+     floor 0.85: answerable kept+correct 20/33  unanswerable passed 3/15
+     floor 0.86: answerable kept+correct 15/33  unanswerable passed 1/15
+     floor 0.87: answerable kept+correct 13/33  unanswerable passed 1/15
+     floor 0.88: answerable kept+correct 6/33  unanswerable passed 0/15
+
+=== dense answer_only|passage: ===
+  dev: top1 26/33  any-in-top3 30/33  multi all-in-top5 1/3
+     answerable best-sim min/median: 0.787 / 0.847   lowest 5: [0.787, 0.799, 0.799, 0.809, 0.81]
+     unanswerable best-sim max/median: 0.856 / 0.822  top 5: [0.829, 0.83, 0.83, 0.832, 0.856]
+     floor 0.80: answerable kept+correct 24/33  unanswerable passed 11/15
+     floor 0.82: answerable kept+correct 20/33  unanswerable passed 8/15
+     floor 0.84: answerable kept+correct 16/33  unanswerable passed 1/15
+     floor 0.85: answerable kept+correct 11/33  unanswerable passed 1/15
+     floor 0.86: answerable kept+correct 9/33  unanswerable passed 0/15
+     floor 0.87: answerable kept+correct 9/33  unanswerable passed 0/15
+     floor 0.88: answerable kept+correct 5/33  unanswerable passed 0/15
+
+=== dense enriched|query: ===
+  dev: top1 29/33  any-in-top3 32/33  multi all-in-top5 1/3
+     answerable best-sim min/median: 0.788 / 0.855   lowest 5: [0.788, 0.82, 0.825, 0.829, 0.829]
+     unanswerable best-sim max/median: 0.859 / 0.824  top 5: [0.829, 0.834, 0.84, 0.842, 0.859]
+     floor 0.80: answerable kept+correct 28/33  unanswerable passed 13/15
+     floor 0.82: answerable kept+correct 27/33  unanswerable passed 9/15
+     floor 0.84: answerable kept+correct 22/33  unanswerable passed 3/15
+     floor 0.85: answerable kept+correct 19/33  unanswerable passed 1/15
+     floor 0.86: answerable kept+correct 8/33  unanswerable passed 0/15
+     floor 0.87: answerable kept+correct 7/33  unanswerable passed 0/15
+     floor 0.88: answerable kept+correct 5/33  unanswerable passed 0/15
+
+=== per-question detail (dense answer_only|query:) ===
+  F01 OK  best=0.868 margin=0.040 top5=['K01', 'K06', 'K07', 'K05', 'K09'] gold=['K01']
+  F02 OK  best=0.861 margin=0.051 top5=['K02', 'K18', 'K05', 'K03', 'K06'] gold=['K02']
+  F03 MISS best=0.864 margin=0.012 top5=['K06', 'K05', 'K07', 'K03', 'K08'] gold=['K03']
+  F04 OK  best=0.858 margin=0.007 top5=['K06', 'K08', 'K05', 'K17', 'K09'] gold=['K05', 'K06', 'K07', 'K08', 'K09']
+  F05 OK  best=0.858 margin=0.005 top5=['K10', 'K11', 'K12', 'K16', 'K15'] gold=['K10']
+  F06 OK  best=0.875 margin=0.034 top5=['K12', 'K13', 'K14', 'K03', 'K11'] gold=['K12']
+  F07 OK  best=0.872 margin=0.059 top5=['K13', 'K16', 'K15', 'K11', 'K03'] gold=['K13']
+  F08 OK  best=0.874 margin=0.066 top5=['K14', 'K13', 'K03', 'K12', 'K02'] gold=['K14']
+  F09 OK  best=0.891 margin=0.040 top5=['K16', 'K12', 'K13', 'K11', 'K15'] gold=['K16']
+  F10 OK  best=0.832 margin=0.008 top5=['K17', 'K15', 'K08', 'K13', 'K09'] gold=['K17']
+  F11 OK  best=0.879 margin=0.048 top5=['K18', 'K08', 'K04', 'K17', 'K15'] gold=['K18']
+  F12 REF best=0.853 margin=0.032 top5=['K10', 'K16', 'K13', 'K08', 'K12'] gold=-
+  O01 OK  best=0.915 margin=0.140 top5=['K01', 'K06', 'K07', 'K18', 'K05'] gold=['K01']
+  O02 MISS best=0.869 margin=0.081 top5=['K01', 'K18', 'K02', 'K08', 'K10'] gold=['K02']
+  O03 OK  best=0.821 margin=0.005 top5=['K02', 'K06', 'K05', 'K08', 'K01'] gold=['K02']
+  O04 MISS best=0.818 margin=0.005 top5=['K17', 'K04', 'K15', 'K06', 'K13'] gold=['K04']
+  O05 MISS best=0.840 margin=0.041 top5=['K01', 'K03', 'K18', 'K07', 'K14'] gold=['K03']
+  O06 OK  best=0.908 margin=0.002 top5=['K06', 'K05', 'K07', 'K09', 'K08'] gold=['K05', 'K06', 'K07', 'K08', 'K09']
+  O07 OK  best=0.876 margin=0.035 top5=['K05', 'K08', 'K06', 'K09', 'K17'] gold=['K05']
+  O08 OK  best=0.798 margin=0.014 top5=['K11', 'K18', 'K16', 'K13', 'K08'] gold=['K11']
+  O09 MISS best=0.823 margin=0.004 top5=['K03', 'K12', 'K14', 'K13', 'K16'] gold=['K12']
+  O10 OK  best=0.870 margin=0.050 top5=['K13', 'K03', 'K07', 'K16', 'K15'] gold=['K13']
+  O11 OK  best=0.884 margin=0.071 top5=['K14', 'K13', 'K03', 'K12', 'K01'] gold=['K14']
+  O12 OK  best=0.883 margin=0.043 top5=['K14', 'K13', 'K12', 'K16', 'K11'] gold=['K14']
+  O13 OK  best=0.850 margin=0.018 top5=['K15', 'K17', 'K16', 'K13', 'K11'] gold=['K15']
+  O14 OK  best=0.878 margin=0.026 top5=['K16', 'K12', 'K15', 'K11', 'K17'] gold=['K16']
+  O15 OK  best=0.886 margin=0.056 top5=['K16', 'K03', 'K15', 'K12', 'K13'] gold=['K16']
+  O16 MISS best=0.868 margin=0.022 top5=['K08', 'K05', 'K06', 'K07', 'K17'] gold=['K17']
+  O17 OK  best=0.857 margin=0.034 top5=['K18', 'K02', 'K08', 'K01', 'K05'] gold=['K18']
+  O18 OK  best=0.829 margin=0.023 top5=['K18', 'K08', 'K01', 'K06', 'K02'] gold=['K18']
+  O19 OK  best=0.840 margin=0.012 top5=['K10', 'K05', 'K08', 'K06', 'K09'] gold=['K10']
+  O20 OK  best=0.854 margin=0.002 top5=['K06', 'K08', 'K04', 'K05', 'K09'] gold=['K05', 'K06', 'K07', 'K08', 'K09']
+  O21 OK  best=0.836 margin=0.009 top5=['K16', 'K15', 'K11', 'K13', 'K17'] gold=['K16']
+  O22 OK  best=0.859 margin=0.012 top5=['K09', 'K05', 'K06', 'K08', 'K07'] gold=['K09']
+  U01 REF best=0.825 margin=0.003 top5=['K13', 'K12', 'K08', 'K11', 'K15'] gold=-
+  U02 REF best=0.826 margin=0.001 top5=['K12', 'K16', 'K03', 'K14', 'K13'] gold=-
+  U03 REF best=0.879 margin=0.008 top5=['K10', 'K08', 'K11', 'K05', 'K06'] gold=-
+  U04 REF best=0.845 margin=0.016 top5=['K08', 'K06', 'K16', 'K15', 'K10'] gold=-
+  U05 REF best=0.835 margin=0.020 top5=['K03', 'K12', 'K14', 'K13', 'K18'] gold=-
+  U06 REF best=0.853 margin=0.005 top5=['K13', 'K11', 'K09', 'K12', 'K16'] gold=-
+  U07 REF best=0.823 margin=0.003 top5=['K11', 'K16', 'K15', 'K17', 'K05'] gold=-
+  U08 REF best=0.841 margin=0.043 top5=['K18', 'K05', 'K08', 'K01', 'K06'] gold=-
+  U09 REF best=0.839 margin=0.014 top5=['K16', 'K03', 'K14', 'K12', 'K13'] gold=-
+  U10 REF best=0.805 margin=0.011 top5=['K02', 'K03', 'K13', 'K14', 'K18'] gold=-
+  U11 REF best=0.835 margin=0.005 top5=['K07', 'K13', 'K03', 'K06', 'K05'] gold=-
+  U12 REF best=0.785 margin=0.004 top5=['K02', 'K18', 'K06', 'K03', 'K05'] gold=-
+  U13 REF best=0.819 margin=0.001 top5=['K11', 'K07', 'K05', 'K08', 'K09'] gold=-
+  U14 REF best=0.815 margin=0.004 top5=['K13', 'K12', 'K14', 'K11', 'K16'] gold=-
+  T01 OK  best=0.930 margin=0.141 top5=['K01', 'K06', 'K07', 'K05', 'K09'] gold=['K01']
+  T02 OK  best=0.841 margin=0.009 top5=['K06', 'K08', 'K05', 'K09', 'K04'] gold=['K05', 'K06', 'K07', 'K08', 'K09']
+  T03 OK  best=0.891 margin=0.040 top5=['K16', 'K12', 'K13', 'K11', 'K15'] gold=['K16']
+  T04 OK  best=0.872 margin=0.063 top5=['K14', 'K03', 'K13', 'K02', 'K01'] gold=['K14']
+  T05 REF best=0.839 margin=0.014 top5=['K10', 'K13', 'K16', 'K11', 'K08'] gold=-
+  T09 OK  best=0.843 margin=0.020 top5=['K17', 'K07', 'K05', 'K06', 'K03'] gold=['K17']
+
+=== BM25 (normalised + light stemming) ===
+  top1 20/33; zero-score answerable: ['F02', 'O08', 'O17', 'O20']
+  unanswerable with score>0: [('F12', 5.81, 'K16'), ('U01', 1.25, 'K15'), ('U02', 2.55, 'K16'), ('U03', 3.82, 'K10'), ('U04', 2.51, 'K01'), ('U06', 1.25, 'K15'), ('U08', 2.17, 'K18'), ('U09', 3.57, 'K12')]
+
+=== hybrid: RRF(dense, bm25) top1 ===
+  F03 hybrid MISS top1=K05 gold=['K03']
+  F04 hybrid MISS top1=K17 gold=['K05', 'K06', 'K07', 'K08', 'K09']
+  F10 hybrid MISS top1=K15 gold=['K17']
+  O02 hybrid MISS top1=K01 gold=['K02']
+  O03 hybrid MISS top1=K15 gold=['K02']
+  O04 hybrid MISS top1=K17 gold=['K04']
+  O05 hybrid MISS top1=K01 gold=['K03']
+  O09 hybrid MISS top1=K03 gold=['K12']
+  O15 hybrid MISS top1=K17 gold=['K16']
+  O16 hybrid MISS top1=K15 gold=['K17']
+  O22 hybrid MISS top1=K05 gold=['K09']
+  hybrid dev top1 22/33
+
+=== values: how far down are K05-K09 for value questions (dense) ===
+  F04: ranks of values [3, 1, 8, 2, 5]
+  O06: ranks of values [2, 1, 3, 5, 4]
+  O20: ranks of values [4, 1, 7, 2, 5]
+  T02: ranks of values [3, 1, 6, 2, 4]
