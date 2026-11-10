@@ -1,0 +1,44 @@
+{
+  "batch_size": 1,
+  "dim": 384,
+  "exporter": "torch.onnx.export (TorchScript, dynamo=False) + onnxruntime.quantization.quantize_dynamic",
+  "input_names": [
+    "input_ids",
+    "attention_mask"
+  ],
+  "max_tokens": 256,
+  "model_id": "intfloat/multilingual-e5-small",
+  "normalize": true,
+  "onnx_file": "model_int8.onnx",
+  "opset": 17,
+  "output_name": "last_hidden_state",
+  "pad_token_id": 1,
+  "pooling": "mean",
+  "quantization": {
+    "method": "quantize_dynamic",
+    "per_channel": true,
+    "reduce_range": true,
+    "weight_type": "QInt8"
+  },
+  "query_prefix": "query: ",
+  "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+  "runtime": "onnx_int8",
+  "schema_version": 1,
+  "sha256": {
+    "model_int8.onnx": "535cf88a6a33a13d53df43a204851bc6dae66f868b2445b697f2e85d59245c60",
+    "tokenizer.json": "21e1d0ea0973db476a23063d24e0c171ab98ecfbd0fe887c7936c081945dcf52"
+  },
+  "tokenizer_file": "tokenizer.json",
+  "vocab_pruning": {
+    "embedding_rows_after": 130021,
+    "embedding_rows_before": 250037,
+    "pieces_after": 130021,
+    "pieces_before": 250002,
+    "rule": "keep pieces whose letters/marks are all LATIN or ARABIC (non-letters kept) + specials",
+    "source_sha256": {
+      "model_int8.onnx": "78f7c1e025cd9155a624436740644bd4e2706386399e074ff1f7548c94ce59c2",
+      "tokenizer.json": "0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39"
+    },
+    "tool": "campuspulse_ai.frameworks.cli.prune_encoder"
+  }
+}
