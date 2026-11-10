@@ -1,0 +1,41 @@
+id,question_ar,category,enabled,source
+OOS01,شو رقم تلفون حدا بالشركة؟,contact,true,ours
+OOS02,بدي رقم موبايل المدير,contact,true,ours
+OOS03,شو الإيميل الرسمي لقسم معين؟,contact,true,ours
+OOS04,مين مدير الفرع؟,contact,true,ours
+OOS05,شو اسم المدير العام؟,contact,true,ours
+OOS06,أعطيني رقم واتساب مسؤول المعرض,contact,true,ours
+OOS07,قديش الراتب؟,salary,true,ours
+OOS08,متى بينزل الراتب؟,salary,true,ours
+OOS09,كم الزيادة السنوية على المعاش؟,salary,true,ours
+OOS10,هل في بدل عن ساعات العمل الإضافية؟,salary,true,ours
+OOS11,كيف بتنحسب الخصومات من المعاش؟,salary,true,ours
+OOS12,كم سعر هذا المنتج؟,prices,true,ours
+OOS13,قديش سعر المكيف عندكم؟,prices,true,ours
+OOS14,هل أسعار المعرض نفس أسعار الموقع؟,prices,true,ours
+OOS15,شو ساعات العمل اليومية؟,hours,true,ours
+OOS16,متى بفتح المعرض الصبح؟,hours,true,ours
+OOS17,هل في شفتات ليلية؟,hours,true,ours
+OOS18,كم مدة استراحة الغدا؟,hours,true,ours
+OOS19,هل في تأمين صحي؟,benefits,true,ours
+OOS20,هل الشركة بتشترك بالضمان الاجتماعي عن الموظف؟,benefits,true,ours
+OOS21,هل في تأمين على الحياة للموظفين؟,benefits,true,ours
+OOS22,وين بصف سيارتي؟,transport,true,ours
+OOS23,هل الشركة بتوفر باص للموظفين؟,transport,true,ours
+OOS24,كيف الطقس اليوم؟,smalltalk,true,ours
+OOS25,مرحبا كيفك,smalltalk,true,ours
+OOS26,شكرا,smalltalk,true,ours
+OOS27,احكيلي نكتة,smalltalk,true,ours
+OOS28,هل في عروض تخفيضات هالشهر؟,discounts,true,ours
+OOS29,هل الموظف بياخذ خصم على المشتريات؟,discounts,true,ours
+OOS30,كم مدة الإشعار إذا بدي أستقيل؟,resignation,true,ours
+OOS31,شو تعويض نهاية الخدمة؟,resignation,true,ours
+OOS32,كيف بيصير إنهاء العقد؟,resignation,true,ours
+OOS33,هل مسموح الشغل عن بعد؟,remote,true,ours
+OOS34,بقدر أداوم من البيت يومين بالأسبوع؟,remote,true,ours
+OOS35,كم نسبة العمولة على كل بيعة؟,commission,true,ours
+OOS36,متى بتنصرف العمولات؟,commission,true,ours
+OOS37,كم يوم إجازة سنوية بستحق؟,holidays,true,ours
+OOS38,هل عيد الاستقلال عطلة رسمية؟,holidays,true,ours
+OOS39,كم سنة كفالة الغسالات؟,warranty,true,ours
+OOS40,كيف بيشتغل الضمان على الأجهزة؟,warranty,true,ours
