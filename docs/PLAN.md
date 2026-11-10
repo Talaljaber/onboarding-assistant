@@ -15,7 +15,7 @@
 ## A0. Kickoff (the orchestrator does this first)
 
 1. Read this whole file once.
-2. Read `C:\Users\hp\.m2\campuspulse-port.md`, the challenge brief `C:\Users\hp\.m2\Ai-Quest\DADA_CHALLENGE_BRIEF.md`, and the files in `C:\Users\hp\Downloads\Dada_GJU_Challenge_Final_2026\`, **except** `ORGANIZER_APPROVAL_AND_FAIRNESS.md`, which you must never open.
+2. Read `C:\Users\hp\.m2\campuspulse-port.md`, the challenge brief `C:\Users\hp\.m2\Ai-Quest\DADA_CHALLENGE_BRIEF.md`, and the files in `C:\Users\hp\Downloads\Dada_GJU_Challenge_Final_2026\`, including `ORGANIZER_APPROVAL_AND_FAIRNESS.md`. The organizer, Dr. Nadia Alrousan, allowed every file in the folder; read that one for rules only and never tune on it (§A6.33).
 3. Prepare the **existing** repo `C:\Users\hp\.m2\onboarding-assistant` (§A12.1) and run Wave 0 (§A7). Then pick the execution mode:
    - **hierarchical** (§A11): you are the integrator, and you launch lead orchestrators as background Claude Code sessions;
    - **flat** (§A7 directly): if the §A11.2 probe fails.
@@ -92,7 +92,7 @@
 **Never:**
 - push anything except the integrator's gate pushes of `main` + tags to `origin` (D10, §A12.6); add a remote; create repos; publish; or send email or messages;
 - touch the Supabase project except as §A12 allows: migrations are applied by the integrator only; the secret key stays server-side, in `.env` only; the browser never talks to Supabase;
-- open `ORGANIZER_APPROVAL_AND_FAIRNESS.md`;
+- tune anything on `ORGANIZER_APPROVAL_AND_FAIRNESS.md` (reading it for rules is allowed, §A6.33);
 - modify `C:\Users\hp\.m2\Ai-Quest`, the Downloads folder or the share folder;
 - edit the official CSVs;
 - read the sealed held-out rows, or tune on `JURY_TEST_CASES.csv`;
@@ -250,6 +250,11 @@
     - **Opus does every review**, red-team, visual review, security review, honesty and length edit, and claim sign-off that Parts B–D assign to "Fable". That includes Part B P2.8, P3.7, P5.4 and the §6 deliverable reviews, and Part D's visual review. Where they say "Fable", read "Opus".
     - Before calling a Fable decision agent, check that the question is a genuine open decision with options and evidence. A review question goes to Opus.
     - Log every Fable call in `docs/DECISIONS.md` (the decision row names it). Target: **no more than 5 Fable calls** for the whole run.
+33. **All organizer files are allowed (Talal, 11 Nov).**
+    - The organizer cleared every file in `C:\Users\hp\Downloads\Dada_GJU_Challenge_Final_2026\`. That includes `ORGANIZER_APPROVAL_AND_FAIRNESS.md` and `SUGGESTED_EVENT_AGENDA.csv`.
+    - **This overrides every "do not open `ORGANIZER_APPROVAL_AND_FAIRNESS.md`" line in Parts B–E.** Read the file once in W0 for rules and fairness constraints, and summarise anything new in `docs/DECISIONS.md`.
+    - Like `JURY_TEST_CASES.csv`, it is **never** used to tune thresholds, prompts or test sets.
+    - It is not copied into `data/official/`; the six hashed CSVs stay the official set (§A6.19).
 
 ## A7. Parallel execution map
 
@@ -405,7 +410,7 @@ You are the <AREA> LEAD orchestrator for the Dada Academy build. Work only in C:
 Read C:\Users\hp\.m2\DADA_BUILD_PLAN.md: Part A in full (especially §A4–§A7 and §A11), then the parts for your area (Backend: Part C; Frontend: Part D; Quality: Part C §7–§8 and Part B §1 P3.7/P5.2; Delivery: Part B §6–§7).
 You own: <list of wave tasks from §A11.1>. Run them in wave order. Start each wave only after C:\Users\hp\.m2\dada-coord\GATE.md says the previous gate passed; in the meantime, build against the W1 contract fixtures.
 Hire your own workers with the Agent tool, using the models the plan assigns. Create sub-worktrees from lead/<area> yourself, one worktree agent per message, at most 2 live. Brief them with the Part B §2.1 template, rerun their acceptance commands yourself, then merge into lead/<area>.
-Never touch main or other leads' worktrees. Never push, publish or email. No key: run offline. Never read data/ours/eval_heldout.csv. Never open ORGANIZER_APPROVAL_AND_FAIRNESS.md. Commit rules: Part B §2.4 (no Co-Authored-By, no mention of Claude/AI/agents).
+Never touch main or other leads' worktrees. Never push, publish or email. No key: run offline. Never read data/ours/eval_heldout.csv. Read ORGANIZER_APPROVAL_AND_FAIRNESS.md for rules only; never tune on it. Commit rules: Part B §2.4 (no Co-Authored-By, no mention of Claude/AI/agents).
 Every 20 minutes and at every milestone, update C:\Users\hp\.m2\dada-coord\<area>\STATUS.md. Write READY-FOR-GATE: w<N> when your tasks for wave N pass. Put cross-area needs in REQUESTS.md and decision proposals in DECISIONS_PROPOSED.md, then continue with the safe default; never wait idle for an answer. Read ANSWERS.md and GATE.md each cycle; after a gate, merge main into your branch.
 Never ask the human anything. Stop when GATE.md says STOP, or at T+8:00 after writing a final STATUS.
 ```

@@ -12,7 +12,7 @@ an optional verified LLM layer (OpenRouter), a Vite/React web client served from
 
 ## Non-negotiables (plan §A4)
 - Never push, add remotes, create repos, publish, email or message. Only the integrator pushes `main` + gate tags.
-- Never edit `data/official/*` (hashed). Never open `ORGANIZER_APPROVAL_AND_FAIRNESS.md`.
+- Never edit `data/official/*` (hashed). `ORGANIZER_APPROVAL_AND_FAIRNESS.md` may be read for rules only (§A6.33); never tune on it or copy it.
 - Never read `data/ours/eval_heldout.csv` (sealed). Never tune anything on `JURY_TEST_CASES.csv`.
 - Never use an unpinned model or OpenRouter auto-routing; never cache an unverified LLM reply; budget USD 3 total.
 - Never present fixture or fake LLM output as real results (LLM columns that could not run are `not_run`).
