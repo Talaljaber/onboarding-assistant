@@ -1,0 +1,54 @@
+{
+  "reply": {
+    "kind": "text",
+    "text_ar": "أهلاً بك في مسار المبيعات. اسألني عن الشركة وقيمها وسياسات التهيئة، أو اكتب «تدريب» لنبدأ موقفاً عملياً. كل إجابة تظهر مع مصدرها.",
+    "text_en": null,
+    "status": null,
+    "band": null,
+    "sources": [],
+    "scenario": null,
+    "feedback": null,
+    "proposal": null,
+    "progress": null,
+    "plan": null,
+    "quiz": null,
+    "reason": null,
+    "label_ar": null
+  },
+  "state": {
+    "active_scenario": null
+  },
+  "mode": "offline",
+  "trace": {
+    "request_id": "2c3d4e5f6071",
+    "mode": "offline",
+    "model": null,
+    "guards": {
+      "employment": null,
+      "contact": null
+    },
+    "router": {
+      "tool": "greet",
+      "confidence": 0.7,
+      "reason": "small talk"
+    },
+    "agent": {
+      "used": false,
+      "tool": null,
+      "args": null,
+      "latency_ms": null,
+      "cached": false,
+      "fallback_reason": null
+    },
+    "retrieval": null,
+    "answer": null,
+    "feedback": null,
+    "injection_suspected": false,
+    "steps": [
+      "guards:none",
+      "router:greet",
+      "render"
+    ],
+    "latency_ms": 3
+  }
+}

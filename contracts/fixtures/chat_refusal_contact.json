@@ -1,0 +1,53 @@
+{
+  "reply": {
+    "kind": "refusal",
+    "text_ar": "لا تتوفر لدي أرقام هواتف أو بيانات اتصال لأي شخص أو قسم، ولن أخمّنها. يرجى الحصول عليها من الموارد البشرية عبر القنوات الرسمية.",
+    "text_en": null,
+    "status": "unsupported",
+    "band": null,
+    "sources": [],
+    "scenario": null,
+    "feedback": null,
+    "proposal": null,
+    "progress": null,
+    "plan": null,
+    "quiz": null,
+    "reason": "contact",
+    "label_ar": null
+  },
+  "state": {
+    "active_scenario": null
+  },
+  "mode": "offline",
+  "trace": {
+    "request_id": "f0e1d2c3b4a5",
+    "mode": "offline",
+    "model": null,
+    "guards": {
+      "employment": null,
+      "contact": "رقم+مدير"
+    },
+    "router": {
+      "tool": "refuse",
+      "confidence": 0.7,
+      "reason": "contact guard"
+    },
+    "agent": {
+      "used": false,
+      "tool": null,
+      "args": null,
+      "latency_ms": null,
+      "cached": false,
+      "fallback_reason": null
+    },
+    "retrieval": null,
+    "answer": null,
+    "feedback": null,
+    "injection_suspected": false,
+    "steps": [
+      "guards:contact",
+      "render"
+    ],
+    "latency_ms": 4
+  }
+}

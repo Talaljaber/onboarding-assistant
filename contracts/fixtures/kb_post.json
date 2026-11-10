@@ -1,0 +1,18 @@
+{
+  "row": {
+    "id": "K19",
+    "topic": "Policy",
+    "answer_ar": "يلتزم الموظف بارتداء الزي الرسمي المعتمد أثناء العمل في المعرض.",
+    "keyword_en": "Dress code",
+    "source_document": "General Policies",
+    "source_page": 3,
+    "edited": true,
+    "status": "added",
+    "offline_edit": false
+  },
+  "version": "9e52d1f8b3ca",
+  "reindex_ms": 224,
+  "oos_disabled": [
+    "OOS12"
+  ]
+}

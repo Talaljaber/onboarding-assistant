@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "not_found",
+    "message": "unknown scenario id: S09",
+    "request_id": "7f3a9c2e41b0",
+    "field": null
+  }
+}

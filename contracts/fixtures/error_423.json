@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "kb_locked",
+    "message": "the knowledge base is being re-indexed; retry once",
+    "request_id": "7f3a9c2e41b0",
+    "field": null
+  }
+}

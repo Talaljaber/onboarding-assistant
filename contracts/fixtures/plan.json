@@ -1,0 +1,121 @@
+{
+  "role": "Sales",
+  "status": "SUGGESTED_COMPETITION_PLAN_NOT_OFFICIAL_POLICY",
+  "disclaimer_ar": "خطة تعلم مقترحة للمسابقة، وليست جدول تقييم رسمياً",
+  "focus_milestone": null,
+  "milestones": [
+    {
+      "name": "Days 1-7",
+      "name_ar": "الأيام 1–7",
+      "learning_goal_ar": "تعرف على الشركة وقيمها وسياسات التهيئة الأساسية",
+      "activities": [
+        {
+          "id": "SA-D1-read-company",
+          "kind": "read",
+          "title_ar": "اقرأ تعريف الشركة ومعارضها وعلاماتها",
+          "refs": [
+            "K01",
+            "K02",
+            "K03",
+            "K04",
+            "K18"
+          ]
+        },
+        {
+          "id": "SA-D1-read-values",
+          "kind": "read",
+          "title_ar": "اقرأ القيم المشتركة الخمس",
+          "refs": [
+            "K05",
+            "K06",
+            "K07",
+            "K08",
+            "K09"
+          ]
+        },
+        {
+          "id": "SA-D1-read-onboarding",
+          "kind": "read",
+          "title_ar": "اقرأ سياسات التهيئة والسياسات العامة",
+          "refs": [
+            "K10",
+            "K11",
+            "K12",
+            "K13",
+            "K14",
+            "K15",
+            "K16",
+            "K17"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Day 30",
+      "name_ar": "اليوم 30",
+      "learning_goal_ar": "أكمل اختباراً قصيراً وموقفاً عملياً مبسطاً",
+      "activities": [
+        {
+          "id": "SA-D30-quiz",
+          "kind": "quiz",
+          "title_ar": "اختبار قصير",
+          "refs": [
+            "Q01",
+            "Q02",
+            "Q03",
+            "Q04",
+            "Q05"
+          ]
+        },
+        {
+          "id": "SA-D30-s01",
+          "kind": "scenario",
+          "title_ar": "موقف عملي: زبون يسأل عن ثلاجة",
+          "refs": [
+            "S01"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Day 60",
+      "name_ar": "اليوم 60",
+      "learning_goal_ar": "تدرّب على موقف وظيفي أكثر تعقيداً واحصل على ملاحظات",
+      "activities": [
+        {
+          "id": "SA-D60-s02",
+          "kind": "scenario",
+          "title_ar": "موقف عملي: ميزة غير مؤكدة",
+          "refs": [
+            "S02"
+          ]
+        },
+        {
+          "id": "SA-D60-s03",
+          "kind": "scenario",
+          "title_ar": "موقف عملي: تنسيق موعد تسليم",
+          "refs": [
+            "S03"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Day 90",
+      "name_ar": "اليوم 90",
+      "learning_goal_ar": "اعرض ملخص تقدم التعلم للمراجعة البشرية فقط",
+      "activities": [
+        {
+          "id": "SA-D90-summary",
+          "kind": "summary",
+          "title_ar": "ملخص تقدم التعلم للمراجعة البشرية",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "notes_ar": [
+    "اختبار اليوم 30 ليس تقييم الشهر الأول المذكور في K14",
+    "ملخص اليوم 90 للمراجعة البشرية فقط"
+  ]
+}

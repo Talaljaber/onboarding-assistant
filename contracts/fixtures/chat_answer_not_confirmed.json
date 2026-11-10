@@ -1,0 +1,151 @@
+{
+  "reply": {
+    "kind": "answer",
+    "text_ar": "لا أجد إجابة مؤكدة في قاعدة المعرفة. أقرب معلومة لدي أدناه، ويُفضَّل التأكد من الموارد البشرية.",
+    "text_en": null,
+    "status": "partial",
+    "band": "not_confirmed",
+    "sources": [
+      {
+        "id": "K15",
+        "topic": "Policy",
+        "answer_ar": "يُطلب من الموظفين تسجيل الحضور والانصراف وفق الوسيلة المعتمدة لدى الشركة.",
+        "source_document": "General Policies",
+        "source_page": 2,
+        "edited": false,
+        "status": "official"
+      }
+    ],
+    "scenario": null,
+    "feedback": null,
+    "proposal": null,
+    "progress": null,
+    "plan": null,
+    "quiz": null,
+    "reason": null,
+    "label_ar": null
+  },
+  "state": {
+    "active_scenario": null
+  },
+  "mode": "offline",
+  "trace": {
+    "request_id": "e5f1a2b3c4d6",
+    "mode": "offline",
+    "model": null,
+    "guards": {
+      "employment": null,
+      "contact": null
+    },
+    "router": {
+      "tool": "answer_from_rows",
+      "confidence": 0.7,
+      "reason": "default: knowledge question"
+    },
+    "agent": {
+      "used": false,
+      "tool": null,
+      "args": null,
+      "latency_ms": null,
+      "cached": false,
+      "fallback_reason": null
+    },
+    "retrieval": {
+      "query": "هل يوجد موقف سيارات للموظفين؟",
+      "hits": [
+        {
+          "id": "K15",
+          "topic": "Policy",
+          "dense": 0.901,
+          "bm25": 3.42,
+          "rrf": 0.0328,
+          "rank": 1
+        },
+        {
+          "id": "K11",
+          "topic": "Onboarding",
+          "dense": 0.87,
+          "bm25": 2.32,
+          "rrf": 0.0323,
+          "rank": 2
+        },
+        {
+          "id": "K02",
+          "topic": "Company",
+          "dense": 0.839,
+          "bm25": 1.22,
+          "rrf": 0.0317,
+          "rank": 3
+        },
+        {
+          "id": "K12",
+          "topic": "Onboarding",
+          "dense": 0.808,
+          "bm25": 0.12,
+          "rrf": 0.0156,
+          "rank": 4
+        },
+        {
+          "id": "K16",
+          "topic": "Policy",
+          "dense": 0.777,
+          "bm25": 0.0,
+          "rrf": 0.0154,
+          "rank": 5
+        },
+        {
+          "id": "K10",
+          "topic": "Onboarding",
+          "dense": 0.746,
+          "bm25": 0.0,
+          "rrf": 0.0152,
+          "rank": 6
+        },
+        {
+          "id": "K17",
+          "topic": "Policy",
+          "dense": 0.715,
+          "bm25": 0.0,
+          "rrf": 0.0149,
+          "rank": 7
+        },
+        {
+          "id": "K13",
+          "topic": "Onboarding",
+          "dense": 0.684,
+          "bm25": 0.0,
+          "rrf": 0.0147,
+          "rank": 8
+        }
+      ],
+      "margin": {
+        "best_row": "K15",
+        "best_row_cos": 0.901,
+        "best_oos": "OOS21",
+        "best_oos_cos": 0.87,
+        "margin": 0.031
+      },
+      "list_question": false,
+      "topic_expanded": null,
+      "kb_version": "3c9e5a1f0b7d"
+    },
+    "answer": {
+      "llm_status": null,
+      "verifier": null,
+      "escalated": false,
+      "band": "not_confirmed",
+      "latency_ms": null,
+      "cached": false
+    },
+    "feedback": null,
+    "injection_suspected": false,
+    "steps": [
+      "guards:none",
+      "router:answer_from_rows",
+      "retrieve:18",
+      "band:not_confirmed",
+      "render"
+    ],
+    "latency_ms": 41
+  }
+}

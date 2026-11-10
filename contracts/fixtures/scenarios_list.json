@@ -1,0 +1,71 @@
+{
+  "scenarios": [
+    {
+      "id": "S01",
+      "department": "Sales",
+      "company_value": "Customer Centricity",
+      "value_ar": "محورية العميل",
+      "scenario_ar": "يسأل زبون عن ثلاجة مناسبة لأسرة كبيرة.",
+      "data_status": "SYNTHETIC_TRAINING_EXAMPLE",
+      "options": [
+        {
+          "id": "S01-O1",
+          "text_ar": "أسأله عن عدد أفراد الأسرة والمساحة المتاحة والميزانية قبل أن أقترح ثلاجة."
+        },
+        {
+          "id": "S01-O2",
+          "text_ar": "أقترح أغلى ثلاجة في المعرض لأنها الأفضل دائماً."
+        },
+        {
+          "id": "S01-O3",
+          "text_ar": "أطلب منه أن يتصفح الثلاجات وحده ويعود إن احتاج شيئاً."
+        }
+      ]
+    },
+    {
+      "id": "S02",
+      "department": "Sales",
+      "company_value": "Integrity",
+      "value_ar": "النزاهة",
+      "scenario_ar": "يسأل الزبون عن ميزة غير مؤكدة في منتج.",
+      "data_status": "SYNTHETIC_TRAINING_EXAMPLE",
+      "options": [
+        {
+          "id": "S02-O1",
+          "text_ar": "أقول له إنني لست متأكداً، وسأتحقق من الكتالوج أو أسأل المسؤول ثم أعود إليه."
+        },
+        {
+          "id": "S02-O2",
+          "text_ar": "أؤكد له أن الميزة موجودة حتى لا يذهب إلى منافس."
+        },
+        {
+          "id": "S02-O3",
+          "text_ar": "أخبره أن هذا ليس من اختصاصي."
+        }
+      ]
+    },
+    {
+      "id": "S03",
+      "department": "Sales",
+      "company_value": "One Team",
+      "value_ar": "فريق واحد",
+      "scenario_ar": "يحتاج عميل إلى تنسيق موعد تسليم.",
+      "data_status": "SYNTHETIC_TRAINING_EXAMPLE",
+      "options": [
+        {
+          "id": "S03-O1",
+          "text_ar": "أنسق مع فريق التسليم وأبلغ العميل بالموعد المؤكد فقط."
+        },
+        {
+          "id": "S03-O2",
+          "text_ar": "أعطيه موعداً تقريبياً من عندي."
+        },
+        {
+          "id": "S03-O3",
+          "text_ar": "أطلب منه الاتصال بفريق التسليم بنفسه."
+        }
+      ]
+    }
+  ],
+  "label_ar": "مواقف تدريبية افتراضية"
+}
