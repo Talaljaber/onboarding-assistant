@@ -1,0 +1,19 @@
+﻿id,topic,answer_ar,keyword_en,source_document,source_page
+K01,Company,تأسست مجموعة الدادا عام 1991.,1991,Company Profile 2026,3
+K02,Company,تمتلك المجموعة 17 معرضاً في عمان والسلط وإربد والزرقاء والعقبة.,17 showrooms,Company Profile 2026,4
+K03,Company,رؤية المجموعة: نثري الحياة اليومية بمزيد من الراحة.,Vision,Company Profile 2026,5
+K04,Company,رسالة المجموعة: نقدم قيمة لعملائنا من خلال منتجات عالية الجودة وعلامات تجارية موثوقة وحلول تلبي احتياجاتهم وتثري تجربتهم.,Mission,Company Profile 2026,5
+K05,Values,النزاهة من القيم المشتركة للمجموعة.,Integrity,Company Profile 2026,6
+K06,Values,فريق واحد من القيم المشتركة للمجموعة.,One Team,Company Profile 2026,6
+K07,Values,المثابرة من القيم المشتركة للمجموعة.,Perseverance,Company Profile 2026,6
+K08,Values,محورية العميل من القيم المشتركة للمجموعة.,Customer Centricity,Company Profile 2026,6
+K09,Values,المسؤولية الاجتماعية من القيم المشتركة للمجموعة.,Social Responsibility,Company Profile 2026,6
+K10,Onboarding,دائرة الموارد البشرية مسؤولة عن تطبيق سياسة انضمام وتهيئة الموظفين الجدد.,HR owns onboarding,On-Boarding Policy,3
+K11,Onboarding,قبل مباشرة العمل يتم تجهيز احتياجات الموظف وفق طبيعة عمله، مثل البريد الإلكتروني والأجهزة والصلاحيات اللازمة.,Before start preparation,On-Boarding Policy,3
+K12,Onboarding,في اليوم الأول يتم تعريف الموظف بالوصف الوظيفي وإجراءات الحضور والإجازات والسلوكيات العامة.,Day 1 orientation,On-Boarding Policy,3
+K13,Onboarding,تُرسل رسالة ترحيب خلال الأيام الثلاثة الأولى للموظفين الذين لديهم بريد إلكتروني للعمل.,Welcome email,On-Boarding Policy,4
+K14,Onboarding,فترة التجربة 90 يوماً، مع تقييمات في نهاية الشهر الأول والثاني للوظائف الإدارية والإشرافية وغير التشغيلية.,Probation,On-Boarding Policy,4
+K15,Policy,يُطلب من الموظفين تسجيل الحضور والانصراف وفق الوسيلة المعتمدة لدى الشركة.,Attendance,General Policies,2
+K16,Policy,يُقدَّم طلب الإجازة عبر نظام الموارد البشرية ويستلزم موافقة المدير المباشر قبل بدء الإجازة.,Leave approval,General Policies,2
+K17,Policy,يجب المحافظة على سرية معلومات الشركة وعدم إفشائها دون تصريح.,Confidentiality,General Policies,1
+K18,Company,من العلامات التجارية المذكورة في العرض التعريفي: Beko وAriston وKärcher وDe’Longhi وElba وBraun وSona وSkyworth وAtlas وNara.,Brands,Company Profile 2026,2

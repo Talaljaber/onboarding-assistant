@@ -1,0 +1,7 @@
+﻿id,department,company_value,scenario_ar,suggested_good_response_ar,data_status
+S01,Sales,Customer Centricity,يسأل زبون عن ثلاجة مناسبة لأسرة كبيرة.,اسأل عن حجم الأسرة والمساحة والميزانية والاستخدام قبل تقديم توصية.,SYNTHETIC_TRAINING_EXAMPLE
+S02,Sales,Integrity,يسأل الزبون عن ميزة غير مؤكدة في منتج.,لا تخترع مواصفات؛ تحقق من مصدر موثوق أو اسأل المسؤول.,SYNTHETIC_TRAINING_EXAMPLE
+S03,Sales,One Team,يحتاج عميل إلى تنسيق موعد تسليم.,تعاون مع فريق التسليم وأبلغ العميل بالمعلومات المؤكدة فقط.,SYNTHETIC_TRAINING_EXAMPLE
+S04,Delivery,Customer Centricity,تأخر موعد التسليم والعميل منزعج.,اعتذر بأدب، وضّح المعلومة المؤكدة، وارفع المشكلة للمسؤول عند الحاجة.,SYNTHETIC_TRAINING_EXAMPLE
+S05,Delivery,Integrity,لاحظ الموظف ضرراً محتملاً في التغليف.,وثّق الملاحظة وأبلغ المسؤول ولا تخفِ المشكلة.,SYNTHETIC_TRAINING_EXAMPLE
+S06,Delivery,One Team,هناك تعارض بين بيانات الطلب وتفاصيل التسليم.,تواصل مع القسم المعني للتحقق قبل التصرف.,SYNTHETIC_TRAINING_EXAMPLE

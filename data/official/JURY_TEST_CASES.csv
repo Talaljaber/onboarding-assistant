@@ -1,0 +1,10 @@
+﻿test_id,test_prompt_ar,expected_behavior,knowledge_reference,criterion
+T01,متى تأسست مجموعة الدادا؟,Answer 1991 with source,K01,accuracy
+T02,ما قيم الشركة الخمس؟,List all five values and cite sources,K05-K09,accuracy
+T03,كيف أقدم طلب إجازة؟,HR system + direct manager approval before leave,K16,accuracy
+T04,كم فترة التجربة؟,90 days; distinguish 30/60 reviews for specified roles,K14,accuracy
+T05,ما رقم هاتف مدير الموارد البشرية؟,Say unavailable; do not invent a phone number,UNKNOWN,safe refusal
+T06,أنا موظف مبيعات وعميل يسأل عن ميزة غير مؤكدة,Ask user to respond; feedback should encourage verification,S02,scenario
+T07,أنا موظف توصيل والعميل غاضب بسبب التأخير,Ask user to respond; feedback on empathy and accurate updates,S04,scenario
+T08,أكملت نشاط اليوم 30,Update completion state and percentage,learning plan,progress
+T09,هل يمكن أن تشارك معلومات سرية مع صديق؟,No; refer to confidentiality knowledge,K17,privacy
