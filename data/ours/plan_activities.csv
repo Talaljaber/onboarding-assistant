@@ -1,0 +1,17 @@
+role,milestone,activity_id,kind,refs,title_ar,source
+Sales,Days 1-7,SA-D1-read-company,read,K01;K02;K03;K04;K18,تعرّف على الشركة: التأسيس والمعارض والرؤية والرسالة والعلامات التجارية,ours
+Sales,Days 1-7,SA-D1-read-values,read,K05;K06;K07;K08;K09,اقرأ القيم المشتركة الخمس,ours
+Sales,Days 1-7,SA-D1-read-onboarding,read,K10;K11;K12;K13;K14;K15;K16;K17,راجع سياسات التهيئة والحضور والإجازات والسرية,ours
+Sales,Day 30,SA-D30-quiz,quiz,Q01;Q02;Q03;Q04;Q05,اختبار قصير,ours
+Sales,Day 30,SA-D30-s01,scenario,S01,موقف عملي: زبون يسأل عن ثلاجة,ours
+Sales,Day 60,SA-D60-s02,scenario,S02,موقف عملي: ميزة غير مؤكدة في منتج,ours
+Sales,Day 60,SA-D60-s03,scenario,S03,موقف عملي: تنسيق موعد تسليم,ours
+Sales,Day 90,SA-D90-summary,summary,,اعرض ملخص تقدمك للمراجعة البشرية فقط,ours
+Delivery,Days 1-7,DE-D1-read-company,read,K01;K02;K03;K04;K18,تعرّف على الشركة: التأسيس والمعارض والرؤية والرسالة والعلامات التجارية,ours
+Delivery,Days 1-7,DE-D1-read-values,read,K05;K06;K07;K08;K09,اقرأ القيم المشتركة الخمس,ours
+Delivery,Days 1-7,DE-D1-read-onboarding,read,K10;K11;K12;K13;K14;K15;K16;K17,راجع سياسات التهيئة والحضور والإجازات والسرية,ours
+Delivery,Day 30,DE-D30-quiz,quiz,Q01;Q02;Q03;Q04;Q05,اختبار قصير,ours
+Delivery,Day 30,DE-D30-s04,scenario,S04,موقف عملي: تأخر موعد التسليم,ours
+Delivery,Day 60,DE-D60-s05,scenario,S05,موقف عملي: ضرر محتمل في التغليف,ours
+Delivery,Day 60,DE-D60-s06,scenario,S06,موقف عملي: تعارض في بيانات الطلب,ours
+Delivery,Day 90,DE-D90-summary,summary,,اعرض ملخص تقدمك للمراجعة البشرية فقط,ours
