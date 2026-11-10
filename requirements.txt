@@ -1,0 +1,10 @@
+# Runtime (pinned; see docs/DECISIONS.md D-P0-pins)
+fastapi==0.143.3
+uvicorn==0.54.0
+pydantic==2.14.1
+pydantic-settings==2.16.0
+python-dotenv==1.2.4
+httpx==0.28.1
+numpy==2.4.6
+onnxruntime==1.31.0
+tokenizers==0.23.3

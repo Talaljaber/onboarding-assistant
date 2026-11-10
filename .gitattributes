@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+data/official/** -text
+data/ours/** -text
+models/** -text
+*.onnx binary

@@ -1,0 +1,18 @@
+.env
+# W0 additions (plan §A12.1, Part B P0.1, §A6.28)
+.venv/
+.cache/
+data/live/
+node_modules/
+web/node_modules/
+*.log
+results/*_heldout_*
+logs/
+release/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+.claude/settings.local.json
+.mcp.json
