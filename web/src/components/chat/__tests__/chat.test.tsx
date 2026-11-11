@@ -293,8 +293,8 @@ describe("practice mode", () => {
     await waitFor(() => expect(card("scenario_start")).not.toBeNull());
     expect(card("scenario_start")!.querySelectorAll("[data-option-id]")).toHaveLength(3);
     const banner = document.querySelector("[data-practice-banner]") as HTMLElement;
-    expect(banner).toHaveTextContent("Practice mode: S02");
-    expect(screen.getByRole("textbox")).toHaveAttribute("placeholder", "Write your response to the situation…");
+    expect(banner).toHaveTextContent("S02 ·");
+    expect(screen.getByRole("textbox")).toHaveAttribute("placeholder", "Write your reply…");
 
     await ask("بقوله إني رح أتأكد");
     await waitFor(() => expect(card("scenario_feedback")).not.toBeNull());

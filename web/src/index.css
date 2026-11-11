@@ -32,6 +32,16 @@ body {
     --da-bottom-nav: 0px;
   }
 }
+/* Practice mode hides the phone bottom bar (BottomNav), so nothing sits under the composer. */
+:root[data-practice] {
+  --da-bottom-nav: 0px;
+}
+/* Phones get a 56px header (the chrome budget at 390x844 is about 160px outside practice). */
+@media (max-width: 39.99rem) {
+  :root {
+    --da-header-h: 3.5rem;
+  }
+}
 html[lang="en"] body {
   line-height: 1.55;
 }

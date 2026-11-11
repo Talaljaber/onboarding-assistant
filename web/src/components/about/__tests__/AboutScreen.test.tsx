@@ -11,7 +11,7 @@ describe("AboutScreen", () => {
   it("renders all sections without claiming a fixed row count, and prints the server status", async () => {
     stubApi();
     renderScreen(<AboutScreen />, { role: null });
-    expect(screen.getByRole("heading", { level: 1, name: "حول النموذج والخصوصية" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "حول التطبيق" })).toBeInTheDocument();
     for (const h of ["ما هذا؟", "كيف يجيب؟", "ما الذي يغادر جهازك؟", "ما الذي يُحفظ؟", "الحدود", "المكونات", "حالة الخادم"]) {
       expect(screen.getByRole("heading", { name: h })).toBeInTheDocument();
     }
@@ -25,7 +25,7 @@ describe("AboutScreen", () => {
   it("shows the English text with ASCII digits and clear-data needs a confirmation", async () => {
     stubApi();
     renderScreen(<AboutScreen />, { role: null, lang: "en" });
-    expect(screen.getByRole("heading", { level: 1, name: "About the prototype & privacy" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "About" })).toBeInTheDocument();
     expect(await screen.findByTestId("health")).toHaveTextContent(`Build ${health.build}`);
     await userEvent.click(screen.getByRole("button", { name: "Clear this browser's data" }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();

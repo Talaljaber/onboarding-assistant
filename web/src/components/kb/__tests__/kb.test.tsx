@@ -322,7 +322,7 @@ describe("manager tab", () => {
   it("shows the server label verbatim, counts only and no score columns", async () => {
     backend();
     mount();
-    await userEvent.click(screen.getByRole("tab", { name: "Manager view" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Manager view (demo)" }));
     const label = await screen.findByText(manager.label_ar);
     expect(label).toHaveAttribute("dir", "rtl");
     const view = document.querySelector("[data-manager-view]") as HTMLElement;
@@ -336,7 +336,7 @@ describe("manager tab", () => {
   it("shows a retry on failure", async () => {
     backend({ "GET /api/manager/summary": () => json({}, 500) });
     mount();
-    await userEvent.click(screen.getByRole("tab", { name: "Manager view" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Manager view (demo)" }));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
   });
 });

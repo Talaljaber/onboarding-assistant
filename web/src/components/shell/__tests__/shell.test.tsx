@@ -67,7 +67,8 @@ describe("shell and role choice", () => {
     await waitFor(() => expect(window.location.hash).toBe("#/chat"));
     await waitFor(() => expect(profileCalls).toBe(1));
     await waitFor(() => expect(stored()?.role).toBe("Sales"));
-    expect(screen.getByTestId("role-chip").textContent).toContain(ar("role.sales"));
+    expect(screen.getByTestId("role-chip").textContent).toContain(ar("uiUat.roleShortSales"));
+    expect(screen.getByTestId("role-chip").getAttribute("aria-label")).toContain(ar("role.sales"));
   });
 
   it("the role dialog switches role and keeps per-role progress", async () => {
@@ -85,7 +86,7 @@ describe("shell and role choice", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await waitFor(() => expect(stored()?.role).toBe("Delivery"));
     expect(stored()?.perRole.Sales.progress).toEqual({ "SA-X": "2026-11-01" });
-    expect(screen.getByTestId("role-chip").textContent).toContain(ar("role.delivery"));
+    expect(screen.getByTestId("role-chip").textContent).toContain(ar("uiUat.roleShortDelivery"));
     expect(window.location.hash).toBe("#/chat");
   });
 
@@ -95,6 +96,7 @@ describe("shell and role choice", () => {
     });
     setHash("#/chat");
     renderApp();
+    fireEvent.click(await screen.findByTestId("header-more"));
     const group = await screen.findByRole("group", { name: ar("mode.label") });
     const offline = within(group).getByRole("button", { name: ar("mode.offline") });
     fireEvent.click(offline);
@@ -102,27 +104,56 @@ describe("shell and role choice", () => {
     await waitFor(() => expect(stored()?.mode).toBe("offline"));
   });
 
-  it("the header shows the prototype badge and the store badge from health", async () => {
-    renderApp();
-    expect(screen.getByRole("banner").textContent).toContain(ar("app.prototype"));
-    await waitFor(() => expect(screen.getByRole("banner").textContent).toMatch(/Supabase|محلي/));
-  });
-
-  it("the more dialog shows the admin sign-in (not the editor) to employees, and the about link", async () => {
+  it("the header stays calm: no prototype badge or status, which live in the footer and the settings sheet", async () => {
     seed((s) => {
       s.role = "Sales";
     });
     setHash("#/chat");
     renderApp();
     await act(async () => {});
-    fireEvent.click(screen.getByRole("button", { name: ar("nav.more") }));
+    const banner = screen.getByRole("banner");
+    expect(banner.textContent).not.toContain(ar("app.prototype"));
+    expect(banner.textContent).not.toMatch(/Supabase|محلي/);
+    expect(screen.getByRole("contentinfo").textContent).toContain(ar("app.disclaimer"));
+    fireEvent.click(screen.getByTestId("header-more"));
+    const dlg = await screen.findByRole("dialog");
+    await waitFor(() => expect(dlg.textContent).toMatch(/Supabase|محلي/));
+  });
+
+  it("the header language toggle switches to English in one tap", async () => {
+    renderApp();
+    fireEvent.click(await screen.findByTestId("lang-toggle"));
+    await waitFor(() => expect(document.documentElement.lang).toBe("en"));
+    fireEvent.click(screen.getByTestId("lang-toggle"));
+    await waitFor(() => expect(document.documentElement.lang).toBe("ar"));
+  });
+
+  it("the bottom bar has the five screens and no more button", async () => {
+    seed((s) => {
+      s.role = "Sales";
+    });
+    setHash("#/chat");
+    renderApp();
+    await act(async () => {});
+    expect(screen.queryByRole("button", { name: ar("nav.more") })).toBeNull();
+  });
+
+  it("the settings sheet shows the admin sign-in (not the editor) to employees, and the about link", async () => {
+    seed((s) => {
+      s.role = "Sales";
+    });
+    setHash("#/chat");
+    renderApp();
+    await act(async () => {});
+    fireEvent.click(screen.getByTestId("header-more"));
     const dlg = await screen.findByRole("dialog");
     expect(within(dlg).getByRole("link", { name: ar("uiAuth.navSignIn") })).toBeTruthy();
     expect(within(dlg).queryByRole("link", { name: ar("nav.kb") })).toBeNull();
-    expect(within(dlg).getByRole("link", { name: ar("nav.about") })).toBeTruthy();
+    fireEvent.click(within(dlg).getByRole("link", { name: ar("nav.about") }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
-  it("the more dialog shows the knowledge editor to the signed-in admin", async () => {
+  it("the settings sheet shows the knowledge editor to the signed-in admin", async () => {
     setAdminToken("4102444800.sig");
     seed((s) => {
       s.role = "Sales";
@@ -130,7 +161,7 @@ describe("shell and role choice", () => {
     setHash("#/chat");
     renderApp();
     await act(async () => {});
-    fireEvent.click(screen.getByRole("button", { name: ar("nav.more") }));
+    fireEvent.click(screen.getByTestId("header-more"));
     const dlg = await screen.findByRole("dialog");
     expect(within(dlg).getByRole("link", { name: ar("nav.kb") })).toBeTruthy();
     expect(within(dlg).queryByRole("link", { name: ar("uiAuth.navSignIn") })).toBeNull();
