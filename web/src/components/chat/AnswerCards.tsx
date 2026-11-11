@@ -43,11 +43,8 @@ export function AnswerCard({ reply, partial }: { reply: AnswerReply; partial: bo
           <span>{noteAt >= 0 ? PARTIAL_NOTE_AR : t("chat.partialTrailer")}</span>
         </p>
       )}
+      {/* "Built only from the rows listed" is the Sources heading's hint and the greeting's promise. */}
       <SourcesBlock sources={reply.sources} />
-      <p className="mt-3 flex items-center gap-1.5 text-xs text-fg-3">
-        <Icon name="shield" size={14} className="shrink-0 text-brand" />
-        {t("chat.groundedNote")}
-      </p>
     </article>
   );
 }

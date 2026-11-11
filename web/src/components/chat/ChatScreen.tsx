@@ -170,9 +170,12 @@ function ChatInner() {
       <div className="flex min-w-0 flex-1 flex-col pt-3 sm:pt-6">
         <div className="mb-2 flex items-center justify-between gap-3 sm:mb-4">
           <h1 className="text-xl font-bold leading-snug text-fg-1 sm:text-2xl">{t("chat.title")}</h1>
-          <Button variant="ghost" icon="refresh" className="-me-3" disabled={busy || items.length === 0} onClick={chat.clear}>
-            {t("chat.clear")}
-          </Button>
+          {/* Only offered once there is something to clear (a disabled ghost button read as broken). */}
+          {items.length > 0 && (
+            <Button variant="ghost" icon="refresh" className="-me-3" disabled={busy} onClick={chat.clear}>
+              {t("chat.clear")}
+            </Button>
+          )}
         </div>
 
         <ol ref={listRef} aria-label={t("chat.thread")} className="flex flex-col gap-5 pb-5 sm:gap-6">
@@ -238,18 +241,16 @@ function ChatInner() {
           )}
         >
           {active && (
-            <div
-              data-practice-banner
-              className={`${surface.soft} da-rise-in mb-2 flex items-center gap-2 ps-3 pe-1`}
-            >
-              <Icon name="flask" size={18} className="shrink-0 text-accent" />
-              <p className="min-w-0 flex-1 text-sm font-semibold leading-snug text-fg-1">
+            <div data-practice-banner className={`${surface.soft} da-rise-in mb-2 flex min-h-11 items-center gap-2 ps-3 pe-1`}>
+              <Icon name="flask" size={16} className="shrink-0 text-accent" />
+              <p className="min-w-0 flex-1 truncate text-sm font-semibold text-fg-1">
+                <span className="sr-only">{t("scenario.title")}: </span>
                 {t("scenario.banner", { id: active, value: value ?? "" })}
               </p>
               <button
                 type="button"
                 onClick={chat.endPractice}
-                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm font-semibold text-accent transition-colors duration-(--da-motion-fast) hover:bg-surface-0"
+                className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-md px-2 text-sm font-semibold text-accent transition-colors duration-(--da-motion-fast) hover:bg-surface-0"
               >
                 <Icon name="close" size={16} />
                 {t("scenario.end")}

@@ -159,12 +159,25 @@ describe("card mapping", () => {
     for (const s of partial.reply.sources) {
       const row = document.querySelector(`[data-source-id="${s.id}"]`) as HTMLElement;
       expect(row).toHaveTextContent(s.answer_ar);
-      expect(row).toHaveTextContent(s.source_document);
+      expect(row).toHaveTextContent(s.id);
+      // the document is named on the row, or once for the whole block when all rows share it
+      expect(card("partial")).toHaveTextContent(s.source_document);
     }
     // the server's text already ends with the note: shown once, no second trailer
     const noteText = partial.reply.text_ar.split(/\n\n/).pop() as string;
     expect(card("partial")!.textContent!.split(noteText).length - 1).toBe(1);
     expect(screen.queryByText(/rest of your question/i)).toBeNull();
+  });
+
+  it("names a document shared by every source once, as the block caption", async () => {
+    backend([listValues]);
+    mount();
+    await ask("values");
+    await waitFor(() => expect(card("answer")).not.toBeNull());
+    const docs = [...new Set(listValues.reply.sources.map((s) => s.source_document))];
+    expect(docs).toHaveLength(1);
+    expect(card("answer")!.textContent!.split(docs[0]!).length - 1).toBe(1);
+    expect(document.querySelectorAll("[data-source-id]")).toHaveLength(listValues.reply.sources.length);
   });
 
   it("adds its own trailer when the text lacks the note", async () => {
@@ -205,13 +218,38 @@ describe("card mapping", () => {
     expect(details.querySelector("[data-source-id]")).not.toBeNull();
   });
 
-  it("mode chip: AI answer, offline mode", async () => {
+  it("mode chip only when the answer differs from the current mode (no model connected: AI answer shows, offline does not)", async () => {
     backend([answerLlm, answerOffline]);
     mount();
     await ask("one");
     await waitFor(() => expect(screen.getByText("AI answer")).toBeInTheDocument());
     await ask("two");
+    await waitFor(() => expect(document.querySelectorAll('[data-kind="answer"]')).toHaveLength(2));
+    expect(screen.queryByText("Offline mode")).toBeNull();
+  });
+
+  it("mode chip: a forced offline mode keeps the offline chip on its answers", async () => {
+    backend([answerOffline]);
+    mount(seed({ mode: "offline" }));
+    await ask("one");
     await waitFor(() => expect(screen.getByText("Offline mode")).toBeInTheDocument());
+  });
+
+  it("the composer counter stays hidden until the text nears the limit", async () => {
+    backend([]);
+    mount();
+    const count = document.getElementById("chat-composer-count")!;
+    expect(count).toHaveClass("hidden");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "x".repeat(Math.ceil(LIMITS.messageMax * 0.8)) } });
+    expect(count).not.toHaveClass("hidden");
+  });
+
+  it("new conversation is only offered once the thread has messages", async () => {
+    backend([answerOffline]);
+    mount();
+    expect(screen.queryByRole("button", { name: "New conversation" })).toBeNull();
+    await ask("one");
+    await waitFor(() => expect(screen.getByRole("button", { name: "New conversation" })).toBeInTheDocument());
   });
 
   it("a fixed server refusal carries the neutral 'Fixed reply' chip, never the model chip", async () => {
