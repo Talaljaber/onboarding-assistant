@@ -13,7 +13,7 @@ const btn =
 /** Sticky header: wordmark, prototype badge, role chip, mode switch, trace toggle, language, store badge. */
 export function Header({ health }: { health: Health | null }) {
   const t = useT();
-  const { role, mode, setMode, forceOffline, trace, setTrace } = useAppState();
+  const { role, mode, setMode, forceOffline, trace, setTrace, practiceActive } = useAppState();
   const [roleOpen, setRoleOpen] = useState(false);
   const llmOn = !forceOffline && health?.llm_available === true;
   const roleName = role ? t(role === "Sales" ? "role.sales" : "role.delivery") : "";
@@ -30,9 +30,12 @@ export function Header({ health }: { health: Health | null }) {
               <button
                 type="button"
                 aria-haspopup="dialog"
+                disabled={practiceActive}
+                title={practiceActive ? t("extra.roleLocked") : undefined}
+                aria-description={practiceActive ? t("extra.roleLocked") : undefined}
                 aria-label={`${t("role.current", { role: roleName })}. ${t("role.switch")}`}
                 onClick={() => setRoleOpen(true)}
-                className={`${btn} border-accent bg-surface-0 text-accent`}
+                className={`${btn} border-accent bg-surface-0 text-accent disabled:cursor-not-allowed disabled:opacity-55`}
                 data-testid="role-chip"
               >
                 <Icon name={role === "Sales" ? "briefcase" : "map"} size={16} />

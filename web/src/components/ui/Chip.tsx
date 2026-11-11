@@ -47,7 +47,7 @@ export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
 export interface ChipGroupProps {
   /** Accessible name of the group (required: a radiogroup needs one). */
   label: string;
-  items: { id: string; label: string; tone?: Tone; disabled?: boolean }[];
+  items: { id: string; label: string; tone?: Tone; disabled?: boolean; lang?: string; dir?: "ltr" | "rtl" }[];
   /** Selected id, or `null` for none. */
   value: string | null;
   onChange: (id: string) => void;
@@ -93,7 +93,13 @@ export function ChipGroup({ label, items, value, onChange, className }: ChipGrou
           tabIndex={it.id === tabStop ? 0 : -1}
           onSelect={() => onChange(it.id)}
         >
-          {it.label}
+          {it.lang || it.dir ? (
+            <span lang={it.lang} dir={it.dir}>
+              {it.label}
+            </span>
+          ) : (
+            it.label
+          )}
         </Chip>
       ))}
     </div>
