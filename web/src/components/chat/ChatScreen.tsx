@@ -225,6 +225,9 @@ function ChatInner() {
                   onCancel={chat.cancelProposal}
                   onTryAgain={() => composerRef.current?.focus()}
                   onEnd={chat.endPractice}
+                  liveKb={chat.live}
+                  canReask={chat.questionOf(item) !== null}
+                  onReask={() => chat.reask(item)}
                 />
                 {!sideMode && item.trace && inlineShown(item.id) && (
                   <TracePanel trace={item.trace} citedIds={item.reply.sources.map((s) => s.id)} />

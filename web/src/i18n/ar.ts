@@ -794,6 +794,19 @@ export const ar = {
     unavailable: "الطلبات غير متاحة الآن.",
     changed: "آخر تغيير للحالة: {when}",
   },
+  // P14.1 Answer Recall «استدعاء الإجابة»
+  recall: {
+    title: "تغيّر مصدر هذه الإجابة بعد أن تلقيتها",
+    received: "تلقيتها في {when}",
+    changedRow: "ما تغيّر في {id}",
+    removed: "لم يعد هذا المصدر موجوداً",
+    del: "حُذف:",
+    add: "أُضيف:",
+    reask: "أعد السؤال",
+    addedHint: "أُضيفت مصادر جديدة بعد هذا الرد — أعد السؤال",
+    impact: "استُشهد بهذا الصف في إجابات لـ {n} متدرب ({names})",
+    impactNote: "إذا تغيّر مصدر إجابة، يظهر عند كل من تلقّاها تنبيه بما تغيّر بالضبط.",
+  },
 };
 
 /** Dictionary shape: the same nesting as `ar`, every leaf a string. */

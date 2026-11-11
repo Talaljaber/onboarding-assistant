@@ -25,7 +25,9 @@ import {
   type ReplyItem,
   type Retry,
 } from "./model";
+import type { LiveKb } from "./recall";
 import { SCENARIO_START_LABEL_AR } from "./starters";
+import { useKbWatch } from "./useKbWatch";
 
 let counter = 0;
 const newId = () => `${Date.now().toString(36)}-${(counter++).toString(36)}`;
@@ -59,6 +61,12 @@ export interface UseChat {
   startScenario: (id: string) => Promise<void>;
   endPractice: () => void;
   clear: () => void;
+  /** P14.1: the live KB (Answer Recall watcher), null until the first read. */
+  live: LiveKb | null;
+  /** P14.1: the user text right before this reply, if any (what «أعد السؤال» resends). */
+  questionOf: (item: ReplyItem) => string | null;
+  /** P14.1: resend the question of this reply as a fresh question (`last_user_message` null). */
+  reask: (item: ReplyItem) => void;
 }
 
 export function useChat(): UseChat {
@@ -74,6 +82,11 @@ export function useChat(): UseChat {
   langRef.current = lang;
   const toastRef = useRef(toast);
   toastRef.current = toast;
+
+  // P14.1 Answer Recall: the live KB, also read at send time for the reply's `kbVersion` fallback.
+  const live = useKbWatch();
+  const liveRef = useRef(live);
+  liveRef.current = live;
 
   const [items, setItems] = useState<ChatItem[]>(() => loadItems(app.thread.items));
   const itemsRef = useRef(items);
@@ -153,6 +166,9 @@ export function useChat(): UseChat {
         return;
       }
       const { reply, state, mode, trace } = res.value;
+      const at = new Date().toISOString();
+      const kbVersion = trace.retrieval?.kb_version ?? liveRef.current?.version;
+      const stamp = kbVersion ? { at, kbVersion } : { at };
       if (reply.kind === "progress_confirmed") {
         const now = appRef.current.progress;
         const pct = now.fromProposal(reply.progress.completed_ids);
@@ -162,14 +178,14 @@ export function useChat(): UseChat {
           if (p.resolveId && cur.some((i) => i.id === p.resolveId)) {
             return cur.map((i) => (i.id === p.resolveId && i.type === "reply" ? { ...i, resolved } : i));
           }
-          return [...cur, { id: newId(), type: "reply", reply, mode, cached: false, trace, resolved }];
+          return [...cur, { id: newId(), type: "reply", reply, mode, cached: false, trace, resolved, ...stamp }];
         });
         return;
       }
       const cached = Boolean(trace.answer?.cached || trace.feedback?.cached);
       commit((cur) => [
         ...cur,
-        { id: newId(), type: "reply", reply, mode, cached, trace, active: state.active_scenario },
+        { id: newId(), type: "reply", reply, mode, cached, trace, active: state.active_scenario, ...stamp },
       ]);
       // Practice counts once feedback exists, even if the user leaves without "end practice".
       if (reply.kind === "scenario_feedback" && reply.feedback) markPractised(reply.feedback.scenario_id);
@@ -284,6 +300,27 @@ export function useChat(): UseChat {
     commit(() => []);
   }, [commit]);
 
+  const questionOf = useCallback((item: ReplyItem): string | null => {
+    const cur = itemsRef.current;
+    const at = cur.findIndex((i) => i.id === item.id);
+    for (let i = at - 1; i >= 0; i--) {
+      const it = cur[i]!;
+      if (it.type === "user") return it.text.trim() ? it.text.slice(0, LIMITS.messageMax) : null;
+    }
+    return null;
+  }, []);
+
+  // A re-ask is a new question: a new user bubble, no follow-up context, the normal pipeline.
+  const reask = useCallback(
+    (item: ReplyItem) => {
+      const message = questionOf(item);
+      if (!message || busyRef.current) return;
+      commit((cur) => [...cur, { id: newId(), type: "user", text: message }]);
+      void run({ message, lastUser: null, confirm: null, optionId: null, resolveId: null });
+    },
+    [commit, run, questionOf],
+  );
+
   return {
     items,
     busy,
@@ -296,5 +333,8 @@ export function useChat(): UseChat {
     startScenario,
     endPractice,
     clear,
+    live,
+    questionOf,
+    reask,
   };
 }

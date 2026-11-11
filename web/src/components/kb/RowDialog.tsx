@@ -1,8 +1,10 @@
 // Edit / add dialog for one K-row. Edit sends only the changed fields (null = unchanged);
 // add sends the five fields and shows the id the server will most likely assign.
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { KbNewRow, KbPatch, KbRow } from "@/api/types";
-import { useT } from "@/i18n";
+import { getKbImpact } from "@/api/client";
+import type { InternPublic, KbNewRow, KbPatch, KbRow } from "@/api/types";
+import { useLang, useT } from "@/i18n";
+import { internName } from "@/lib/intern";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { Notice } from "../ui/Notice";
@@ -68,6 +70,33 @@ const draftOf = (row: KbRow | null, topics: string[]): Draft => ({
   document: row?.source_document ?? "",
   page: row ? String(row.source_page) : "",
 });
+
+/**
+ * P14.1: in edit mode, the interns whose answers cited this row, read before saving. Shows nothing while
+ * loading, on failure or when nobody was answered from it (never "0").
+ */
+function ImpactLine({ id }: { id: string }) {
+  const t = useT();
+  const { lang } = useLang();
+  const [interns, setInterns] = useState<InternPublic[]>([]);
+  useEffect(() => {
+    const ctl = new AbortController();
+    void getKbImpact(id, ctl.signal).then((r) => {
+      if (r.ok && r.value.id === id) setInterns(r.value.interns);
+    });
+    return () => ctl.abort();
+  }, [id]);
+  if (interns.length === 0) return null;
+  const names = interns.map((i) => internName(i, lang)).join(lang === "ar" ? "، " : ", ");
+  return (
+    <div data-kb-impact>
+      <Notice tone="suggest" icon="info">
+        <p className="font-semibold">{t("recall.impact", { n: interns.length, names })}</p>
+        <p className="mt-1 text-fg-2">{t("recall.impactNote")}</p>
+      </Notice>
+    </div>
+  );
+}
 
 export function RowDialog({ row, nextId, topics, onClose, onSubmit }: RowDialogProps) {
   const t = useT();
@@ -142,9 +171,12 @@ export function RowDialog({ row, nextId, topics, onClose, onSubmit }: RowDialogP
     <Dialog open onClose={onClose} size="lg" title={row ? t("extra.kbEditTitle", { id: row.id }) : t("extra.kbAddTitle")}>
       <form onSubmit={(e) => void submit(e)} noValidate className="flex flex-col gap-4" data-kb-form={row ? "edit" : "add"}>
         {row ? (
-          <div className="flex flex-wrap items-center gap-2 text-sm text-fg-2">
-            <StatusBadges row={row} />
-          </div>
+          <>
+            <div className="flex flex-wrap items-center gap-2 text-sm text-fg-2">
+              <StatusBadges row={row} />
+            </div>
+            <ImpactLine id={row.id} />
+          </>
         ) : (
           <Notice tone="info">
             {t("kb.nextId", { id: "" })}
