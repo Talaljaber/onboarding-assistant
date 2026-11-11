@@ -182,23 +182,31 @@ def test_trace_has_no_prompt_or_key(tmp_path: Path, kb: KnowledgeBase) -> None:
         assert secret not in dumped
 
 
-def test_citation_judge_may_only_drop_ids(tmp_path: Path, kb: KnowledgeBase) -> None:
+def test_a_citation_drop_escalates_and_never_edits_the_draft(tmp_path: Path, kb: KnowledgeBase) -> None:
+    k15 = {"status": "answered", "answer_ar": K15_K12["answer_ar"].split(".")[0] + ".", "ids": ["K15"],
+           "quotes": {"K15": K15_K12["quotes"]["K15"]}}
     fake = PanelFake(sanitizer=sanitizer("هل يجب تسجيل الحضور؟"), answerer=js(K15_K12),
-                     citation_judge=judge(drop=["K12", "K03"]), coverage_judge=coverage())
+                     citation_judge=judge(drop=["K12", "K03"]), coverage_judge=coverage(), escalation=js(k15))
     res, info = run(make_llm(tmp_path, fake), kb, "هل يجب تسجيل الحضور؟", first="K15")
-    assert res is not None and res.ids == ["K15"] and set(res.quotes) == {"K15"}  # K12 dropped, K03 never added
-    assert res.text_ar == K15_K12["answer_ar"] and panel_of(info).accepted
+    assert res is not None and res.escalated and res.ids == ["K15"]  # the escalation's minimal answer
+    p = panel_of(info)
+    assert not p.accepted and p.escalated_to == ESC
+    cit = next(v for v in p.votes if v.role == "citation_judge")
+    assert cit.note == "extra rows: K12"  # K03 was not cited: never added, never named
 
 
-def test_a_drop_the_verifier_rejects_keeps_the_draft(tmp_path: Path, kb: KnowledgeBase) -> None:
-    draft = {"status": "answered", "answer_ar": "فترة التجربة 90 يوماً، ويتم تسجيل الحضور وفق الوسيلة المعتمدة.",
-             "ids": ["K14", "K15"], "quotes": {"K14": "فترة التجربة 90 يوماً", "K15": "تسجيل الحضور والانصراف"}}
-    fake = PanelFake(sanitizer=sanitizer("التجربة والحضور؟"), answerer=js(draft),
-                     citation_judge=judge(drop=["K14"]), coverage_judge=coverage())
-    res, info = run(make_llm(tmp_path, fake), kb, "التجربة والحضور؟", first="K14")
-    assert res is not None and res.ids == ["K14", "K15"]  # dropping K14 leaves "90" unsupported
-    cit = next(v for v in panel_of(info).votes if v.role == "citation_judge")
-    assert cit.note is not None and "rejected by the verifier" in cit.note
+def test_a_drop_without_escalation_keeps_the_fully_cited_draft(tmp_path: Path, kb: KnowledgeBase) -> None:
+    fake = PanelFake(sanitizer=sanitizer("هل يجب تسجيل الحضور؟"), answerer=js(K15_K12),
+                     citation_judge=judge(drop=["K12"]), coverage_judge=coverage())
+    res, _info = run(make_llm(tmp_path, fake, escalation=False), kb, "هل يجب تسجيل الحضور؟", first="K15")
+    assert res is not None and res.ids == ["K15", "K12"] and res.text_ar == K15_K12["answer_ar"]
+
+
+def test_trace_notes_never_carry_a_number_or_contact() -> None:
+    from app.llm.panel import _clip
+    assert _clip("K12 is extra; K15 answers it") == "K12 is extra; K15 answers it"
+    assert _clip("the draft should say 30 days") == "[note removed]"
+    assert _clip("ask hr@example.com") == "[note removed]"
 
 
 def test_coverage_doubt_escalates_with_notes_as_data(tmp_path: Path, kb: KnowledgeBase) -> None:
@@ -457,3 +465,16 @@ def test_small_talk_never_uses_the_panel(agent: Agent, install: Any) -> None:
     fake = install(PanelFake(agent=js({"tool": "greet", "args": {}})))
     r = ask(agent, "مرحبا")
     assert r.reply.kind == "text" and r.trace.panel is None and fake.roles() == ["agent"]
+
+
+def test_parallel_stages_share_one_wall_clock_end() -> None:
+    from app.llm.panel import GRACE_S, Stage, _gather
+
+    def slow() -> Stage:
+        time.sleep(3.0)
+        return Stage(role="x", model="m", ok=True)
+
+    started = time.monotonic()
+    out = _gather({"a": (slow, 1.0, "sanitizer", "m"), "b": (slow, 1.0, "answerer", "m")})
+    assert time.monotonic() - started < 1.0 + GRACE_S + 0.4  # not 2 × (deadline + grace)
+    assert {s.reason for s in out.values()} == {"timeout"}

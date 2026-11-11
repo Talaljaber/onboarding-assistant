@@ -207,6 +207,9 @@ class Agent:
         use_llm = self.llm_on(req.force_offline)
         if use_llm and self.llm is not None:
             tb.mode, tb.model = "llm", self.llm.model
+            if self.llm.chat is not None:
+                # request threads are reused: an earlier turn's error must not flip this turn offline
+                self.llm.chat.last_error = None
 
         if req.confirm is not None:
             tb.router = Route("propose_progress", {}, 0.7, "confirm turn")
@@ -269,6 +272,9 @@ class Agent:
         use_llm = self.llm_on(req.force_offline)
         if use_llm and self.llm is not None:
             tb.mode, tb.model = "llm", self.llm.model
+            if self.llm.chat is not None:
+                # request threads are reused: an earlier turn's error must not flip this turn offline
+                self.llm.chat.last_error = None
         tb.router = Route("give_scenario_feedback", {"scenario_id": scenario_id}, 0.7, "scenario feedback endpoint")
         # Guards run first here too (D-W5-feedback-guard): a guarded reply never reaches the model;
         # the endpoint keeps its response shape and gives the offline (server-worded) feedback.

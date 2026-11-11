@@ -15,6 +15,7 @@ prompt, a cache key or a raw reply in the trace, or receive the role (no paramet
 from __future__ import annotations
 
 import concurrent.futures as cf
+import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -34,7 +35,6 @@ from app.verify import (
     normalise_ids,
     numbers_in,
     parse_json_object,
-    verify_answer,
 )
 
 SANITIZER_PROMPT = "panel_sanitizer_v1"
@@ -51,7 +51,8 @@ QUESTION_MAX = 1000
 DEAD_REASONS = frozenset({"no_key", "offline", "budget_exhausted", "no_credits", "unauthorized", "unreachable"})
 HARD_FAILURES = frozenset({"no_credits", "unauthorized", "unreachable"})
 
-_POOL = cf.ThreadPoolExecutor(max_workers=8, thread_name_prefix="panel")
+_POOL = cf.ThreadPoolExecutor(max_workers=32, thread_name_prefix="panel")
+_K_ID = re.compile(r"\bK\d{1,3}\b")
 
 
 @dataclass(frozen=True)
@@ -114,7 +115,8 @@ def _clip(note: object) -> str | None:
     if not isinstance(note, str) or not note.strip():
         return None
     text = " ".join(note.split())
-    if has_contact_or_link(text) is not None:
+    # notes are model text shown in the trace: no contact, link or number (row ids aside) may pass
+    if has_contact_or_link(text) is not None or numbers_in(_K_ID.sub(" ", text)):
         return "[note removed]"
     return text[:NOTE_MAX]
 
@@ -166,11 +168,23 @@ def _run_stage(chat: CachedChat, role: str, prompt: str, rendered: str, max_toke
 
 def _gather(jobs: Mapping[str, tuple[Callable[[], Stage], float, str, str]]) -> dict[str, Stage]:
     """Run stage jobs concurrently; a job not done by its deadline + grace counts as a timeout."""
-    futures = {name: (_POOL.submit(fn), deadline, role, model) for name, (fn, deadline, role, model) in jobs.items()}
+    submitted = time.monotonic()
+
+    def guarded(fn: Callable[[], Stage], deadline: float, role: str, model: str) -> Callable[[], Stage]:
+        def run() -> Stage:
+            # a job that waited in the queue past its deadline makes no (paid) call for a turn already over
+            if time.monotonic() - submitted > max(0.0, deadline):
+                return Stage(role=role, model=model, reason="no_time")
+            return fn()
+        return run
+
+    futures = {name: (_POOL.submit(guarded(fn, deadline, role, model)), deadline, role, model)
+               for name, (fn, deadline, role, model) in jobs.items()}
     out: dict[str, Stage] = {}
     for name, (fut, deadline, role, model) in futures.items():
+        end = submitted + max(0.0, deadline) + GRACE_S  # one wall-clock end per job, not per wait
         try:
-            out[name] = fut.result(timeout=max(0.0, deadline) + GRACE_S)
+            out[name] = fut.result(timeout=max(0.0, end - time.monotonic()))
         except cf.TimeoutError:
             out[name] = Stage(role=role, model=model, reason="timeout", latency_ms=int((deadline + GRACE_S) * 1000),
                               called=True)
@@ -236,20 +250,6 @@ def _coverage_validator(draft_status: str) -> Callable[[str], tuple[dict[str, An
 
 
 # ---------------------------------------------------------------------------------------------- the panel
-def _drop_ids(draft: dict[str, Any], drop: Sequence[str], rows: Sequence[Mapping[str, Any]],
-              user_texts: str) -> dict[str, Any] | None:
-    """The draft without the dropped ids, if it still passes the verifier; else None (keep the draft)."""
-    keep = [i for i in draft["ids"] if i not in drop]
-    if not keep or keep == draft["ids"]:
-        return None
-    reply = {"status": draft["status"], "answer_ar": draft["answer_ar"], "ids": keep,
-             "quotes": {k: v for k, v in draft["quotes"].items() if k in keep}}
-    verdict = verify_answer(reply, rows, user_texts)
-    if not verdict.ok:
-        return None
-    return {**reply, "ids": verdict.normalised_ids}
-
-
 def run_panel(
     question: str,
     rows: list[dict[str, Any]],
@@ -406,12 +406,10 @@ def run_panel(
         trace["confidence"] = round(confidence, 3)
         cit = judged.get("citation")
         if cit is not None and cit.ok and cit.value and cit.value["drop"]:
-            dropped = _drop_ids(d, cit.value["drop"], rows, user_texts)
-            if dropped is not None:
-                d = dropped
-            else:
-                judge_votes["citation"]["note"] = _clip(
-                    f"drop {', '.join(cit.value['drop'])} rejected by the verifier")
+            # a drop would leave the dropped row's text in the answer without its source: it never edits
+            # the draft, it only sends the turn to escalation (the draft, fully cited, stays the fallback)
+            all_ok = False
+            judge_votes["citation"]["note"] = _clip(f"extra rows: {', '.join(cit.value['drop'])}")
         if all_ok and confidence >= settings.accept:
             return finish(d, None, final=draft, accepted=True)
 
