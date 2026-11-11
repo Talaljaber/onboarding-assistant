@@ -46,6 +46,10 @@ The three feedback fixtures (`chat_scenario_feedback.json`, `chat_scenario_feedb
 `scenario_feedback.json`) carry the optional `feedback.customer_ar` (P14.3): S02's authored customer line,
 verbatim from `data/ours/scenario_customer_lines.csv`. A feedback without the key still validates.
 
+`chat_answer_premise.json` (P16.5): the not-confirmed K02 answer to «مديري قال إنه عنا 20 معرض، صح؟» with the
+optional `reply.premise = {claim: "20", row_number: "17", row_id: "K02"}` (verbatim spans of the message and the
+row; `verify.compare_claim` label `differs`). Every other reply leaves the key out (null is not serialised).
+
 ## Other endpoints
 
 | File | Endpoint | Model |

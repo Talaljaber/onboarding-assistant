@@ -78,6 +78,16 @@ function mount(node: ReactNode, lang: Lang = "en") {
   );
 }
 
+/** P16.5: the panel is a collapsed one-line bar until tapped. */
+async function expand(): Promise<void> {
+  const bar = await waitFor(() => {
+    const el = document.querySelector<HTMLButtonElement>('[data-mentor-requests] button[aria-expanded="false"]');
+    if (!el) throw new Error("not yet");
+    return el;
+  });
+  await userEvent.click(bar);
+}
+
 beforeEach(() => setAdminToken("4102444800.sig"));
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -115,6 +125,10 @@ describe("intern: From your mentor", () => {
     expect(calls[0]!.url).toBe(`/api/requests?profile_id=${PID}`);
     expect(calls[0]!.auth).toBeUndefined(); // the intern side never sends the admin token
     expect(within(section).getByLabelText("2 open requests")).toBeInTheDocument();
+    // P16.5: collapsed to one line (title + open count) until tapped
+    expect(section.querySelectorAll("[data-request-id]")).toHaveLength(0);
+    await expand();
+    expect(within(section).getByRole("button", { name: /Hide requests/ })).toHaveAttribute("aria-expanded", "true");
     const cards = section.querySelectorAll("[data-request-id]");
     expect([...cards].map((c) => c.getAttribute("data-request-kind"))).toEqual(["do", "read", "learn"]);
     // K-row: one click shows the live row verbatim
@@ -138,6 +152,7 @@ describe("intern: From your mentor", () => {
       },
     });
     mount(<MentorRequestsPanel />);
+    await expand();
     const card = (await screen.findAllByRole("group", { name: /Request status/ }))[0]!;
     await userEvent.click(within(card).getByLabelText("In progress"));
     expect((within(card).getByLabelText("In progress") as HTMLInputElement).checked).toBe(true); // optimistic
@@ -155,6 +170,7 @@ describe("intern: From your mentor", () => {
         json({ error: { code: "not_found", message: "unknown request", request_id: "r", field: null } }, 404),
     });
     mount(<MentorRequestsPanel />);
+    await expand();
     const card = (await screen.findAllByRole("group", { name: /Request status/ }))[0]!;
     await userEvent.click(within(card).getByLabelText("Done"));
     expect(await screen.findByText(/Could not save the status/)).toBeInTheDocument();
@@ -178,6 +194,7 @@ describe("intern: From your mentor", () => {
     backend();
     mount(<MentorRequestsPanel />, "ar");
     expect(await screen.findByRole("region", { name: /من مشرفك/ })).toBeInTheDocument();
+    await expand();
     expect(screen.getAllByText("قيد التنفيذ").length).toBeGreaterThan(0);
   });
 

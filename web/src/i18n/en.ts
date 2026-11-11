@@ -858,4 +858,13 @@ export const en: Dict = {
     quizDoneElsewhere: "Completed — attempt details are on the device you used",
     unticked: "Unticked: progress is {pct}%",
   },
+  chatUx: {
+    // P16.5 chat screen: recall banner, first-day link, nav dot, premise correction.
+    recallBanner: "Sources of an earlier answer changed ({n})",
+    recallShow: "Show",
+    firstDayLink: "Before your first day",
+    navAttention: "New: an answer whose sources changed or a request from your mentor",
+    premise: "You said {claim}; the source says {row}",
+    premiseCheck: "Check what you heard",
+  },
 };

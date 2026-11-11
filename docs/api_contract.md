@@ -181,6 +181,14 @@ Shapes:
 - `PlanOut`: see `GET /api/plan`; in chat it may set `focus_milestone`.
 - `QuizItem`: see `GET /api/quiz`.
 
+P16.5 premise correction: `reply.premise` = `{claim, row_number, row_id}` is optional and **absent** (not
+null) when not set. The server adds it after the agent returned (`app/premise.py`, identical in offline and model
+mode) when the reply is an `answer` (any band, including not-confirmed), no guard fired, no injection was
+suspected, and the user's `message` states a number with the same unit as a number in a cited row but another
+value (`verify.compare_claim` label `differs`, the Rumour Check rule). `claim` is the message's number and
+`row_number` the row's, both verbatim spans; `row_id` is one of `sources`. The client shows one line above that
+row («ذكرتَ 20، والمصدر يذكر 17») with a link to the Rumour Check. Example: `chat_answer_premise.json`.
+
 Examples: `contracts/fixtures/chat_*.json` (one per kind and card variant, see §8).
 
 ### Trace (every chat response; also scenario feedback)
@@ -641,6 +649,7 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
   `mentor_requests.json`, `mentor_request_status_request.json`, `mentor_request.json`,
   `mentor_request_patch_request.json`, `mentor_request_deleted.json`;
 - Rumour Check (P14.2): `check_request.json`, `check.json`;
+- premise correction (P16.5): `chat_answer_premise.json`;
 - request threads (P15): `request_thread.json`, `request_comment.json`, `request_comment_create_request.json`,
   `request_comment_admin_create_request.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,

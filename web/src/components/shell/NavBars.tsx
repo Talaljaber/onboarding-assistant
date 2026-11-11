@@ -3,6 +3,7 @@ import { Icon, type IconName } from "@/components/ui/Icon";
 import { useT, type DictKey } from "@/i18n";
 import { usePath } from "@/router";
 import { useAppState } from "@/state/useAppState";
+import { needsAttention, useAttention } from "../chat/attention";
 
 interface Item {
   path: string;
@@ -28,9 +29,24 @@ function useMore(): Item[] {
   return [ABOUT];
 }
 
+/** P16.5: the Assistant item's dot (a recalled answer or an open mentor request), with a spoken hint. */
+function useChatDot(item: Item): boolean {
+  const attention = useAttention();
+  return item.path === "/chat" && needsAttention(attention);
+}
+
+const DOT = "absolute size-2.5 rounded-full bg-amber ring-2 ring-surface-0";
+
+/** Spoken after the item's label while the dot shows. */
+function DotHint() {
+  const t = useT();
+  return <span className="sr-only">{` (${t("chatUx.navAttention")})`}</span>;
+}
+
 /** One sidebar link: a rail tile (icon over label) at md, a full row from lg. */
 function SideLink({ item, current }: { item: Item; current: boolean }) {
   const t = useT();
+  const dot = useChatDot(item);
   return (
     <li>
       <a
@@ -45,8 +61,12 @@ function SideLink({ item, current }: { item: Item; current: boolean }) {
       >
         {/* Current page: a teal bar on the start edge (shape, not only colour). */}
         {current && <span aria-hidden="true" className="absolute inset-y-2 start-0 w-1 rounded-full bg-accent max-lg:hidden" />}
-        <Icon name={item.icon} size={20} className="shrink-0" />
+        <span className="relative shrink-0">
+          <Icon name={item.icon} size={20} className="shrink-0" />
+          {dot && <span aria-hidden="true" data-nav-dot className={cn(DOT, "-end-1 -top-0.5")} />}
+        </span>
         <span>{t(item.key)}</span>
+        {dot && <DotHint />}
       </a>
     </li>
   );
@@ -96,6 +116,7 @@ export function BottomNav() {
   const t = useT();
   const path = usePath();
   const { practiceActive } = useAppState();
+  const chatDot = needsAttention(useAttention());
   if (practiceActive) return null;
   const cls = "flex h-16 flex-1 flex-col items-center justify-center gap-1 px-0.5 text-xs leading-none";
   const pillCls = (on: boolean) =>
@@ -119,10 +140,12 @@ export function BottomNav() {
                 aria-current={on ? "page" : undefined}
                 className={cn(cls, on ? "font-bold text-accent" : "font-medium text-fg-2")}
               >
-                <span aria-hidden="true" className={pillCls(on)}>
+                <span aria-hidden="true" className={cn(pillCls(on), "relative")}>
                   <Icon name={i.icon} size={20} />
+                  {i.path === "/chat" && chatDot && <span data-nav-dot className={cn(DOT, "end-1.5 top-0.5")} />}
                 </span>
                 <span className="max-w-full truncate">{t(i.short ?? i.key)}</span>
+                {i.path === "/chat" && chatDot && <DotHint />}
               </a>
             </li>
           );

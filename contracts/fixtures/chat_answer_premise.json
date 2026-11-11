@@ -1,0 +1,157 @@
+{
+  "reply": {
+    "kind": "answer",
+    "text_ar": "لا أجد إجابة مؤكدة في قاعدة المعرفة. أقرب معلومة لدي أدناه، ويُفضَّل التأكد من الموارد البشرية.",
+    "text_en": null,
+    "status": "partial",
+    "band": "not_confirmed",
+    "sources": [
+      {
+        "id": "K02",
+        "topic": "Company",
+        "answer_ar": "تمتلك المجموعة 17 معرضاً في عمان والسلط وإربد والزرقاء والعقبة.",
+        "source_document": "Company Profile 2026",
+        "source_page": 4,
+        "edited": false,
+        "status": "official"
+      }
+    ],
+    "scenario": null,
+    "feedback": null,
+    "proposal": null,
+    "progress": null,
+    "plan": null,
+    "quiz": null,
+    "reason": null,
+    "label_ar": null,
+    "premise": {
+      "claim": "20",
+      "row_number": "17",
+      "row_id": "K02"
+    }
+  },
+  "state": {
+    "active_scenario": null
+  },
+  "mode": "offline",
+  "trace": {
+    "request_id": "b7c2d4e6f8a1",
+    "mode": "offline",
+    "model": null,
+    "guards": {
+      "employment": null,
+      "contact": null
+    },
+    "router": {
+      "tool": "answer_from_rows",
+      "confidence": 0.7,
+      "reason": "default: knowledge question"
+    },
+    "agent": {
+      "used": false,
+      "tool": null,
+      "args": null,
+      "latency_ms": null,
+      "cached": false,
+      "fallback_reason": null
+    },
+    "retrieval": {
+      "query": "مديري قال إنه عنا 20 معرض، صح؟",
+      "hits": [
+        {
+          "id": "K02",
+          "topic": "Company",
+          "dense": 0.865,
+          "bm25": 2.584,
+          "rrf": 0.03333,
+          "rank": 1
+        },
+        {
+          "id": "K16",
+          "topic": "Policy",
+          "dense": 0.8063,
+          "bm25": 2.1545,
+          "rrf": 0.02938,
+          "rank": 2
+        },
+        {
+          "id": "K03",
+          "topic": "Company",
+          "dense": 0.8512,
+          "bm25": 0.0,
+          "rrf": 0.01639,
+          "rank": 3
+        },
+        {
+          "id": "K06",
+          "topic": "Values",
+          "dense": 0.8391,
+          "bm25": 0.0,
+          "rrf": 0.01613,
+          "rank": 4
+        },
+        {
+          "id": "K07",
+          "topic": "Values",
+          "dense": 0.836,
+          "bm25": 0.0,
+          "rrf": 0.01587,
+          "rank": 5
+        },
+        {
+          "id": "K14",
+          "topic": "Onboarding",
+          "dense": 0.8346,
+          "bm25": 0.0,
+          "rrf": 0.01562,
+          "rank": 6
+        },
+        {
+          "id": "K05",
+          "topic": "Values",
+          "dense": 0.8334,
+          "bm25": 0.0,
+          "rrf": 0.01538,
+          "rank": 7
+        },
+        {
+          "id": "K08",
+          "topic": "Values",
+          "dense": 0.8324,
+          "bm25": 0.0,
+          "rrf": 0.01515,
+          "rank": 8
+        }
+      ],
+      "margin": {
+        "best_row": "K18",
+        "best_row_cos": 0.8686,
+        "best_oos": "OOS06",
+        "best_oos_cos": 0.8844,
+        "margin": -0.0158
+      },
+      "list_question": false,
+      "topic_expanded": null,
+      "kb_version": "a320e70cc4dd"
+    },
+    "answer": {
+      "llm_status": null,
+      "verifier": null,
+      "escalated": false,
+      "band": "not_confirmed",
+      "latency_ms": null,
+      "cached": false
+    },
+    "feedback": null,
+    "injection_suspected": false,
+    "panel": null,
+    "steps": [
+      "guards:none",
+      "router:answer_from_rows",
+      "retrieve:18",
+      "band:not_confirmed",
+      "render"
+    ],
+    "latency_ms": 12
+  }
+}

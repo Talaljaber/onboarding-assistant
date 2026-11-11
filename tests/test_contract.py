@@ -108,6 +108,8 @@ FIXTURES: dict[str, type[BaseModel]] = {
     "request_comment.json": s.RequestComment,
     "request_comment_create_request.json": s.RequestCommentCreate,
     "request_comment_admin_create_request.json": s.AdminCommentCreate,
+    # P16.5 premise correction
+    "chat_answer_premise.json": s.ChatResponse,
 }
 
 # One response fixture per endpoint (the request fixtures are listed in FIXTURES above).
@@ -635,3 +637,23 @@ def test_request_comments_limits_and_no_score() -> None:
     counted = {r["id"]: r["comment_count"] for r in listing}
     assert counted[thread["request_id"]] == len(thread["comments"])
     assert s.COMMENT_BODY_MAX_BYTES > s.COMMENT_FILES_MAX * s.COMMENT_FILE_MAX_BYTES * 4 // 3
+
+
+def test_premise_is_optional_verbatim_and_names_a_source() -> None:
+    """P16.5: `reply.premise` is left out when null; when set, both numbers are verbatim spans and the row is cited."""
+    for name, reply in chat_replies():
+        if name != "chat_answer_premise.json":
+            assert "premise" not in reply, name
+    body = load("chat_answer_premise.json")
+    p = body["reply"]["premise"]
+    assert p == {"claim": "20", "row_number": "17", "row_id": "K02"}
+    row = next(src for src in body["reply"]["sources"] if src["id"] == p["row_id"])
+    assert p["row_number"] in row["answer_ar"]
+    assert p["claim"] in body["trace"]["retrieval"]["query"]
+    ts = TYPES_TS.read_text(encoding="utf-8")
+    assert "export interface Premise" in ts and "premise?: Premise" in ts
+    bad = {**body["reply"], "premise": {**p, "row_id": "K03"}}
+    with pytest.raises(ValidationError):
+        s.Reply.model_validate(bad)
+    with pytest.raises(ValidationError):
+        s.Reply.model_validate({**load("chat_refusal_contact.json")["reply"], "premise": p})

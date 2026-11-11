@@ -112,6 +112,29 @@ describe("CheckScreen", () => {
     await screen.findByRole("list");
     expect(screen.getByText(translate("en", "check.supported"))).toBeInTheDocument();
     expect(document.querySelector("[data-check-footer]")).toHaveTextContent(translate("en", "check.footer"));
-    expect(document.querySelector("blockquote")?.getAttribute("lang")).toBe("ar");
+    // P16.5 (U9): the user's words follow their own direction (an English sentence is not an RTL quote)
+    const quote = document.querySelector("blockquote")!;
+    expect(quote.getAttribute("dir")).toBe("auto");
+    expect(quote.hasAttribute("lang")).toBe(false);
+  });
+
+  it("clears the old result as soon as the text is edited (P16.5, I8)", async () => {
+    stubApi({ "/api/check": () => json(check) });
+    renderScreen(<CheckScreen />);
+    await userEvent.click(screen.getByRole("button", { name: ar("check.sample") }));
+    await screen.findByRole("list");
+    await userEvent.type(screen.getByLabelText(ar("check.inputLabel")), " ");
+    expect(document.querySelector("[data-check-results]")).toBeNull();
+    expect(screen.queryByRole("heading", { name: ar("check.results") })).toBeNull();
+  });
+
+  it("a premise link opens prefilled with the question and checks it once (P16.5)", async () => {
+    const q = "مديري قال إنه عنا 20 معرض، صح؟";
+    window.history.replaceState(null, "", `#/check?text=${encodeURIComponent(q)}`);
+    const fn = stubApi({ "/api/check": () => json(check) });
+    renderScreen(<CheckScreen />);
+    expect(screen.getByLabelText(ar("check.inputLabel"))).toHaveValue(q);
+    await screen.findByRole("list");
+    expect(bodies(fn)).toEqual([{ text: q, force_offline: false }]);
   });
 });

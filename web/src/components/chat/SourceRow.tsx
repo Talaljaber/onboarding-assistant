@@ -1,10 +1,11 @@
-import type { Source } from "@/api/types";
+import type { Premise, Source } from "@/api/types";
 import { useT } from "@/i18n";
 import { highlightNumbers } from "@/lib/highlight";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { sourceQuote } from "../ui/recipes";
 import { useToast } from "../ui/Toast";
+import { PremiseLine } from "./PremiseLine";
 
 /** Which parts of the document/page line a row prints itself (the rest is the block caption). */
 export interface SourceMeta {
@@ -40,10 +41,15 @@ export function SourceRow({
   source,
   meta = { doc: true, page: true },
   answer,
+  premise,
+  question,
 }: {
   source: Source;
   meta?: SourceMeta;
   answer?: string;
+  /** P16.5: shown as one line above this row when it names this row. */
+  premise?: Premise;
+  question?: string | null;
 }) {
   const t = useT();
   const toast = useToast();
@@ -57,6 +63,7 @@ export function SourceRow({
   };
   return (
     <li data-source-id={source.id} className={`${sourceQuote} min-w-0 py-2 pe-1 flow-root`}>
+      {premise?.row_id === source.id && <PremiseLine premise={premise} question={question} />}
       {/* The row is always Arabic (rtl), so the copy button floats at the line's end (left) and only
           the first line of the row is shortened by its 44px hit area. */}
       <div dir="rtl">
@@ -112,7 +119,17 @@ export function SourceRow({
  * share a document (and page) it is named once, as the block caption, instead of under every row.
  * `answer` (P14.4) is the answer text whose numbers are highlighted in the rows.
  */
-export function SourcesBlock({ sources, answer }: { sources: readonly Source[]; answer?: string }) {
+export function SourcesBlock({
+  sources,
+  answer,
+  premise,
+  question,
+}: {
+  sources: readonly Source[];
+  answer?: string;
+  premise?: Premise;
+  question?: string | null;
+}) {
   const t = useT();
   const first = sources[0];
   if (!first) return null;
@@ -126,7 +143,14 @@ export function SourcesBlock({ sources, answer }: { sources: readonly Source[]; 
       </h4>
       <ul className="flex flex-col gap-2">
         {sources.map((s) => (
-          <SourceRow key={s.id} source={s} meta={{ doc: !sameDoc, page: !samePage }} answer={answer} />
+          <SourceRow
+            key={s.id}
+            source={s}
+            meta={{ doc: !sameDoc, page: !samePage }}
+            answer={answer}
+            premise={premise}
+            question={question}
+          />
         ))}
       </ul>
       <DocLine source={first} meta={{ doc: sameDoc, page: samePage }} className="mt-2" />

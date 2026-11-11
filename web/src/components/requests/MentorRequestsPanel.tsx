@@ -3,11 +3,14 @@
 // at once (optimistic) and is put back with an error toast when the server refuses it. Nothing renders
 // while there are no requests (or when the server cannot serve them): the home stays as it was.
 // P15: each card has a "Replies (n)" thread where the intern answers and sees the mentor's replies.
+// P16.5: a compact one-line bar (title + open count) that expands on tap, collapsed by default, so the
+// greeting and starters stay in view; the open count also feeds the Assistant nav dot (in memory only).
 import { useEffect, useId, useState } from "react";
 import { getMyRequests, setMyRequestStatus } from "@/api/client";
 import type { MentorRequest, RequestStatus } from "@/api/types";
 import { useT } from "@/i18n";
 import { useAppState } from "@/state/useAppState";
+import { setAttention } from "../chat/attention";
 import { cn } from "../ui/cn";
 import { Icon } from "../ui/Icon";
 import { surface } from "../ui/recipes";
@@ -27,7 +30,7 @@ export function MentorRequestsPanel() {
   const toast = useToast();
   const { profileId } = useAppState();
   const [items, setItems] = useState<MentorRequest[] | null>(null);
-  const [open, setOpen] = useState<boolean | null>(null);
+  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState<ReadonlySet<string>>(new Set());
   const listId = useId();
 
@@ -40,9 +43,13 @@ export function MentorRequestsPanel() {
     return () => ctl.abort();
   }, [profileId]);
 
-  if (!profileId || !items || items.length === 0) return null;
-  const openCount = items.filter((i) => i.status !== "done").length;
-  const expanded = open ?? openCount > 0;
+  const openCount = items ? items.filter((i) => i.status !== "done").length : null;
+  useEffect(() => {
+    if (openCount !== null) setAttention({ openRequests: openCount });
+  }, [openCount]);
+
+  if (!profileId || !items || items.length === 0 || openCount === null) return null;
+  const expanded = open;
   const sorted = sortForIntern(items);
 
   async function change(req: MentorRequest, status: RequestStatus) {
@@ -65,40 +72,44 @@ export function MentorRequestsPanel() {
   }
 
   return (
-    <section data-mentor-requests aria-labelledby={`${listId}-h`} className={cn(surface.soft, "mb-4 flex flex-col gap-3 p-3 sm:p-4")}>
-      <div className="flex items-center gap-2">
-        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-sm bg-surface-0 text-accent">
-          <Icon name="mail" size={16} />
-        </span>
-        <h2 id={`${listId}-h`} className="m-0 flex min-w-0 flex-1 items-center gap-2 text-base font-bold text-fg-1">
-          {t("mentorReq.title")}
+    <section
+      data-mentor-requests
+      data-expanded={expanded || undefined}
+      aria-labelledby={`${listId}-h`}
+      className={cn(surface.soft, "mb-3 flex flex-col", expanded && "gap-3 pb-3 sm:pb-4")}
+    >
+      {/* One line: the whole bar is the disclosure button (heading > button keeps the heading outline). */}
+      <h2 id={`${listId}-h`} className="m-0 text-base font-bold text-fg-1">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={listId}
+          onClick={() => setOpen(!expanded)}
+          className="flex min-h-11 w-full items-center gap-2 rounded-lg ps-3 pe-2 text-start transition-colors duration-(--da-motion-fast) hover:bg-surface-0/60"
+        >
+          <Icon name="mail" size={16} className="shrink-0 text-accent" />
+          <span className="min-w-0 truncate">{t("mentorReq.title")}</span>
           {openCount > 0 && (
             <span
               data-request-count
               aria-label={t("mentorReq.openAria", { n: openCount })}
-              className="inline-grid min-w-6 place-items-center rounded-full bg-accent px-1.5 text-xs font-bold leading-6 text-on-accent"
+              className="inline-grid min-w-6 shrink-0 place-items-center rounded-full bg-accent px-1.5 text-xs font-bold leading-6 text-on-accent"
             >
               <span aria-hidden="true" className="font-id" dir="ltr">
                 {openCount}
               </span>
             </span>
           )}
-        </h2>
-        <button
-          type="button"
-          aria-expanded={expanded}
-          aria-controls={listId}
-          onClick={() => setOpen(!expanded)}
-          className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-2 text-sm font-semibold text-accent transition-colors duration-(--da-motion-fast) hover:bg-surface-0"
-        >
-          {t(expanded ? "mentorReq.hide" : "mentorReq.show")}
-          <Icon name="chevron-down" size={16} className={cn("shrink-0 transition-transform", expanded && "rotate-180")} />
+          <span className="ms-auto inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-accent">
+            {t(expanded ? "mentorReq.hide" : "mentorReq.show")}
+            <Icon name="chevron-down" size={16} className={cn("shrink-0 transition-transform", expanded && "rotate-180")} />
+          </span>
         </button>
-      </div>
+      </h2>
       {expanded && (
         <>
-          <p className="m-0 text-sm text-fg-2">{t("mentorReq.intro")}</p>
-          <ul id={listId} className="m-0 flex list-none flex-col gap-3 p-0">
+          <p className="m-0 px-3 text-sm text-fg-2 sm:px-4">{t("mentorReq.intro")}</p>
+          <ul id={listId} className="m-0 flex list-none flex-col gap-3 px-3 sm:px-4">
             {sorted.map((req) => (
               <RequestCard
                 key={req.id}

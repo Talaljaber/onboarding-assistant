@@ -118,7 +118,8 @@ export function ClaimCard({ claim }: { claim: CheckClaim }) {
         <Icon name={LABEL_ICON[claim.label]} size={18} className="mt-0.5 shrink-0 text-(--tone)" />
         <span>{t(LABEL_KEY[claim.label])}</span>
       </p>
-      <blockquote lang="ar" dir="rtl" className="border-s-4 border-s-line-strong ps-3 text-base leading-[1.8] text-fg-1">
+      {/* P16.5 (U9): the user's own words, in whatever language they wrote them. */}
+      <blockquote dir="auto" className="border-s-4 border-s-line-strong ps-3 text-base leading-[1.8] text-fg-1">
         {n
           ? withSpan(claim.text, n.claim_start, n.claim.length, (s) => (
               <del data-claim-number className="decoration-danger decoration-2">
@@ -140,10 +141,22 @@ function readSampleFlag(): boolean {
   return new URLSearchParams(query).get("sample") === "1";
 }
 
+/** P16.5: `#/check?text=<what you heard>` (the chat's premise line) prefills the box and checks it once. */
+function readTextParam(): string | null {
+  const query = window.location.hash.split("?")[1] ?? "";
+  const v = new URLSearchParams(query).get("text")?.trim();
+  return v ? v.slice(0, CHECK_LIMITS.textMax) : null;
+}
+
+/** What opens the screen: the sample (chat chip), a handed-over text (premise line), or nothing. */
+function initialText(): string | null {
+  return readSampleFlag() ? CHECK_SAMPLE_AR : readTextParam();
+}
+
 export default function CheckScreen() {
   const t = useT();
   const app = useAppState();
-  const [text, setText] = useState(() => (readSampleFlag() ? CHECK_SAMPLE_AR : ""));
+  const [text, setText] = useState(() => initialText() ?? "");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [result, setResult] = useState<CheckResponse | null>(null);
@@ -168,12 +181,13 @@ export default function CheckScreen() {
     setResult(res.value);
   }
 
-  // Opened from the chat chip with the sample: check it straight away, once.
+  // Opened from the chat chip with the sample, or from a premise line with the question: check it, once.
   const autoRan = useRef(false);
   useEffect(() => {
-    if (autoRan.current || !readSampleFlag()) return;
+    const first = initialText();
+    if (autoRan.current || !first) return;
     autoRan.current = true;
-    void run(CHECK_SAMPLE_AR);
+    void run(first);
   }, []); // once, on mount
 
   function onSubmit(e: FormEvent) {
@@ -191,7 +205,16 @@ export default function CheckScreen() {
             placeholder={t("check.placeholder")}
             value={text}
             rows={4}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              // P16.5 (I8): the shown result belongs to the old text: clear it (and any pending check).
+              if (result || failed || busy) {
+                seq.current++;
+                setResult(null);
+                setFailed(false);
+                setBusy(false);
+              }
+            }}
             aria-invalid={tooLong || undefined}
             description={tooLong ? t("check.tooLong", { max: CHECK_LIMITS.textMax }) : t("check.counter", { n: text.length, max: CHECK_LIMITS.textMax })}
           />
