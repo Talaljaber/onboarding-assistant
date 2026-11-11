@@ -61,7 +61,7 @@ function MilestoneSummary({ milestone, current }: { milestone: Milestone; curren
 
 export default function ProgressScreen() {
   const t = useT();
-  const { role, plan, planStatus, reloadPlan, progress, quiz, scenarios } = useAppState();
+  const { role, profileId, plan, planStatus, reloadPlan, progress, quiz, scenarios } = useAppState();
   const list = useScenarioList(role);
   const [confirmReset, setConfirmReset] = useState(false);
   const [summary, setSummary] = useState(false);
@@ -71,6 +71,9 @@ export default function ProgressScreen() {
   const milestones = plan?.milestones ?? [];
   const current = currentMilestone(milestones, progress.isDone);
   const nextActivity = current >= 0 ? milestones[current]?.activities.find((a) => !progress.isDone(a.id)) : undefined;
+  // Ticks live on the server (signed in); quiz attempt details only in the browser that took the quiz.
+  const quizActivity = milestones.flatMap((m) => m.activities).find((a) => a.kind === "quiz");
+  const quizDoneElsewhere = !quiz.last && quizActivity !== undefined && progress.isDone(quizActivity.id);
 
   return (
     <section data-screen="progress">
@@ -79,7 +82,7 @@ export default function ProgressScreen() {
           <PageHeader
             icon="chart"
             title={t("progress.title")}
-            description={t("uiLearning.progressIntro")}
+            description={t(profileId ? "progressSync.intro" : "uiLearning.progressIntro")}
             actions={
               <Button variant="secondary" icon="print" onClick={() => setSummary(true)}>
                 {t("extra.progressViewSummary")}
@@ -114,7 +117,9 @@ export default function ProgressScreen() {
                       {t("progress.quizLast", { correct: quiz.last.correct, total: quiz.last.total })}
                     </p>
                   ) : (
-                    <p className="m-0 ps-6 text-sm text-fg-2">{t("progress.quizNone")}</p>
+                    <p className="m-0 ps-6 text-sm text-fg-2" data-testid="quiz-none">
+                      {t(quizDoneElsewhere ? "progressSync.quizDoneElsewhere" : "progress.quizNone")}
+                    </p>
                   )}
                 </div>
                 <a href="#/quiz" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent hover:underline">

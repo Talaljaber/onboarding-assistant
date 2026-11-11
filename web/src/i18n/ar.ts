@@ -865,6 +865,11 @@ export const ar = {
     unavailable: "الردود غير متاحة الآن.",
     downloadFailed: "تعذّر تنزيل الملف.",
   },
+  progressSync: {
+    intro: "ما أنجزته من الأنشطة المقترحة في خطتك. يُحفظ تقدّمك على الخادم، وتُحفظ نتائج محاولاتك في الاختبار التدريبي في هذا المتصفح.",
+    quizDoneElsewhere: "أُنجز — تفاصيل المحاولة على الجهاز الذي استخدمته",
+    unticked: "أُلغي التحديد: التقدم {pct}%",
+  },
 };
 
 /** Dictionary shape: the same nesting as `ar`, every leaf a string. */

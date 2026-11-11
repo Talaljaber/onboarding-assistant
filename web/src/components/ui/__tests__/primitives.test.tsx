@@ -1,6 +1,6 @@
 import { act, render as rtlRender, screen, within, type RenderOptions } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createRef, useState, type ReactElement, type ReactNode } from "react";
+import { createRef, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { LangScope } from "@/i18n";
 import { Badge } from "../Badge";
@@ -12,7 +12,7 @@ import { EmptyState } from "../EmptyState";
 import { Skeleton } from "../Skeleton";
 import { Table } from "../Table";
 import { TabPanel, Tabs } from "../Tabs";
-import { ToastProvider, useToast } from "../Toast";
+import { ToastProvider, useToast, useToastDock } from "../Toast";
 
 /** These tests assert English strings: render under an English LangScope (the app default is Arabic). */
 const English = ({ children }: { children: ReactNode }) => <LangScope lang="en">{children}</LangScope>;
@@ -178,6 +178,28 @@ describe("Toast", () => {
       expect(screen.queryByText("Saved")).toBeNull();
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+describe("Toast placement (P16.2)", () => {
+  it("sits at the bottom (never over the page title) and above a sticky dock while that screen is mounted", () => {
+    function Screen() {
+      const ref = useRef<HTMLDivElement>(null);
+      useToastDock(ref);
+      return <div ref={ref} style={{ position: "sticky" }} data-testid="dock" />;
+    }
+    const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(72);
+    try {
+      const { unmount } = render(<ToastProvider><Screen /></ToastProvider>);
+      const region = document.querySelector("[data-toast-region]")!;
+      expect(region.className).toMatch(/bottom-\[calc\(var\(--da-bottom-nav\)\+var\(--da-toast-dock/);
+      expect(region.className).not.toMatch(/(^|\s)top-/);
+      expect(document.documentElement.style.getPropertyValue("--da-toast-dock")).toBe("72px");
+      unmount();
+      expect(document.documentElement.style.getPropertyValue("--da-toast-dock")).toBe("");
+    } finally {
+      height.mockRestore();
     }
   });
 });

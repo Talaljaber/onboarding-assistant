@@ -349,9 +349,15 @@ export function AppStateProvider({ children, initial }: AppStateProviderProps) {
       },
       fromProposal: (ids) => {
         if (!role) return 0;
-        const next = applyProposal(cur(), ids);
+        const before = cur();
+        const next = applyProposal(before, ids);
         edits.current += 1;
         patchSlot(role, internId, (d) => ({ ...d, progress: next }));
+        // Practice, quiz and chat-confirmed ticks reach the server like a Plan tick, so a reload
+        // (server wins) and the manager view keep them. Only the plan's new ids: one unknown id
+        // would make the server reject the whole update.
+        const fresh = ids.filter((id) => !(id in before) && (planIdsRef.current.length === 0 || planIdsRef.current.includes(id)));
+        sendProgress(pidNow(), fresh, true);
         return pctOf(next, planIdsRef.current);
       },
       reset: () => {

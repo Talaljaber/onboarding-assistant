@@ -45,6 +45,22 @@ describe("PlanScreen", () => {
     expect(localStorage.getItem(STORAGE_KEY)).toContain("SA-D30-quiz");
   });
 
+  it("unticking shows a neutral line, not the 'progress updated' confirmation", async () => {
+    stubApi();
+    renderScreen(<PlanScreen />, { data: { progress: { "SA-D30-quiz": "2026-11-03T08:00:00Z" } } });
+    const row = await waitFor(() => {
+      const el = document.querySelector<HTMLElement>('[data-activity="SA-D30-quiz"]');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    const box = within(row).getByRole("checkbox");
+    expect(box).toBeChecked();
+    await userEvent.click(box);
+    expect(box).not.toBeChecked();
+    expect(await screen.findByText("أُلغي التحديد: التقدم 0%")).toBeInTheDocument();
+    expect(screen.queryByText(/تم تحديث التقدم/)).toBeNull();
+  });
+
   it("opens the referenced K-rows inline", async () => {
     stubApi();
     renderScreen(<PlanScreen />);
