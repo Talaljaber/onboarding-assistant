@@ -1,0 +1,5 @@
+id,lines,expected,rule_tp,rule_fp,rule_fn,rule_passages,used,count,reason,model_tp,model_fp,model_fn,model_passages,model_titles,cost_usd
+T01,14,مرحباً بك | الأسبوع الأول | الأدوات والأنظمة | الحضور والانصراف,4,1,0,4,1,3,,3,0,1,5,الأسبوع الأول | الأدوات والأنظمة | الحضور والانصراف,0.000110
+T02,6,سياسة اللباس: | مواقف السيارات: | الوجبات والاستراحة:,0,0,3,1,1,3,,3,0,0,3,سياسة اللباس: | مواقف السيارات: | الوجبات والاستراحة:,0.000010
+T03,9,1. Introduction | 2. Your first week | 3. Requests and approvals,3,1,0,3,1,3,,3,0,0,4,1. Introduction | 2. Your first week | 3. Requests and approvals,0.000084
+T04,6,قائمة مهام المبيعات | خدمة العملاء,2,0,0,2,1,2,,2,0,0,2,قائمة مهام المبيعات | خدمة العملاء,0.000042
