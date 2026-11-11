@@ -56,6 +56,12 @@ def kill(pid: int) -> None:
 def main() -> int:
     env = dict(os.environ, NOPAUSE="1", NOBROWSER="1")
     flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    # Only a port that was free before the launch can belong to this start.bat (never report or kill
+    # a server some other process already runs on 8000/8010).
+    ports = [p for p in PORTS if not listening(p)]
+    if not ports:
+        print("serve check FAILED: ports 8000 and 8010 are both in use; stop the other server first")
+        return 1
     started = time.monotonic()
     proc = subprocess.Popen(
         ["cmd", "/c", r".\start.bat"],
@@ -70,7 +76,7 @@ def main() -> int:
     try:
         deadline = time.time() + 60
         while time.time() < deadline and health is None:
-            for port in PORTS:
+            for port in ports:
                 health = fetch(port)
                 if health is not None:
                     used = port
