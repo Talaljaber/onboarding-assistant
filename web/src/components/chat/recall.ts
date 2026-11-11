@@ -7,8 +7,6 @@ import type { KbListResponse, KbStatus, Source } from "@/api/types";
 export interface LiveKb {
   version: string;
   rows: ReadonlyMap<string, { answer_ar: string; status: KbStatus }>;
-  /** Every row is official (nothing edited or added): a KB reset clears every recall. */
-  pristine: boolean;
   /** At least one row was added in the editor (the refusal "ask again" hint needs one). */
   hasAdded: boolean;
 }
@@ -18,7 +16,6 @@ export function liveKbOf(r: KbListResponse): LiveKb {
   return {
     version: r.version,
     rows,
-    pristine: r.rows.every((x) => x.status === "official"),
     hasAdded: r.rows.some((x) => x.status === "added"),
   };
 }
@@ -115,10 +112,11 @@ export function sourceState(source: Pick<Source, "id" | "answer_ar">, live: Live
 
 /**
  * The saved sources whose row changed or disappeared since the answer was received. Empty while the live
- * KB is unknown, and after a KB reset (every row official again: the demo's clean slate).
+ * KB is unknown. A KB reset is a change like any other: an answer given from an edited row is recalled
+ * back to the official text, and an answer given from the official row stops being recalled.
  */
 export function recallOf(sources: readonly Source[], live: LiveKb | null): SourceRecall[] {
-  if (!live || live.pristine) return [];
+  if (!live) return [];
   const out: SourceRecall[] = [];
   for (const s of sources) {
     const state = sourceState(s, live);

@@ -154,10 +154,13 @@ describe("Answer Recall in the chat (P14.1)", () => {
     const users = document.querySelectorAll('[data-kind="user"]');
     expect(users[users.length - 1]).toHaveTextContent(Q_EXHIBITS);
 
-    // a KB reset (every row official again) clears the recall, including the answer given from 18
+    // a KB reset: the first answer (17) is current again, the answer given from 18 is now the recalled one
     live.kb = kb(V1);
     await focus();
-    await waitFor(() => expect(recalled()).toHaveLength(0));
+    await waitFor(() => expect(recalled()).toHaveLength(1));
+    const answers = document.querySelectorAll('article[data-kind="answer"]');
+    expect(answers[answers.length - 1]!.closest("[data-recall]")).not.toBeNull(); // the 18 answer
+    expect(answers[0]!.closest("[data-recall]")).toBeNull(); // the 17 answer is current again
   });
 
   it("a removed row reads 'no longer exists'", async () => {

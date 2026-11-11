@@ -74,13 +74,15 @@ describe("recallOf", () => {
     expect(recallOf([src("K02", K02)], live)).toEqual([]);
   });
 
-  it("is empty before the first read, and a KB reset clears it", () => {
+  it("is empty before the first read; after a KB reset an answer given from an edited row is recalled", () => {
     const answeredFrom18 = [src("K02", K02_18)];
     expect(recallOf(answeredFrom18, null)).toEqual([]);
     expect(recallOf(answeredFrom18, liveKbOf(kb("v4", edit("K02", K02.replace("17", "19")))))).toHaveLength(1);
     const reset = liveKbOf(kb("v1"));
-    expect(reset.pristine).toBe(true);
-    expect(recallOf(answeredFrom18, reset)).toEqual([]);
+    const back = recallOf(answeredFrom18, reset);
+    expect(back).toHaveLength(1);
+    expect(back[0]).toMatchObject({ id: "K02", state: "changed", before: K02_18, after: K02 });
+    expect(recallOf([src("K02", K02)], reset)).toEqual([]); // the answer given from the official row is current again
   });
 });
 

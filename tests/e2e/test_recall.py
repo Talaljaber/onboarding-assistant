@@ -2,7 +2,7 @@
 
 The Sales intern asks «كم عدد المعارض؟» (K02, 17) → the admin opens K02 in the editor, sees the intern in the
 impact line and saves 18 → the intern signs out and back in and sees the amber recall with the word diff →
-«أعد السؤال» answers from the edited K02 → a KB reset clears the recall.
+«أعد السؤال» answers from the edited K02 → after a KB reset that answer is recalled back to 17.
 Run: python -m pytest tests/e2e -q   (web/dist built; E2E_PORT overrides port 8010).
 """
 
@@ -102,10 +102,13 @@ def recall_flow(r: smoke.Run) -> None:
     expect(fresh.locator('[data-source-id="K02"]')).to_contain_text("معدّل مباشرة")
     expect(page.locator('[data-recall="changed"]')).to_have_count(1)  # only the old card
 
-    # 5. a KB reset clears the recall (the watcher re-reads on focus)
+    # 5. a KB reset is a change too (the watcher re-reads on focus): the first answer (17) is current again,
+    #    and the answer given from 18 is now recalled back to the official 17
     _reset_kb(r.base)
     page.evaluate("window.dispatchEvent(new Event('focus'))")
-    expect(page.locator('[data-recall="changed"]')).to_have_count(0)
+    expect(page.locator('[data-recall="changed"]')).to_have_count(1)
+    recalled = page.locator('[data-recall="changed"] article[data-kind="answer"]')
+    expect(recalled.locator('[data-source-id="K02"]')).to_contain_text("18")  # the answer given from 18
 
 
 @pytest.mark.parametrize("vp", ["1280", "360"])
