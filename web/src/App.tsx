@@ -10,6 +10,7 @@ import InternsScreen from "@/components/admin/InternsScreen";
 import { getAdminSession } from "@/api/client";
 import { getAdminToken, useIsAdmin } from "@/api/adminToken";
 import ChatScreen from "@/components/chat/ChatScreen";
+import CheckScreen from "@/components/check/CheckScreen";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import KbScreen from "@/components/kb/KbScreen";
 import ImportReviewScreen from "@/components/kb/import/ImportReviewScreen";
@@ -42,6 +43,7 @@ export const ROUTES: readonly RouteDef[] = [
   { path: "/plan", Screen: PlanScreen, needsRole: true },
   { path: "/quiz", Screen: QuizScreen, needsRole: true },
   { path: "/progress", Screen: ProgressScreen, needsRole: true },
+  { path: "/check", Screen: CheckScreen, needsRole: true }, // P14.2 Rumour Check
   { path: "/kb", Screen: KbScreen, needsRole: false, needsAdmin: true },
   { path: "/admin/interns", Screen: InternsScreen, needsRole: false, needsAdmin: true },
   {

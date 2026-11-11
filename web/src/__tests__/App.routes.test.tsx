@@ -50,9 +50,9 @@ afterEach(() => {
 });
 
 describe("App routes", () => {
-  it("registers all 13 routes, with the knowledge editor, document import and the interns screens admin only", () => {
+  it("registers all 14 routes, with the knowledge editor, document import and the interns screens admin only", () => {
     expect(ROUTES.map((r) => r.path)).toEqual([
-      "/", "/chat", "/scenarios", "/plan", "/quiz", "/progress", "/kb", "/admin/interns", "/admin/interns/:id",
+      "/", "/chat", "/scenarios", "/plan", "/quiz", "/progress", "/check", "/kb", "/admin/interns", "/admin/interns/:id",
       "/admin/kb/import", "/admin/kb/import/:id", "/admin", "/about",
     ]);
     expect(ROUTES.filter((r) => r.needsAdmin).map((r) => r.path)).toEqual([
@@ -92,7 +92,7 @@ describe("App routes", () => {
   it("every guarded route renders its screen with a role", async () => {
     seed("Delivery");
     renderApp();
-    for (const name of ["scenarios", "plan", "quiz", "progress", "chat"]) {
+    for (const name of ["scenarios", "plan", "quiz", "progress", "check", "chat"]) {
       act(() => {
         window.location.hash = `#/${name}`;
       });

@@ -100,12 +100,22 @@ afterEach(() => {
 });
 
 describe("greeting and starters", () => {
-  it("shows the greeting and five Sales starters, and a click sends at once", async () => {
+  it("the Rumour Check chip opens the check screen with the sample and sends nothing to the chat (P14.2)", async () => {
+    const be = backend([]);
+    mount();
+    const starters = within(document.querySelector('[data-kind="starters"]') as HTMLElement).getAllByRole("button");
+    await userEvent.click(starters[starters.length - 1]!);
+    expect(window.location.hash).toBe("#/check?sample=1");
+    expect(be.chat()).toHaveLength(0);
+  });
+
+  it("shows the greeting and five Sales starters (plus the Rumour Check chip), and a click sends at once", async () => {
     const be = backend([answerLlm]);
     mount();
     expect(screen.getByText(/Welcome to the Sales track/)).toBeInTheDocument();
     const starters = within(document.querySelector('[data-kind="starters"]') as HTMLElement).getAllByRole("button");
-    expect(starters).toHaveLength(5);
+    expect(starters).toHaveLength(6);
+    expect(starters[5]).toHaveTextContent("Heard it at the showroom? Check it");
     expect(starters[0]).toHaveTextContent("What are the company's five values?");
     await userEvent.click(starters[0]!);
     await waitFor(() => expect(card("answer")).not.toBeNull());

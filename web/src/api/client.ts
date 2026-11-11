@@ -368,3 +368,11 @@ export const deleteRequest = (id: string, signal?: AbortSignal) =>
     signal,
     admin: true,
   });
+
+// ---------------------------------------------------------------- Rumour Check (P14.2)
+
+import { isCheckResponse, type CheckRequest, type CheckResponse } from "./types";
+
+/** Each sentence of a pasted rumour against the KB (no store write on the server). */
+export const postCheck = (body: CheckRequest, signal?: AbortSignal) =>
+  request<CheckResponse>("/api/check", { method: "POST", body, guard: isCheckResponse, signal });

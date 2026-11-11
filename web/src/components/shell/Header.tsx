@@ -213,6 +213,7 @@ export function Header({ health }: { health: Health | null }) {
             </SettingRow>
           )}
           <ul className="flex flex-col pt-2">
+            {role && <SheetLink href="#/check" icon="megaphone" label={t("check.nav")} onGo={close} />}
             <SheetLink href="#/about" icon="info" label={t("nav.about")} onGo={close} />
           </ul>
           {intern && (
