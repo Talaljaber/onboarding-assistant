@@ -148,6 +148,9 @@ def test_every_intern_action_reaches_the_admin_views(env: tuple[TestClient, dict
     assert d.chat.questions == 1 and [c.id for c in d.chat.cited][:1] == ["K01"] and d.chat.cited[0].topic
     kinds = {e.kind for e in d.timeline}
     assert kinds == {"activity", "scenario", "quiz", "chat"}
+    # P16.2: "asked the assistant" in the log means the same as the question count (a practice reply
+    # is a scenario event, not a question).
+    assert sum(e.kind == "chat" for e in d.timeline) == d.chat.questions
     assert [e.at for e in d.timeline] == sorted((e.at for e in d.timeline), reverse=True)
     assert d.last_active == d.timeline[0].at and d.label_ar == INTERNS_LABEL_AR
 
@@ -163,6 +166,28 @@ def test_every_intern_action_reaches_the_admin_views(env: tuple[TestClient, dict
     # Turn logs carry the profile id, never the name or the chat text.
     logs = json.dumps(store.table_rows("turn_logs"), ensure_ascii=False)
     assert pid in logs and "سارة" not in logs and "Sara" not in logs and "تأسست" not in logs
+
+
+def test_practice_and_quiz_ticks_reload_and_match_the_admin(env: tuple[TestClient, dict[str, str], LocalStore]) -> None:
+    """P16.2: the client sends practice and quiz completions as PUT /api/progress; a reload (GET) and the
+    admin list and detail then show the same ticks and the same percentage."""
+    client, auth, _ = env
+    sara = ok(client.get("/api/interns"), InternsResponse).interns[0]
+    pid = ok(client.post(f"/api/interns/{sara.id}/session"), InternSession).profile_id
+    plan = client.get("/api/plan?role=Sales").json()
+    acts = [a for m in plan["milestones"] for a in m["activities"]]
+    scenario = next(a["id"] for a in acts if a["kind"] == "scenario" and "S02" in a["refs"])
+    quiz = next(a["id"] for a in acts if a["kind"] == "quiz")
+    for aid in (scenario, quiz):
+        r = client.put("/api/progress", json={"profile_id": pid, "activity_ids": [aid], "completed": True})
+        assert r.status_code == 200, r.text
+    reload = client.get(f"/api/progress?profile_id={pid}").json()
+    assert sorted(reload["completed_ids"]) == sorted([scenario, quiz]) and reload["percent"] > 0
+    d = ok(client.get(f"/api/admin/interns/{sara.id}", headers=auth), InternDetail)
+    row = next(i for i in ok(client.get("/api/admin/interns", headers=auth), AdminInternsResponse).interns
+               if i.id == sara.id)
+    assert d.progress.percent == row.percent == reload["percent"]
+    assert d.progress.done == row.activities_done == reload["done"] == 2
 
 
 def test_names_never_reach_the_chat(env: tuple[TestClient, dict[str, str], LocalStore]) -> None:

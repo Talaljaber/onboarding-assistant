@@ -113,6 +113,34 @@ describe("useAppState", () => {
     expect(result.current.progress.doneCount).toBe(0);
   });
 
+  it("practice and quiz completions (fromProposal) reach the server, and a reload keeps them", async () => {
+    const { result, unmount } = signedIn();
+    await waitFor(() => expect(result.current.planStatus).toBe("ready"));
+    const fetch = vi.mocked(globalThis.fetch);
+    const puts = () =>
+      fetch.mock.calls
+        .filter(([url, init]) => url === "/api/progress" && init?.method === "PUT")
+        .map(([, init]) => JSON.parse(String(init?.body)) as unknown);
+
+    act(() => {
+      result.current.progress.fromProposal([IDS[2]!]); // a scenario activity after practice feedback
+    });
+    act(() => {
+      result.current.progress.fromProposal([IDS[2]!, IDS[3]!, "XX-9"]); // the quiz activity; known and unknown ids skipped
+    });
+    expect(puts()).toEqual([
+      { profile_id: PID, activity_ids: [IDS[2]], completed: true },
+      { profile_id: PID, activity_ids: [IDS[3]], completed: true },
+    ]);
+
+    // Reload: the server (which now holds both ticks) wins and keeps them.
+    unmount();
+    serverProgress = { ...progressFx, completed_ids: [IDS[2], IDS[3]] };
+    const again = renderHook(() => useAppState(), { wrapper });
+    act(() => again.result.current.signIn(SESSION));
+    await waitFor(() => expect(Object.keys(again.result.current.progress.done).sort()).toEqual([IDS[2], IDS[3]].sort()));
+  });
+
   it("signing out clears the session; the intern's data stays for the next sign-in", async () => {
     const { result } = signedIn();
     await waitFor(() => expect(result.current.planStatus).toBe("ready"));

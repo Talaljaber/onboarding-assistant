@@ -436,7 +436,7 @@ describe("practice mode", () => {
   });
 
   it("feedback alone records the practice: leaving without 'end practice' still counts", async () => {
-    backend([scenarioStart, scenarioFeedback]);
+    const be = backend([scenarioStart, scenarioFeedback]);
     const initial = seed({}, ["SA-D1-read-company"]);
     function Probe() {
       const a = useAppState();
@@ -467,6 +467,42 @@ describe("practice mode", () => {
     await userEvent.click(within(document.querySelector("[data-practice-banner]") as HTMLElement).getByRole("button", { name: "End practice" }));
     expect(probe()).toBe("25|S02");
     expect(screen.getAllByText("Progress updated: 25%")).toHaveLength(1);
+    // the practice tick reaches the server once (a reload and the admin view keep it)
+    const puts = be.calls.filter((c) => c.url === "/api/progress" && c.body);
+    expect(puts.map((c) => c.body)).toEqual([
+      { profile_id: "6f1c2b9e-0000-4000-8000-000000000001", activity_ids: ["SA-D60-s02"], completed: true },
+    ]);
+  });
+
+  it("the progress toast never covers the newest reply: the scroll band ends above the toast (P16.2)", async () => {
+    backend([scenarioStart, scenarioFeedback]);
+    const rect = (top: number, bottom: number) =>
+      ({ top, bottom, height: bottom - top, left: 0, right: 360, width: 360, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    const orig = Element.prototype.getBoundingClientRect;
+    const origScroll = window.scrollBy;
+    const scrollBy = vi.fn();
+    window.scrollBy = scrollBy as unknown as typeof window.scrollBy;
+    // A toast near the bottom (600..656) and every chat item at 500..700: in the viewport, under the toast.
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      if (this.matches("[data-toast-region] [role=status]")) return rect(600, 656);
+      if (this.tagName === "LI" && this.parentElement?.tagName === "OL") return rect(500, 700);
+      return rect(0, 0);
+    };
+    try {
+      mount();
+      await ask("تدريب");
+      await waitFor(() => expect(card("scenario_start")).not.toBeNull());
+      expect(scrollBy).not.toHaveBeenCalled(); // no toast yet: the reply is in view
+      await ask("بقوله إني رح أتأكد");
+      await waitFor(() => expect(card("scenario_feedback")).not.toBeNull());
+      expect(await screen.findByText(/Progress updated/)).toBeInTheDocument();
+      await waitFor(() => expect(scrollBy).toHaveBeenCalled());
+      const delta = (scrollBy.mock.calls.at(-1)![0] as ScrollToOptions).top!;
+      expect(700 - delta).toBeLessThanOrEqual(600); // the reply's bottom lands above the toast
+    } finally {
+      Element.prototype.getBoundingClientRect = orig;
+      window.scrollBy = origScroll;
+    }
   });
 
   it("an offline option pick sends option_id with an empty message", async () => {

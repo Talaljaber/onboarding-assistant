@@ -89,4 +89,21 @@ describe("QuizScreen", () => {
     await userEvent.click(screen.getByRole("button", { name: "أعد المحاولة" }));
     expect(await screen.findByText("السؤال 1 من 5")).toBeInTheDocument();
   });
+
+  it("finishing sends the quiz activity tick to the server for a signed-in intern", async () => {
+    const pid = "6f1c2b9e-0000-4000-8000-000000000001";
+    const spy = stubApi();
+    renderScreen(<QuizScreen />, { data: { profile_id: pid } });
+    for (let i = 0; i < 5; i++) {
+      await userEvent.click((await screen.findAllByRole("radio"))[0]!);
+      await userEvent.click(screen.getByRole("button", { name: "تحقق" }));
+      await screen.findByText("إجابة صحيحة");
+      await userEvent.click(screen.getByRole("button", { name: "التالي" }));
+    }
+    expect(await screen.findByText("أنهيت 5 أسئلة")).toBeInTheDocument();
+    const puts = spy.mock.calls
+      .filter(([url, init]) => url === "/api/progress" && (init as RequestInit | undefined)?.method === "PUT")
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)) as unknown);
+    expect(puts).toEqual([{ profile_id: pid, activity_ids: ["SA-D30-quiz"], completed: true }]);
+  });
 });
