@@ -5,8 +5,13 @@ Windows laptop with one command. It works fully offline. An AI model is optional
 
 It covers the five required features:
 
-1. **Welcome and role choice.** Pick «مسار المبيعات» (Sales) or «مسار التوصيل» (Delivery). These are
-   fictional training tracks. Scenarios, the plan and the quiz order follow the track.
+1. **Sign-in and role.** The first screen asks who you are: **Intern** or **Admin**. An intern picks
+   their name from the active interns; their track («مسار المبيعات» Sales or «مسار التوصيل» Delivery) is
+   set by the admin. Scenarios, the plan and the quiz order follow the track. The four seeded interns
+   (Sara Al-Khatib / سارة الخطيب – Sales, Omar Haddad / عمر حداد – Delivery, Layan Al-Ali / ليان العلي –
+   Sales, Yousef Al-Najjar / يوسف النجار – Delivery) are **fictional demo personas**, not real employees.
+   This demo has no intern passwords; a production version would add real authentication (company single
+   sign-on).
 2. **Question-answer assistant.** Answers come only from the 18 rows of the official knowledge base.
    Every answer shows its source row: id · document · page, with the row text verbatim. When the rows do
    not support a question, the assistant says so with a fixed refusal (offline, often a "not confirmed"
@@ -23,11 +28,14 @@ It covers the five required features:
 Every chat reply has a «كيف أجبت؟» ("How I answered") panel: guards, tool chosen, retrieval scores,
 the answer band or verifier verdict, mode and latency.
 
-Also included, **for the admin only**: a knowledge-base editor («قاعدة المعرفة») with a «جرّب الآن» box
-and a manager tab («عرض المدير») that shows completion and practice counts for demo profiles only,
-labelled «ملفات تجريبية، ليست موظفين حقيقيين — ليست تقييماً». Employees never sign in; the admin opens
-«دخول المسؤول» (welcome screen, or the settings button at the top) and enters the admin password. **Demo admin password:
-`dada2026`** — set `ADMIN_PASSWORD` in `.env` to change it. On a phone, the header keeps the role chip and
+Also included, **for the admin only**, in a separate admin interface (sign-in screen → «مسؤول» → admin
+password): **Interns** (the list with each intern's track, completion, activities done, scenarios practised,
+quiz questions answered, questions asked, last active and status; «إضافة متدرب» to add one; a detail page per
+intern with the plan and the date each activity was done, scenarios practised, quiz practice per day, the
+K-rows their questions cited and an activity timeline; edit name and track, deactivate) and the knowledge-base
+editor («قاعدة المعرفة») with a «جرّب الآن» box. Completion and practice counts only, never a score.
+**Demo admin password: `dada2026`** — set `ADMIN_PASSWORD` in `.env` to change it. On a phone, the intern
+header keeps the intern's name and track and
 puts the mode switch, model and storage badges, trace toggle and language in a settings dialog
 («الإعدادات»). The server exposes a JSON HTTP API (`docs/api_contract.md`).
 
@@ -106,12 +114,16 @@ Full timed script with expected screens: [`docs/demo_script.md`](docs/demo_scrip
    «ملاحظات تدريبية، وليست تقييماً». Click «إنهاء التدريب».
 6. **Progress tracking.** Type `أكملت نشاط اليوم 30` → a proposal card; click «تأكيد» → the new
    percentage. Open «التقدم» to see the dashboard.
-7. **Other role's scenario.** Switch the role chip to «مسار التوصيل», open «المواقف» and click
-   «ابدأ التدريب» on S04 (or type `أنا موظف توصيل والعميل غاضب بسبب التأخير`).
-8. **Modify an answer live.** Open «دخول المسؤول», enter the admin password (`dada2026` unless
-   `ADMIN_PASSWORD` is set), then in «قاعدة المعرفة» edit K02 (17 → 18), save, and ask `كم عدد المعارض؟`
-   in «جرّب الآن». The answer cites the edited K02 row with 18 and the badge «معدّل مباشرة».
-9. **Offline switch.** Set the header switch to «بلا اتصال» and repeat step 2: the same K01 row,
+7. **Other role's scenario.** In «الإعدادات» click «تسجيل الخروج», sign in as «عمر حداد» (Delivery), open
+   «المواقف» and click «ابدأ التدريب» on S04 (or type `أنا موظف توصيل والعميل غاضب بسبب التأخير`).
+8. **The admin sees the progress.** Sign out, choose «مسؤول», enter the admin password (`dada2026` unless
+   `ADMIN_PASSWORD` is set). «المتدربون» lists every intern: سارة الخطيب now shows the Day 30 activities
+   and the questions she asked. Open her row for the detail page (plan with dates, practice, cited rows,
+   timeline). «إضافة متدرب» adds an intern who can sign in at once.
+9. **Modify an answer live.** In the admin interface open «قاعدة المعرفة», edit K02 (17 → 18), save, and
+   ask `كم عدد المعارض؟` in «جرّب الآن». The answer cites the edited K02 row with 18 and the badge
+   «معدّل مباشرة».
+10. **Offline switch.** Set the header switch to «بلا اتصال» and repeat step 2: the same K01 row,
    mode chip «وضع بلا اتصال».
 
 ## 4. Prove offline mode makes no network calls
@@ -204,7 +216,8 @@ The web client is prebuilt in `web/dist`; judges do not need Node. To rebuild:
 - **Five features only, small knowledge base.** 18 rows. No HR procedures beyond them, no employment
   decisions (questions about pay, firing or passing probation get a fixed refusal when the guard
   patterns match them; on each held-out set 5 of 7 guard questions were handled as expected).
-- **Not a product.** No accounts, no deployment. Profiles are demo aliases such as «متدرب ١».
+- **Not a product.** No deployment and no real authentication: interns sign in by picking their name
+  (no password) and the admin shares one password. The interns are fictional demo personas.
 
 ## 8. Troubleshooting
 
@@ -231,10 +244,11 @@ Full note: [`docs/privacy_ai_note.md`](docs/privacy_ai_note.md).
 - **What leaves the laptop:** without a key, nothing goes to an AI service. With a key, the question,
   the previous question (only for short follow-ups), the knowledge-base rows and practice replies go to
   OpenRouter with data collection denied (GLM sees the question and rows only on escalated turns).
-  Never the role, alias, progress or chat history.
+  Never the role, the intern's name, progress or chat history.
 - **What is stored:** no chat text on any server. Supabase (or the local SQLite file) holds the
-  knowledge base and its history, demo profiles, progress, attempt ids and turn metadata. The browser
-  keeps the role, progress, quiz results and the chat thread in local storage («امسح بيانات هذا
+  knowledge base and its history, the interns (fictional names and tracks) and their profiles, progress,
+  attempt ids and turn metadata. The browser keeps the signed-in intern, progress, quiz results and the chat
+  thread in local storage («امسح بيانات هذا
   المتصفح» on «حول والخصوصية» clears it).
 - **No real personal data:** no real employee or customer data is used.
 - **Libraries:** FastAPI, Uvicorn, Pydantic, httpx, NumPy, ONNX Runtime, tokenizers; React, Vite,
