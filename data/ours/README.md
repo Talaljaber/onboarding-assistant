@@ -84,3 +84,18 @@ scenario, progress, plan and greeting rows.
 Harness conventions: scenario rows send the prompt, then the fixed reply «سأتحقق من المصدر وأعود إليه»;
 progress rows send the prompt, then `confirm`. Scenario and progress prompts name the role in the text
 (`مبيعات` / `توصيل`); when the text names no role, use `Sales`.
+
+## factcheck_dev.csv — 24 rows (P14.2 Rumour Check)
+Rumours written by the team from the official K-rows (never from a held-out or jury file), one sentence
+each, for `scripts/eval_factcheck.py`. The gate is **0 false `supported`**: a rumour labelled `supported`
+while `supported` is not in `acceptable`, or `supported` citing another row than `expected_id`.
+
+| column | meaning |
+|---|---|
+| `id` | `FC01`… |
+| `text_ar` | the rumour (one sentence, no split mark) |
+| `expected` | the right label: `supported`, `differs`, `contradicts`, `related`, `not_found`, `guarded` |
+| `acceptable` | `;`-separated labels that are not wrong for this rumour (always includes `expected`; `related` is a safe miss) |
+| `expected_id` | the K-row the verdict should cite (empty when none) |
+| `note` | why the row is there |
+| `source` | `ours` |

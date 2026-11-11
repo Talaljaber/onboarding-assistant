@@ -1359,7 +1359,76 @@ class ErrorBody(_Model):
     error: ErrorDetail
 
 
+# --------------------------------------------------------------------------------------
+# Rumour Check (P14.2): POST /api/check
+# --------------------------------------------------------------------------------------
+
+CHECK_TEXT_MAX = 600
+CHECK_CLAIMS_MAX = 5
+#: Fixed footer of the check screen (shown as sent).
+CHECK_LABEL_AR = "هذا فحص للمعلومة، وليس حكماً على أحد"
+#: `supported` the row confirms it; `differs` same unit, another number (offline rule); `contradicts` a verified
+#: model verdict with a quote in the row; `related` nearest row, not confirmed; `not_found` no row; `guarded`
+#: stopped by the employment / contact guard (never compared, never sent to the model).
+CheckLabel = Literal["supported", "differs", "contradicts", "related", "not_found", "guarded"]
+CheckBy = Literal["rules", "model"]
+CHECK_LABELS: tuple[str, ...] = get_args(CheckLabel)
+
+
+class CheckRequest(_Model):
+    text: Annotated[Block, Field(min_length=1, max_length=CHECK_TEXT_MAX)]
+    force_offline: bool = False
+
+
+class CheckNumbers(_Model):
+    """`differs` only: the claim's number and the row's number, each verbatim with its start offset."""
+
+    claim: str
+    claim_start: NonNeg
+    row: str
+    row_start: NonNeg
+
+
+class CheckClaim(_Model):
+    """One claim card: a fixed label, the user's own substring (`text` at `start` of the sent text) and, except
+    for `not_found` / `guarded`, the live row verbatim. No generated text."""
+
+    i: NonNeg
+    text: str
+    start: NonNeg
+    label: CheckLabel
+    source: Source | None
+    numbers: CheckNumbers | None
+    by: CheckBy
+
+    @model_validator(mode="after")
+    def _label_rules(self) -> CheckClaim:
+        if (self.source is None) != (self.label in ("not_found", "guarded")):
+            raise ValueError("source is set exactly when the label names a row")
+        if (self.numbers is not None) != (self.label == "differs"):
+            raise ValueError("numbers are set exactly for differs")
+        if self.label == "guarded" and self.by != "rules":
+            raise ValueError("a guarded claim is never checked by the model")
+        return self
+
+
+class CheckResponse(_Model):
+    claims: Annotated[list[CheckClaim], Field(max_length=CHECK_CLAIMS_MAX)]
+    #: More than `CHECK_CLAIMS_MAX` sentences were sent; the rest were not checked.
+    truncated: bool
+    mode: Mode
+    label_ar: str
+
+
 __all__ = [
+    "CHECK_CLAIMS_MAX",
+    "CHECK_LABELS",
+    "CHECK_LABEL_AR",
+    "CHECK_TEXT_MAX",
+    "CheckClaim",
+    "CheckNumbers",
+    "CheckRequest",
+    "CheckResponse",
     "ADMIN_PASSWORD_MAX",
     "AdminLogin",
     "AdminSession",
