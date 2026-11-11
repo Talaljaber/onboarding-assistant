@@ -19,10 +19,37 @@
 - **Decision needing you — D-P8-heldout2:** accept 45/50 as the reported number (recommended; it is an honest one-time result), or ask for a third sealed set.
   Tuning against held-out 2 now would make it meaningless.
 - **Stale files:** `docs/report.docx` and `docs/slides.pptx` predate P8. The .md versions are current; re-export them before submitting.
-- **The app is running now:** http://127.0.0.1:8000 in AI mode on the Supabase store, build `0a30109` (tag `p8-gate`). Release zip rebuilt: `releaseonboarding-assistant-0a30109.zip` (54 MB, local only, not uploaded).
+- **The app was running** at http://127.0.0.1:8000 for P8 review; it is now stopped (see 0b). Release zip rebuilt: `releaseonboarding-assistant-0a30109.zip` (54 MB, local only, not uploaded).
   - The server runs in a minimized python window; close that window to stop it.
   - To start it again later, run `start.bat`.
 - **Spend:** $0.31 of $3.00 in total (`.cacheudget.json`).
+
+## 0b. P9 — redesigned interface, user testing and full browser review
+- **Redesign:** new look across every screen (design plan in `docs/UI_PLAN.md`): warm ivory and teal palette, a mobile bottom bar, a tablet icon rail, a labelled desktop sidebar, and sheets that open from the bottom on phones.
+  - Before and after shots: `docs/screenshots/before/` and `docs/screenshots/after/`, 108 shots at 360, 390, 768 and 1280.
+  - The shot script fails on sideways scrolling; none was found.
+- **User testing:** four end-user personas tried the live app in a browser:
+  - a first-job sales hire on a phone;
+  - a delivery driver with low tech literacy;
+  - an HR manager on desktop, also in English;
+  - an edge-case tester on a tablet.
+  - Nothing leaked or broke.
+  - Fixed: a scenario now counts as practised as soon as feedback arrives; screens open at the top; new replies scroll into view; the values answer no longer repeats itself; dismissal questions get the employment refusal; refusals show «رد ثابت»; plus English starters, Arabic-only value names, clearer badges and a manager empty state.
+- **Browser review:** four Opus reviewers pressed every control (shell, chat, learning screens, knowledge editor and manager view) at 360–1920 px. Fixed:
+  - quiz: the correct answer is now marked after a wrong pick;
+  - knowledge editor: the Edit column was hidden at 1536 px and wider; dialog errors now show in Arabic, with a length counter;
+  - a Delivery user got a Sales scenario from «تدريب»; a new practice request mid-scenario was graded as an answer;
+  - English header crowding, focus after navigation, toast placement, the "practised" count matching across screens, and RTL day ranges.
+  - A final Opus check confirmed all 23 fixes in the browser.
+- **Unchanged after all fixes:** DEV LLM mode 152/154, offline 106/154; red team 17/20 and 19/20; 687 Python tests, 201 web tests, browser e2e 2/2.
+  - Held-out 2 was not re-run; 45/50 stays the reported number.
+- **Kept on purpose:**
+  - the fixed refusal wording «…عبر القنوات الرسمية» (plan text and jury wording);
+  - salary questions under the employment guard;
+  - in LLM mode, chat-started scenarios ask for free text without option buttons (contract);
+  - a plan answer to «شو اعمل اول يوم».
+- **Known, low:** on a 360 px phone the progress toast can briefly (3 s) cover a reply's «كيف أجبت؟» button.
+- **Servers are stopped, as you asked.** To run the app: `start.bat` (AI mode with the key), then open http://127.0.0.1:8000.
 
 ## 1. One paragraph
 The onboarding assistant is built and every wave gated: W0–W4 are tagged and pushed to the private `origin`, and W5 deliverables are in `main`. All five features work for both roles in the browser: role choice, grounded Q&A with K-row sources and fixed refusals, scenarios with value-linked feedback that is never a score, the suggested 90-day plan with a Day 90 summary, quiz and progress dashboard, plus the KB live editor and a demo-profile manager view. The AI is a tool-using agent: guards first, an LLM tool choice with a rule-router fallback, and LLM answers that the server verifies (ids, quotes, numbers, contacts), cached only after they pass. With no key, a dead network or an exhausted budget it falls back to offline retrieval and never errors. Supabase holds the KB with history, demo profiles, progress, attempts and turn logs (metadata only, no chat text), with a local SQLite fallback. **Held-out (run once, after the freeze):** AI mode 43/50 correct, 0 answerable refused, 14/14 unanswerable refused; offline 25/50, 2 answerable refused; 0 invented contacts in both. Not done: the hierarchical lead mode (fell back to flat; see D-A11-mode), the Gemini model comparison (HTTP 400), .docx/.pptx exports (Markdown only), and the real second-Windows-account test.
