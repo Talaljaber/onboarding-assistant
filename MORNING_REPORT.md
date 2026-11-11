@@ -26,7 +26,7 @@ The onboarding assistant is built and every wave gated: W0–W4 are tagged and p
 - Carried over and recorded for review: D1–D3, D6–D10 (D3 model kept; D6 escalation not enabled: rejection rate about 1%).
 
 ## 4. Known issues (ranked by demo risk)
-1. **AI-mode UI not watched live in a browser.** The browser smoke ran offline. AI mode was verified through the API (storyboard smoke in AI mode against the keyed server at the W3 gate) and DEV/held-out evals, not by eye. Do steps 2, 5 and 8 once by hand with the key.
+1. **The startup LLM probe can time out** (3 s; it happened once tonight on a slow network), and then the app starts offline. It re-probes on the first chat turn after 60 s, or on `GET /api/health?probe=1`. Before the demo, open `http://127.0.0.1:8000/api/health?probe=1` once and check `"mode": "llm"`. AI mode was checked in a real browser tonight (steps 2, 3 and 5: AI chip, K01, K05–K09, checklist feedback with a verified tip, no score). Screenshots are in the integrator's scratchpad; the committed ones are offline.
 2. **Offline mode is weaker on unseen wording**: held-out offline 25/50 with 2 answerable refused, and 27 of 43 DEV unanswerables get "not confirmed" rather than a refusal. AI mode is the primary path; say so in the demo.
 3. KB editing has no authentication ("staff mode"); cross-origin writes are refused. A demo limitation.
 4. No sync between the local fallback store and Supabase; the switch to local is one-way per process.
