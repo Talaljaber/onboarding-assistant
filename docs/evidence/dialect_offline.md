@@ -86,3 +86,10 @@ false answer on out-of-scope dialect questions. Following the kill-switch, only 
 `kb_anchors.csv` is unchanged, so offline `eval_dev` (106/154), the out-of-scope set (0 answers of 42) and the
 offline red-team (19/20, RT20 as before) are unchanged by construction. The remaining misses are ranking and
 routing misses; in LLM mode the model sees all rows, so this measurement concerns offline mode only.
+
+## Model mode (integrator run, main folder, Thu 12 Nov 2026)
+
+Same 31 questions through `POST /api/chat` with the pinned model (temporary store; `results/dialect_llm.csv`):
+**answers 25/26 on the right row, refusals 5/5.** The one miss is DL25 «الاهتمام بالزبون وخدمته من قيم الشركة؟»,
+which the router reads as a request to practise and starts a customer scenario instead of citing K08.
+Offline stays 19/26 (above): offline dialect questions more often get the cautious "closest information" reply.
