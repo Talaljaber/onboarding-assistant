@@ -54,6 +54,9 @@ def create_app(settings: Settings | None = None, *, agent: Agent | None = None, 
     if agent is None:
         agent = _build_agent(s, st)
     agent.probe_llm(3.0)  # no network call without a key or with OFFLINE=1
+    if agent.llm_probe.reason == "timeout":
+        # D-W5-probe-retry: a slow first connection (DNS/TLS) should not start the demo offline.
+        agent.probe_llm(5.0)
 
     app = FastAPI(title="Dada Academy", version=__version__, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.settings = s
