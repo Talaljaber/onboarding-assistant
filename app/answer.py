@@ -5,6 +5,9 @@ What it does: `answer_offline` turns retrieval hits + the OOS margin into an `An
 a list question whose top row is in the `Values` topic → the server list of every Values row;
 otherwise band `answer` → the top row verbatim, `not_confirmed` → the fixed not-confirmed text with the
 top row, `refuse` → the fixed refusal. `render_sources` returns the cited live rows verbatim.
+Red-team rules (P3.8): a row whose id the user named (`Hit.named`, F6) is never refused by the margin
+alone (the refuse band becomes `not_confirmed`); an injection-looking message (O1) whose band is not
+`answer` gets the injection refusal (`reason="injection"`, `INJECTION_AR`) instead of an unrelated row.
 
 What it must never do: take the user's role (no function here has a role parameter), word a fact that
 is not in a cited row, or show a row for a refusal.
@@ -24,6 +27,7 @@ from app.kb import KnowledgeBase, Row
 from app.llm.paths import ANSWER_MARGIN_S, llm_answer, should_escalate
 from app.retrieve import Bands, Hit, MarginResult, is_list_question, load_bands, named_values
 from app.schemas import VALUES_AR, Source
+from app.verify import injection_suspected
 
 REFUSAL_AR = "هذه المعلومة غير موجودة في قاعدة المعرفة المعتمدة لدي. يرجى الرجوع إلى الموارد البشرية عبر القنوات الرسمية."
 NOT_CONFIRMED_AR = "لا أجد إجابة مؤكدة في قاعدة المعرفة. أقرب معلومة لدي أدناه، ويُفضَّل التأكد من الموارد البشرية."
@@ -67,6 +71,8 @@ class AnswerResult:
     cached: bool = False
     latency_ms: int | None = None
     escalated: bool = False
+    #: Refusal reason for the reply (`out_of_scope` when None); `injection` for O1.
+    reason: str | None = None
 
     def trace_fields(self) -> dict[str, Any]:
         """Keyword arguments for `schemas.TraceAnswer` (plus `band`)."""
@@ -115,6 +121,11 @@ def refusal_result(band: str | None = "refuse") -> AnswerResult:
     return AnswerResult(status="unsupported", text_ar=REFUSAL_AR, ids=[], band=band)
 
 
+def injection_refusal(band: str | None) -> AnswerResult:
+    """O1: the fixed injection refusal (no row shown); `band` records the margin band it replaced."""
+    return AnswerResult(status="unsupported", text_ar=INJECTION_AR, ids=[], band=band, reason="injection")
+
+
 def _named_value_row(question: str, kb: KnowledgeBase) -> Row | None:
     named = named_values(question)
     if len(named) != 1:
@@ -137,6 +148,10 @@ def answer_offline(
     if not hits:
         return refusal_result()
     band = (bands or load_bands()).band(margin.margin)
+    if band != "answer" and injection_suspected(question):
+        return injection_refusal(band)
+    if band == "refuse" and hits[0].named:
+        band = "not_confirmed"  # F6: the user asked for this row by id; show it under the hedge
     if band == "refuse":
         return refusal_result()
     top = kb.get(hits[0].id)
@@ -304,6 +319,7 @@ __all__ = [
     "answer_offline",
     "build_list_answer",
     "employment_attachment",
+    "injection_refusal",
     "refusal_result",
     "render_sources",
 ]
