@@ -18,10 +18,19 @@ describe("ProgressScreen", () => {
     renderScreen(<ProgressScreen />, { data: DATA });
     // 2 of 8 plan activities -> 25
     expect(await screen.findByRole("img", { name: "نسبة الإنجاز 25 بالمئة" })).toBeInTheDocument();
-    expect(screen.getByTestId("activities-count")).toHaveTextContent("2 من 8");
+    expect(screen.getByTestId("activities-count")).toHaveTextContent("2 من 8 أنشطة");
     expect(screen.getByTestId("quiz-last")).toHaveTextContent("آخر محاولة: 4/5 — تدريب");
     expect(screen.getByText("نسبة إنجاز الأنشطة المقترحة، وليست تقييم أداء.")).toBeInTheDocument();
     expect(await screen.findByText("محورية العميل")).toBeInTheDocument();
+  });
+
+  it("summarises the milestones as links to the plan, without a second checklist", async () => {
+    stubApi();
+    renderScreen(<ProgressScreen />, { data: DATA });
+    const stages = (await screen.findByRole("heading", { name: "المراحل" })).closest("section")!;
+    expect(stages.querySelectorAll('a[href="#/plan"]')).toHaveLength(4);
+    expect(stages.querySelectorAll("input[type=checkbox]")).toHaveLength(0);
+    expect(document.querySelectorAll("[data-activity]")).toHaveLength(0);
   });
 
   it("reset asks for confirmation and only then clears the role progress", async () => {

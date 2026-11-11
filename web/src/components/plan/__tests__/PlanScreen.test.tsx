@@ -19,6 +19,10 @@ describe("PlanScreen", () => {
     expect(screen.getByText(plan.milestones[0]!.learning_goal_ar)).toBeInTheDocument();
     expect(screen.getByText(/وليس تقييم نهاية الشهر الأول المذكور في K14/)).toBeInTheDocument();
     expect(screen.getByText(/بلا درجات/)).toBeInTheDocument();
+    // "suggested" is said once by the badge, the not-official text is the description (no boxed notice)
+    expect(screen.getAllByText("مقترحة")).toHaveLength(1);
+    // one Day 90 summary entry (the activity's), not two
+    expect(screen.getAllByRole("button", { name: /ملخص/ })).toHaveLength(1);
   });
 
   it("ticking an activity updates progress, stores it and toasts the new percentage", async () => {
@@ -44,7 +48,7 @@ describe("PlanScreen", () => {
   it("opens the referenced K-rows inline", async () => {
     stubApi();
     renderScreen(<PlanScreen />);
-    const btn = await screen.findByRole("button", { name: /اقرأ: K01/ });
+    const btn = (await screen.findAllByRole("button", { name: /^اقرأ/ }))[0]!;
     expect(btn).toHaveAttribute("aria-expanded", "false");
     await userEvent.click(btn);
     expect(btn).toHaveAttribute("aria-expanded", "true");
@@ -70,7 +74,7 @@ describe("PlanScreen", () => {
         quiz: [{ at: "2026-11-04T08:00:00Z", correct: 4, total: 5 }],
       },
     });
-    await userEvent.click(await screen.findByRole("button", { name: "عرض الملخص" }));
+    await userEvent.click(await screen.findByRole("button", { name: "اعرض ملخص التعلم" }));
     const sum = document.querySelector<HTMLElement>('[data-summary="day90"]')!;
     expect(sum).not.toBeNull();
     expect(within(sum).getByText(/مسار المبيعات/)).toBeInTheDocument();

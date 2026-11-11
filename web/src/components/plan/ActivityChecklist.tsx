@@ -1,32 +1,34 @@
 // The checklist of one milestone: native checkboxes with visible labels, plus the per-kind
-// action (read rows inline, scenario link to the chat, quiz link). Used by the plan and the
-// progress dashboard so both stay identical.
-import type { Milestone } from "@/api/types";
+// action (read rows inline, scenario link to the chat, quiz link, Day 90 summary). Rows are
+// separated by hairlines inside the milestone card (no card in a card); the action's icon already
+// says read, practice or quiz, so there is no separate type caption.
+import type { ActivityKind, Milestone } from "@/api/types";
 import { cn } from "@/components/ui/cn";
 import { Icon } from "@/components/ui/Icon";
 import { useAppState } from "@/state/useAppState";
-import { useT } from "@/i18n";
+import { useT, type DictKey } from "@/i18n";
 import { ActivityRows } from "./ActivityRows";
-import { KIND_ICON, KIND_LABEL, rowAction } from "./shared";
+import { rowAction } from "./shared";
 import { useToggleActivity } from "./useToggleActivity";
+
+/** A short note under one activity: the Day 30 quiz is self-practice, the Day 90 summary is for human review. */
+function activityNote(milestone: Milestone, kind: ActivityKind): DictKey | null {
+  if (kind === "quiz" && milestone.name === "Day 30") return "plan.quizNote";
+  if (kind === "summary") return "plan.day90Note";
+  return null;
+}
 
 export function ActivityChecklist({ milestone, onOpenSummary }: { milestone: Milestone; onOpenSummary?: () => void }) {
   const t = useT();
   const { progress } = useAppState();
   const toggle = useToggleActivity();
   return (
-    <ul className="m-0 flex list-none flex-col gap-2 p-0">
+    <ul className="m-0 flex list-none flex-col divide-y divide-line p-0">
       {milestone.activities.map((a) => {
         const done = progress.isDone(a.id);
+        const note = activityNote(milestone, a.kind);
         return (
-          <li
-            key={a.id}
-            data-activity={a.id}
-            className={cn(
-              "flex flex-col gap-1 rounded-md border p-2 transition-colors duration-(--da-motion-fast) ease-da sm:p-2.5",
-              done ? "border-transparent bg-surface-1" : "border-line bg-surface-0",
-            )}
-          >
+          <li key={a.id} data-activity={a.id} className="flex flex-col gap-0.5 py-2 first:pt-0 last:pb-0">
             <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-sm px-1">
               <span className="relative grid size-6 shrink-0 place-items-center">
                 <input
@@ -46,21 +48,19 @@ export function ActivityChecklist({ milestone, onOpenSummary }: { milestone: Mil
                   className="pointer-events-none absolute text-on-accent opacity-0 peer-checked:opacity-100"
                 />
               </span>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span
-                  lang="ar"
-                  dir="rtl"
-                  className={cn("text-start text-base leading-snug", done ? "text-fg-2 line-through decoration-fg-3" : "font-medium text-fg-1")}
-                >
-                  {a.title_ar}
-                </span>
-                <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-fg-3">
-                  <Icon name={KIND_ICON[a.kind]} size={12} className="shrink-0" />
-                  {t(KIND_LABEL[a.kind])}
-                </span>
+              <span
+                lang="ar"
+                dir="rtl"
+                className={cn(
+                  "min-w-0 flex-1 text-start text-base leading-snug",
+                  done ? "text-fg-2 line-through decoration-fg-3" : "font-medium text-fg-1",
+                )}
+              >
+                {a.title_ar}
               </span>
             </label>
-            <div className="ps-1 empty:hidden sm:ps-10">
+            {note && <p className="m-0 ps-10 text-sm text-fg-2">{t(note)}</p>}
+            <div className="ps-8 empty:hidden">
               {a.kind === "read" && a.refs.length > 0 && <ActivityRows ids={a.refs} />}
               {a.kind === "scenario" && a.refs[0] && (
                 <a href={`#/chat?scenario=${encodeURIComponent(a.refs[0])}`} className={rowAction}>

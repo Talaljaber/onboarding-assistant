@@ -295,7 +295,7 @@ def learning_plan(page: Page) -> None:
 def learning_day90(page: Page) -> None:
     go(page, "#/plan", "[data-milestone]")
     _tick_some(page)
-    page.locator('[data-screen="plan"]').get_by_role("button", name="عرض الملخص").click()
+    page.locator('[data-screen="plan"]').get_by_role("button", name="اعرض ملخص التعلم").click()
     page.wait_for_selector('[data-summary="day90"]', state="visible")
     page.evaluate("window.scrollTo(0, 0)")
 

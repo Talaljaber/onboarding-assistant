@@ -206,7 +206,7 @@ def storyboard(r: Run) -> None:
     expect(plan.locator("[data-activity] input:checked").first).to_be_visible()
     r.no_overflow("11")
     r.shot("11_plan")
-    plan.get_by_role("button", name="عرض الملخص").click()
+    plan.get_by_role("button", name="اعرض ملخص التعلم").click()
     summary = page.locator('[data-summary="day90"]')
     expect(summary).to_be_visible()
     r.no_overflow("12")

@@ -1,13 +1,12 @@
-// #/progress: completion ring, activity count, last practice quiz attempt, the same per-milestone
-// checklist as the plan, practised scenarios with their values, reset (confirm) and the Day 90
-// summary. Everything is "completion of suggested activities", never a performance score.
+// #/progress: one hero card (completion ring, activity count, last practice quiz attempt), the next
+// suggested activity, a compact per-milestone summary linking to the plan (the plan owns ticking),
+// practised scenarios with their values, reset (confirm) and the Day 90 summary. Everything is
+// "completion of suggested activities", never a performance score.
 import { useState } from "react";
 import type { Milestone } from "@/api/types";
-import { ActivityChecklist } from "@/components/plan/ActivityChecklist";
 import { Day90Summary } from "@/components/plan/Day90Summary";
 import { currentMilestone, KIND_ICON, linkButton, MILESTONE_TITLE } from "@/components/plan/shared";
 import { useScenarioList } from "@/components/scenarios/useScenarioList";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { Dialog } from "@/components/ui/Dialog";
@@ -15,59 +14,47 @@ import { Icon } from "@/components/ui/Icon";
 import { Loadable } from "@/components/ui/Loadable";
 import { Page, PageHeader } from "@/components/ui/Page";
 import { surface } from "@/components/ui/recipes";
-import { StatTile } from "@/components/ui/StatTile";
-import { ValueLabel } from "@/components/ui/ValueLabel";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import { ValueTag } from "@/components/ui/ValueLabel";
 import { useT } from "@/i18n";
 import { isoDay } from "@/lib/format";
 import { practisedScenarios } from "@/state/progress";
 import { useAppState } from "@/state/useAppState";
 import { ProgressRing } from "./ProgressRing";
 
-/** One milestone as a disclosure: title, done count and a check when complete; the checklist inside. */
-function MilestonePanel({ milestone, index, defaultOpen }: { milestone: Milestone; index: number; defaultOpen: boolean }) {
+/**
+ * One milestone as a compact summary row linking to the plan (the plan screen owns ticking):
+ * title, done count and a thin bar.
+ */
+function MilestoneSummary({ milestone, current }: { milestone: Milestone; current: boolean }) {
   const t = useT();
   const { progress } = useAppState();
-  const [open, setOpen] = useState(defaultOpen);
   const total = milestone.activities.length;
   const doneN = milestone.activities.filter((a) => progress.isDone(a.id)).length;
   const complete = total > 0 && doneN === total;
-  const panelId = `ms-panel-${index}`;
+  const title = t(MILESTONE_TITLE[milestone.name]);
   return (
-    <li className={cn(surface.card, "overflow-hidden")}>
-      <h3 className="m-0">
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-controls={panelId}
-          onClick={() => setOpen((o) => !o)}
-          className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-start transition-colors duration-(--da-motion-fast) ease-da hover:bg-surface-1 sm:px-5"
-        >
-          <span
-            aria-hidden="true"
-            className={cn(
-              "grid size-9 shrink-0 place-items-center rounded-full border-2 text-sm font-bold",
-              complete ? "border-brand bg-brand text-on-accent" : "border-line bg-surface-0 text-fg-2",
-            )}
-          >
-            {complete ? <Icon name="check" size={18} strokeWidth={3} /> : <span dir="ltr">{index + 1}</span>}
-          </span>
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="text-base font-bold text-fg-1">{t(MILESTONE_TITLE[milestone.name])}</span>
-            <span className="text-sm text-fg-3">
-              {t("progress.ofTotal", { done: doneN, total })}
-              {complete && <> · {t("uiLearning.milestoneDone")}</>}
-            </span>
-          </span>
-          <Icon
-            name="chevron-down"
-            size={20}
-            className={cn("shrink-0 text-fg-3 transition-transform duration-(--da-motion-fast) ease-da", open && "rotate-180")}
-          />
-        </button>
-      </h3>
-      <div id={panelId} hidden={!open} className="border-t border-line px-3 py-3 sm:px-4">
-        {open && <ActivityChecklist milestone={milestone} />}
-      </div>
+    <li>
+      <a
+        href="#/plan"
+        aria-current={current ? "step" : undefined}
+        className="flex min-h-14 items-center gap-3 px-4 py-2.5 transition-colors duration-(--da-motion-fast) ease-da hover:bg-surface-1 sm:px-5"
+      >
+        <span className="flex w-28 shrink-0 items-center gap-1.5 text-sm font-semibold text-fg-1 sm:w-32">
+          {complete && <Icon name="check" size={16} strokeWidth={3} className="shrink-0 text-ok" />}
+          {title}
+        </span>
+        <ProgressBar
+          value={total ? (doneN / total) * 100 : 0}
+          label={`${title}: ${t("progress.ofTotal", { done: doneN, total })}`}
+          showValue={false}
+          className="min-w-0 flex-1"
+        />
+        <span dir="ltr" className="w-10 shrink-0 text-end text-sm tabular-nums text-fg-2">
+          {t("uiCalm.milestoneLine", { done: doneN, total })}
+        </span>
+        <Icon name="chevron-end" size={16} className="shrink-0 text-fg-3" />
+      </a>
     </li>
   );
 }
@@ -103,45 +90,36 @@ export default function ProgressScreen() {
         {summary && <Day90Summary onClose={() => setSummary(false)} />}
         <div className={cn("flex flex-col gap-5 sm:gap-6", summary && "print:hidden")}>
           <Loadable state={state} onRetry={reloadPlan} lines={6}>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div
-                className={cn(
-                  surface.card,
-                  "flex flex-col items-center gap-4 p-5 text-center sm:col-span-2 sm:flex-row sm:text-start lg:col-span-1 lg:flex-col lg:text-center",
-                )}
-              >
+            {/* One hero card: the ring, the activity count and the single "not a performance score" caption,
+                then a compact stat row for the practice quiz. */}
+            <div className={cn(surface.card, "flex flex-col")}>
+              <div className="flex flex-col items-center gap-4 p-5 text-center sm:flex-row sm:text-start">
                 <ProgressRing percent={progress.percent} />
                 <div className="flex min-w-0 flex-col gap-1">
                   <h2 className="text-base font-bold text-fg-1">{t("progress.overall")}</h2>
+                  <p className="m-0 text-lg font-bold text-fg-1" data-testid="activities-count">
+                    {t("uiCalm.activitiesLine", { done: progress.doneCount, total: progress.total })}
+                  </p>
                   <p className="m-0 text-sm text-fg-2">{t("progress.caption")}</p>
                 </div>
               </div>
-              <StatTile
-                icon="list"
-                label={<h2 className="text-sm font-semibold text-fg-2">{t("progress.activities")}</h2>}
-                value={<span data-testid="activities-count">{t("progress.ofTotal", { done: progress.doneCount, total: progress.total })}</span>}
-                hint={t("uiLearning.planProgress")}
-              />
-              <StatTile
-                icon="help"
-                label={<h2 className="text-sm font-semibold text-fg-2">{t("quiz.title")}</h2>}
-                value={
-                  quiz.last ? (
-                    <span className="text-xl" data-testid="quiz-last">
-                      {t("progress.quizLast", { correct: quiz.last.correct, total: quiz.last.total })}
-                    </span>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-5 py-2">
+                <h2 className="m-0 flex items-center gap-2 text-sm font-semibold text-fg-2">
+                  <Icon name="help" size={16} className="shrink-0 text-fg-3" />
+                  {t("quiz.title")}
+                </h2>
+                <p className="m-0 flex flex-1 flex-wrap items-center justify-end gap-x-3 text-sm text-fg-1">
+                  {quiz.last ? (
+                    <span data-testid="quiz-last">{t("progress.quizLast", { correct: quiz.last.correct, total: quiz.last.total })}</span>
                   ) : (
-                    <span className="text-lg font-semibold text-fg-2">{t("progress.quizNone")}</span>
-                  )
-                }
-              >
-                <div className="mt-auto flex flex-wrap items-center gap-2 pt-3">
-                  <a href="#/quiz" className={cn(linkButton("soft"), "w-full sm:w-auto")}>
-                    <Icon name="help" size={18} className="shrink-0" />
+                    <span className="text-fg-2">{t("progress.quizNone")}</span>
+                  )}
+                  <a href="#/quiz" className="inline-flex min-h-11 items-center gap-1 font-semibold text-accent hover:underline">
                     {t("plan.takeQuiz")}
+                    <Icon name="chevron-end" size={16} className="shrink-0" />
                   </a>
-                </div>
-              </StatTile>
+                </p>
+              </div>
             </div>
 
             <div className={cn(surface.soft, "flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:p-5")}>
@@ -169,18 +147,15 @@ export default function ProgressScreen() {
 
             <section aria-labelledby="progress-stages" className="flex flex-col gap-3">
               <h2 id="progress-stages" className="text-lg font-bold text-fg-1">{t("uiLearning.milestonesTitle")}</h2>
-              <ol className="m-0 flex list-none flex-col gap-3 p-0">
+              <ol className={cn(surface.card, "m-0 flex list-none flex-col divide-y divide-line overflow-hidden p-0")}>
                 {milestones.map((m, i) => (
-                  <MilestonePanel key={m.name} milestone={m} index={i} defaultOpen={i === current} />
+                  <MilestoneSummary key={m.name} milestone={m} current={i === current} />
                 ))}
               </ol>
             </section>
 
             <section aria-labelledby="progress-practised" className={cn(surface.card, "flex flex-col gap-3 p-4 sm:p-6")}>
-              <h2 id="progress-practised" className="flex items-center gap-2 text-lg font-bold text-fg-1">
-                <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-md bg-accent-soft text-accent">
-                  <Icon name="flask" size={18} />
-                </span>
+              <h2 id="progress-practised" className="text-lg font-bold text-fg-1">
                 {t("summary.scenarios")}
               </h2>
               {practised.length === 0 ? (
@@ -194,11 +169,7 @@ export default function ProgressScreen() {
                         <bdi dir="ltr" className="rounded-full border border-accent-line bg-surface-0 px-2 py-0.5 font-id text-xs font-semibold text-accent">
                           {id}
                         </bdi>
-                        {s && (
-                          <Badge tone="value">
-                            <ValueLabel ar={s.value_ar} en={s.company_value} />
-                          </Badge>
-                        )}
+                        {s && <ValueTag ar={s.value_ar} en={s.company_value} />}
                         <span className="ms-auto text-sm text-fg-3" dir="ltr">{isoDay(date)}</span>
                       </li>
                     );
@@ -207,17 +178,14 @@ export default function ProgressScreen() {
               )}
             </section>
 
-            <div className={cn(surface.panel, "flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between")}>
-              <div className="min-w-0">
-                <h2 className="text-sm font-bold text-fg-1">{t("uiLearning.manage")}</h2>
-                <p className="m-0 text-sm text-fg-2">{t("uiLearning.resetHint")}</p>
-              </div>
+            <div className="flex flex-col gap-1 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+              <p className="m-0 text-sm text-fg-3">{t("uiLearning.resetHint")}</p>
               <button
                 type="button"
                 onClick={() => setConfirmReset(true)}
-                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 self-start rounded-md border border-transparent px-4 font-semibold text-danger transition-colors duration-(--da-motion-fast) ease-da hover:border-[color-mix(in_srgb,var(--da-danger)_35%,transparent)] hover:bg-surface-0 sm:self-auto"
+                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 self-start rounded-md px-2 text-sm font-semibold text-danger transition-colors duration-(--da-motion-fast) ease-da hover:bg-surface-2 sm:self-auto"
               >
-                <Icon name="refresh" size={18} className="shrink-0" />
+                <Icon name="refresh" size={16} className="shrink-0" />
                 {t("progress.reset")}
               </button>
             </div>
