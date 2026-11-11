@@ -564,11 +564,15 @@ _SMALL_TALK_ECHO = re.compile(
 )
 
 
+#: "first" / «أول» in a greeting ("ask me first", «أول شي») is not a fact; the number check skips it.
+_SMALL_TALK_ORDINAL = re.compile(r"(?<![\w])(?:أول|اول|أولا|اولا|أولاً|اولاً|first|firstly)(?![\w])", re.IGNORECASE)
+
+
 def _language_ok(text: str, lang: str) -> bool:
     arabic = len(_ARABIC_LETTER.findall(text))
     latin = len(_LATIN_LETTER.findall(text))
-    if lang == "ar":
-        return arabic > 0 and latin <= TRANSLATION_ARABIC_SHARE * (arabic + latin)
+    if lang == "ar":  # an Arabic small-talk reply needs no Latin letters at all (caught «بhelpك»)
+        return arabic > 0 and latin == 0
     return latin > 0 and not _arabic_left(text)
 
 
@@ -596,7 +600,7 @@ def verify_small_talk(reply: object, *, documents: Iterable[str] = ()) -> Verdic
             return _reject(EMPTY)
         if len(text) > SMALL_TALK_MAX_CHARS:
             return _reject(TOO_LONG)
-        if numbers_in(english_number_words_to_digits(text)):
+        if numbers_in(english_number_words_to_digits(_SMALL_TALK_ORDINAL.sub(" ", text))):
             return _reject(FOREIGN_NUMBER)
         if has_contact_or_link(text) is not None:
             return _reject(CONTACT_OR_LINK)

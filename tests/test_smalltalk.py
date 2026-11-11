@@ -373,3 +373,11 @@ def test_eval_script_intents_and_mixed_rows_with_a_fake_agent(agent: Agent, fake
     assert all(r["router_tool"] != "greet" for r in rows if r["id"].startswith("MX-"))
     line = mod.summarise(rows, 0.0)
     assert line.startswith(f"intent_ok={len(mod.SMALL_TALK)}/{len(mod.SMALL_TALK)} verified=0/")
+
+
+def test_small_talk_verifier_allows_ordinals_and_rejects_latin_in_arabic() -> None:
+    from app.verify import verify_small_talk
+
+    assert verify_small_talk({"text_ar": "أهلاً! أول شي اسألني عن الشركة.", "text_en": "Hi! Ask me first."}).ok
+    assert verify_small_talk({"text_ar": "بكل سرور بhelpك", "text_en": "Happy to help."}).reason == "wrong_language"
+    assert verify_small_talk({"text_ar": "عندنا 5 قيم", "text_en": "We have five values."}).reason == "foreign_number"
