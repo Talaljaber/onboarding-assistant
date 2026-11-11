@@ -1,8 +1,8 @@
 """Store protocol and the validation shared by every store.
 
-What it does: defines the `Store` interface the server uses for KB rows + history, demo profiles,
-progress, practice attempts, turn logs and the manager summary, plus pure helpers that validate
-and shape records before any store writes them.
+What it does: defines the `Store` interface the server uses for KB rows + history, interns (added by
+the admin), their profiles, progress, practice attempts, turn logs and the admin's per-intern records,
+plus pure helpers that validate and shape records before any store writes them.
 What it must never do: touch the network or a database, accept chat/answer text for a turn log,
 or accept an alias shaped like an email or a phone number.
 """
@@ -117,8 +117,44 @@ class Store(Protocol):
         """Metadata only; any key naming message/answer/text (or prompt/reply) rejects the log."""
         ...
 
-    def manager_summary(self) -> list[dict[str, Any]]:
-        """Per profile: {alias, role, activities_done, scenarios_practised, quiz_practised}. Counts only."""
+    # Interns (P11.2) ------------------------------------------------------------------------
+
+    def list_interns(self) -> list[dict[str, Any]] | None:
+        """Every intern {id, name_ar, name_en, role, active, created_at, updated_at}, oldest first; None on failure."""
+        ...
+
+    def get_intern(self, intern_id: str) -> dict[str, Any] | None: ...
+
+    def create_intern(self, name_ar: str, name_en: str | None, role: str) -> dict[str, Any]:
+        """The new intern, or {} when the input is invalid or the write failed."""
+        ...
+
+    def update_intern(self, intern_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        """Apply {name_ar?, name_en?, role?, active?} (updated_at set). The intern, or None (unknown/invalid)."""
+        ...
+
+    def seed_interns(self, interns: list[dict[str, Any]]) -> int:
+        """Insert `interns` only when the table is empty (idempotent startup seed). Returns rows inserted."""
+        ...
+
+    def intern_profile(self, intern_id: str, role: str) -> dict[str, Any]:
+        """Get-or-create the one profile of (intern, role): {id, alias, role, intern_id, created_at}; {} on failure."""
+        ...
+
+    def intern_profiles(self, intern_id: str | None = None) -> list[dict[str, Any]]:
+        """Profiles linked to an intern (all interns, or one): {id, intern_id, role, created_at}, oldest first."""
+        ...
+
+    def activity(self, profile_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        """Timestamped records of these profiles, ids and labels only (never correctness, never text):
+        {"progress": [{profile_id, activity_id, completed_at}], "quiz": [{profile_id, question_id, at}],
+        "scenarios": [{profile_id, scenario_id, mode, value, at}], "turns": [{profile_id, tool, cited_ids, at}]}."""
+        ...
+
+    def purge_demo_profiles(self, apply: bool = False) -> dict[str, int]:
+        """Profiles not linked to an intern (old anonymous demo profiles): counts of the profiles, their
+        progress, quiz and scenario attempts, and turn logs pointing at them. With apply=True the profiles,
+        progress and attempts are deleted and the turn logs are kept with `profile_id` cleared."""
         ...
 
     def close(self) -> None: ...
@@ -169,6 +205,80 @@ def alias_problem(alias: str) -> str | None:
     if sum(1 for ch in a if ch.isdigit()) >= _PHONE_DIGITS:
         return "phone"
     return None
+
+
+NAME_MIN = 2
+
+
+def name_problem(name: str) -> str | None:
+    """Why an intern name is refused ("empty", "too_short", "too_long", "email", "phone"), or None."""
+    problem = alias_problem(name)
+    if problem:
+        return problem
+    if len(name.strip()) < NAME_MIN:
+        return "too_short"
+    return None
+
+
+def clean_name(name: object) -> str | None:
+    """The stored form of a valid name (spaces collapsed), else None."""
+    if not isinstance(name, str):
+        return None
+    v = " ".join(name.split())
+    return v if name_problem(v) is None else None
+
+
+def intern_input(name_ar: object, name_en: object, role: object) -> dict[str, Any] | None:
+    """{name_ar, name_en, role} ready to store, or None when anything is invalid."""
+    ar = clean_name(name_ar)
+    if ar is None or role not in ROLES:
+        return None
+    en: str | None = None
+    if name_en is not None and not (isinstance(name_en, str) and not name_en.strip()):
+        en = clean_name(name_en)
+        if en is None:
+            return None
+    return {"name_ar": ar, "name_en": en, "role": role}
+
+
+def intern_changes(changes: dict[str, Any]) -> dict[str, Any] | None:
+    """Validated partial update for an intern, or None when anything is invalid."""
+    out: dict[str, Any] = {}
+    for key, val in changes.items():
+        if key == "name_ar":
+            v = clean_name(val)
+            if v is None:
+                return None
+            out[key] = v
+        elif key == "name_en":
+            if val is None or (isinstance(val, str) and not val.strip()):
+                out[key] = None
+            else:
+                v = clean_name(val)
+                if v is None:
+                    return None
+                out[key] = v
+        elif key == "role":
+            if val not in ROLES:
+                return None
+            out[key] = val
+        elif key == "active":
+            if not isinstance(val, bool):
+                return None
+            out[key] = val
+        else:
+            return None
+    return out
+
+
+INTERN_FIELDS = ("id", "name_ar", "name_en", "role", "active", "created_at", "updated_at")
+
+
+def intern_row(r: dict[str, Any]) -> dict[str, Any]:
+    out = {k: r.get(k) for k in INTERN_FIELDS}
+    out["id"] = str(out["id"])
+    out["active"] = bool(out["active"])
+    return out
 
 
 def default_alias(n: int) -> str:
@@ -317,11 +427,5 @@ def scenario_record(
     }
 
 
-def summary_row(alias: str, role: str, activities: int, scenarios: int, quiz: int) -> dict[str, Any]:
-    return {
-        "alias": alias,
-        "role": role,
-        "activities_done": int(activities),
-        "scenarios_practised": int(scenarios),
-        "quiz_practised": int(quiz),
-    }
+def empty_activity() -> dict[str, list[dict[str, Any]]]:
+    return {"progress": [], "quiz": [], "scenarios": [], "turns": []}

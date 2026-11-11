@@ -20,14 +20,12 @@ from app.answer import CONTACT_REFUSAL_AR
 from app.config import get_settings
 from app.main import create_app
 from app.schemas import (
-    MANAGER_LABEL_AR,
     ChatResponse,
     ErrorBody,
     Health,
     KbListResponse,
     KbResetResponse,
     KbWriteResponse,
-    ManagerSummaryResponse,
     PlanResponse,
     Profile,
     ProgressResponse,
@@ -273,14 +271,7 @@ def test_profiles_progress_and_manager(client: TestClient, store: LocalStore) ->
     ok(client.post("/api/scenarios/S01/feedback", json={"option_id": "S01-O1", "profile_id": pid}),
        ScenarioFeedbackResponse)
     chat(client, "", option_id="S02-O1", state={"active_scenario": "S02"}, profile_id=pid)
-
-    r = client.get("/api/manager/summary")
-    summary = ok(r, ManagerSummaryResponse)
-    assert summary.label_ar == MANAGER_LABEL_AR
-    row = next(x for x in summary.profiles if x.alias == p.alias)
-    assert row.activities_done == len(ids) and row.quiz_practised == 1 and row.scenarios_practised == 2
-    assert row.percent == prog.percent
-    assert not any(w in r.text for w in ("correct", "score", "grade"))
+    assert ok(client.get(f"/api/progress?profile_id={pid}"), ProgressResponse).done == len(ids)
 
 
 def test_plan_ticks_reach_the_manager_view(client: TestClient) -> None:
@@ -296,15 +287,9 @@ def test_plan_ticks_reach_the_manager_view(client: TestClient) -> None:
     again = ok(client.put("/api/progress", json={"profile_id": pid, "activity_ids": two}), ProgressResponse)
     assert again.done == 2  # idempotent
 
-    def manager_row() -> Any:
-        rows = ok(client.get("/api/manager/summary"), ManagerSummaryResponse).profiles
-        return next(x for x in rows if x.alias == p.alias)
-
-    assert manager_row().activities_done == 2 and manager_row().percent == prog.percent > 0
-
     off = {"profile_id": pid, "activity_ids": two[:1], "completed": False}
     left = ok(client.put("/api/progress", json=off), ProgressResponse)
-    assert left.completed_ids == two[1:] and manager_row().activities_done == 1
+    assert left.completed_ids == two[1:] and left.done == 1
     assert ok(client.get(f"/api/progress?profile_id={pid}"), ProgressResponse).completed_ids == two[1:]
 
     sales_id = next(a["id"] for m in client.get("/api/plan?role=Sales").json()["milestones"] for a in m["activities"])

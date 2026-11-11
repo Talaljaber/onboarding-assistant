@@ -1,5 +1,5 @@
-// `#/admin`: admin sign-in. The knowledge editor and the manager view (`#/kb`) open only after it.
-// Employees never sign in; this screen is reached from the "admin sign-in" links only.
+// `#/admin`: admin sign-in. The admin shell (Interns, Knowledge base) opens only after it. Interns
+// never come here: they pick their name on the sign-in screen "#/".
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { adminLogin } from "@/api/client";
 import { useT } from "@/i18n";
@@ -46,7 +46,7 @@ export default function AdminScreen() {
     setBusy(false);
     if (r.ok) {
       setPassword("");
-      navigate("/kb");
+      navigate("/admin/interns");
       return;
     }
     const status = r.error.kind === "http" ? r.error.status : undefined;

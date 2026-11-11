@@ -151,27 +151,104 @@ def test_local_profiles_progress_attempts(local: LocalStore) -> None:
     rows = local.table_rows("scenario_attempts")
     assert json.loads(rows[0]["met"]) == ["S02-C1"]
 
-    summary = local.manager_summary()
-    assert summary == [
-        {"alias": "متدرب ١", "role": "Sales", "activities_done": 2, "scenarios_practised": 2, "quiz_practised": 2},
-        {
-            "alias": "فريق التوصيل",
-            "role": "Delivery",
-            "activities_done": 0,
-            "scenarios_practised": 0,
-            "quiz_practised": 0,
-        },
-    ]
+
+SEED = [
+    {"name_ar": "سارة الخطيب", "name_en": "Sara Al-Khatib", "role": "Sales"},
+    {"name_ar": "عمر حداد", "name_en": "Omar Haddad", "role": "Delivery"},
+]
 
 
-def test_manager_summary_has_counts_only(local: LocalStore) -> None:
-    p = local.create_profile("Sales")
-    local.add_quiz_attempt(p["id"], "Q01", "A", True)
-    (row,) = local.manager_summary()
-    assert set(row) == {"alias", "role", "activities_done", "scenarios_practised", "quiz_practised"}
-    banned = ("correct", "score", "grade", "percent_correct", "accuracy", "option")
-    assert not any(b in k for k in row for b in banned)
-    assert all(isinstance(row[k], int) for k in row if k not in ("alias", "role"))
+def test_local_interns_seed_create_update(local: LocalStore) -> None:
+    assert local.list_interns() == []
+    assert local.seed_interns(SEED) == 2
+    assert local.seed_interns(SEED) == 0  # idempotent: only into an empty table
+    sara, omar = local.list_interns() or []
+    assert sara["name_ar"] == "سارة الخطيب" and sara["active"] is True and omar["role"] == "Delivery"
+    assert local.get_intern(sara["id"]) == sara
+    assert local.get_intern(str(uuid.uuid4())) is None and local.get_intern("nope") is None
+
+    rana = local.create_intern("  رنا   الحسن ", None, "Delivery")
+    assert rana["name_ar"] == "رنا الحسن" and rana["name_en"] is None
+    for bad in (("x", None, "Sales"), ("a@b.co", None, "Sales"), ("رنا", "0791234567", "Sales"), ("رنا", None, "HR")):
+        assert local.create_intern(*bad) == {}
+    moved = local.update_intern(rana["id"], {"role": "Sales", "name_en": "Rana Al-Hassan"})
+    assert moved is not None and moved["role"] == "Sales" and moved["name_en"] == "Rana Al-Hassan"
+    assert moved["updated_at"] >= rana["updated_at"]
+    off = local.update_intern(rana["id"], {"active": False})
+    assert off is not None and off["active"] is False
+    assert local.update_intern(rana["id"], {"name_ar": "x"}) is None
+    assert local.update_intern(rana["id"], {"email": "a@b.co"}) is None
+    assert local.update_intern(str(uuid.uuid4()), {"active": True}) is None
+    assert len(local.list_interns() or []) == 3  # deactivated, never deleted
+
+
+def test_local_intern_profiles_and_activity(local: LocalStore) -> None:
+    local.seed_interns(SEED)
+    sara = (local.list_interns() or [])[0]
+    p1 = local.intern_profile(sara["id"], "Sales")
+    assert p1["intern_id"] == sara["id"] and p1["role"] == "Sales"
+    assert local.intern_profile(sara["id"], "Sales") == p1  # get-or-create
+    p2 = local.intern_profile(sara["id"], "Delivery")
+    assert p2["id"] != p1["id"]
+    assert local.intern_profile(str(uuid.uuid4()), "Sales") == {}
+    assert local.intern_profile(sara["id"], "HR") == {}
+    assert [p["id"] for p in local.intern_profiles(sara["id"])] == [p1["id"], p2["id"]]
+    anon = local.create_profile("Sales")
+    assert anon["id"] not in {p["id"] for p in local.intern_profiles()}
+
+    pid = p1["id"]
+    local.set_progress(pid, ["SA-D1-read-company"])
+    local.add_quiz_attempt(pid, "Q01", "A", True)
+    local.add_scenario_attempt(pid, "S02", "option", "S02-O1", [], [], "Integrity")
+    local.add_turn_log(request_id="r1", profile_id=pid, tool="answer_from_rows", cited_ids=["K01"])
+    act = local.activity([pid, p2["id"], "nope"])
+    assert [r["activity_id"] for r in act["progress"]] == ["SA-D1-read-company"]
+    assert act["progress"][0]["completed_at"]
+    assert act["quiz"] == [{"profile_id": pid, "question_id": "Q01", "at": act["quiz"][0]["at"]}]  # no correctness
+    assert act["scenarios"][0]["scenario_id"] == "S02" and act["scenarios"][0]["value"] == "Integrity"
+    assert act["turns"][0]["cited_ids"] == ["K01"] and act["turns"][0]["tool"] == "answer_from_rows"
+    assert local.activity([]) == {"progress": [], "quiz": [], "scenarios": [], "turns": []}
+
+
+def test_local_purge_demo_profiles(local: LocalStore) -> None:
+    local.seed_interns(SEED)
+    sara = (local.list_interns() or [])[0]
+    keep = local.intern_profile(sara["id"], "Sales")["id"]
+    demo = local.create_profile("Sales")["id"]
+    for pid in (keep, demo):
+        local.set_progress(pid, ["SA-D1-read-company"])
+        local.add_quiz_attempt(pid, "Q01", "A", True)
+        local.add_scenario_attempt(pid, "S01", "offline", None, [], [], None)
+        local.add_turn_log(request_id=f"r-{pid}", profile_id=pid, tool="greet")
+    counts = {"profiles": 1, "progress": 1, "quiz_attempts": 1, "scenario_attempts": 1, "turn_logs": 1}
+    assert local.purge_demo_profiles() == counts  # dry run changes nothing
+    assert len(local.table_rows("profiles")) == 2
+    assert local.purge_demo_profiles(apply=True) == counts
+    assert [p["id"] for p in local.table_rows("profiles")] == [keep]
+    for table in ("progress", "quiz_attempts", "scenario_attempts"):
+        assert {r["profile_id"] for r in local.table_rows(table)} == {keep}
+    logs = local.table_rows("turn_logs")
+    assert len(logs) == 2 and {r["profile_id"] for r in logs} == {keep, None}  # logs kept, link cleared
+    assert local.purge_demo_profiles()["profiles"] == 0
+
+
+def test_local_migrates_an_old_database(tmp_path: Path) -> None:
+    import sqlite3
+
+    live = tmp_path / "old"
+    live.mkdir()
+    con = sqlite3.connect(live / "local.sqlite")
+    con.execute("create table profiles (id text primary key, alias text not null, role text not null,"
+                " created_at text not null)")
+    con.execute("insert into profiles values ('6f1c2b9e-4d3a-4e8b-9c71-2a5d0e7f3b14', 'متدرب ١', 'Sales', 'x')")
+    con.commit()
+    con.close()
+    st = LocalStore(live)
+    try:
+        assert st.purge_demo_profiles()["profiles"] == 1
+        assert st.seed_interns(SEED) == 2
+    finally:
+        st.close()
 
 
 @pytest.mark.parametrize(
@@ -223,7 +300,8 @@ def test_local_never_raises_after_close(local: LocalStore) -> None:
     assert local.kb_rows() is None
     assert local.create_profile("Sales") == {}
     assert local.get_progress(str(uuid.uuid4())) == []
-    assert local.manager_summary() == []
+    assert local.list_interns() is None
+    assert local.create_intern("سارة", None, "Sales") == {}
 
 
 # SupabaseStore over a fake PostgREST -----------------------------------------------------------
@@ -253,6 +331,10 @@ class FakePostgrest:
         for col, (cond, *_) in params.items():
             if col in ("select", "order", "limit", "on_conflict"):
                 continue
+            if cond == "is.null" and row.get(col) is not None:
+                return False
+            if cond == "not.is.null" and row.get(col) is None:
+                return False
             if cond.startswith("eq.") and str(row.get(col)) != cond[3:]:
                 return False
             if cond.startswith("in.("):
@@ -274,6 +356,12 @@ class FakePostgrest:
                 cols = params["select"][0].split(",")
                 out = [{c: r.get(c) for c in cols} for r in out]
             return httpx.Response(200, json=out)
+        if request.method == "PATCH":
+            body = json.loads(request.content)
+            hit = [r for r in rows if self._match(r, params)]
+            for r in hit:
+                r.update(body)
+            return httpx.Response(200, json=hit)
         if request.method == "DELETE":
             self.tables[table] = [r for r in rows if not self._match(r, params)]
             return httpx.Response(204)
@@ -290,6 +378,10 @@ class FakePostgrest:
                     item.setdefault("created_at", "2026-11-11T00:00:00+00:00")
                 if table == "progress" and not any(p["id"] == item["profile_id"] for p in self.tables["profiles"]):
                     return httpx.Response(409, json={"code": "23503"})
+                if table == "profiles" and item.get("intern_id") and any(
+                    p.get("intern_id") == item["intern_id"] and p["role"] == item["role"] for p in rows
+                ):
+                    return httpx.Response(409, json={"code": "23505"})
                 existing = [r for r in rows if keys and all(r.get(k) == item.get(k) for k in keys)]
                 if existing:
                     if "merge-duplicates" in prefer:
@@ -334,9 +426,7 @@ def test_supabase_happy_path(tmp_path: Path, logs: io.StringIO) -> None:
     assert sb.add_quiz_attempt(prof["id"], "Q01", "A", True)
     assert sb.add_scenario_attempt(prof["id"], "S04", "llm", None, ["S04-C1"], [], "Integrity")
     assert sb.add_turn_log(request_id="r1", tool="greet", cited_ids=[])
-    assert sb.manager_summary() == [
-        {"alias": "متدرب ١", "role": "Delivery", "activities_done": 1, "scenarios_practised": 1, "quiz_practised": 1}
-    ]
+    assert sb.activity([prof["id"]])["quiz"][0]["question_id"] == "Q01"
     # 409 (unknown profile in Supabase) is refused without flipping
     assert not sb.set_progress(str(uuid.uuid4()), ["DE-D1-read-company"])
     assert sb.name == "supabase" and sb.fallback_reason is None
@@ -349,6 +439,73 @@ def test_supabase_happy_path(tmp_path: Path, logs: io.StringIO) -> None:
     assert FAKE_KEY not in logs.getvalue()
     assert FAKE_KEY not in repr(sb)
     sb.close()
+
+
+def test_supabase_interns(tmp_path: Path, logs: io.StringIO) -> None:
+    fake = FakePostgrest()
+    fake.tables["interns"] = []
+    sb = make_sb(tmp_path, fake)
+    assert sb.seed_interns(SEED) == 2
+    assert sb.seed_interns(SEED) == 0
+    sara, omar = sb.list_interns() or []
+    assert sara["name_ar"] == "سارة الخطيب" and sara["active"] is True
+    assert sb.get_intern(omar["id"]) == omar
+    rana = sb.create_intern("رنا الحسن", None, "Delivery")
+    assert rana["role"] == "Delivery"
+    assert sb.create_intern("a@b.co", None, "Sales") == {}
+    edited = sb.update_intern(rana["id"], {"role": "Sales", "active": False})
+    assert edited is not None and edited["role"] == "Sales" and edited["active"] is False
+    patch = next(r for r in fake.requests if r.method == "PATCH")
+    assert parse_qs(patch.url.query.decode())["id"] == [f"eq.{rana['id']}"]
+    assert sb.update_intern(rana["id"], {"name_ar": "x"}) is None
+
+    p1 = sb.intern_profile(sara["id"], "Sales")
+    assert p1["intern_id"] == sara["id"] and sb.intern_profile(sara["id"], "Sales")["id"] == p1["id"]
+    assert sb.intern_profile(str(uuid.uuid4()), "Sales") == {}
+    anon = sb.create_profile("Sales")
+    assert [p["id"] for p in sb.intern_profiles()] == [p1["id"]]
+    assert [p["id"] for p in sb.intern_profiles(sara["id"])] == [p1["id"]]
+    assert sb.set_progress(p1["id"], ["SA-D1-read-company"])
+    assert sb.add_quiz_attempt(p1["id"], "Q01", "A", True)
+    assert sb.add_turn_log(request_id="r1", profile_id=p1["id"], tool="answer_from_rows", cited_ids=["K01"])
+    assert sb.add_turn_log(request_id="r2", profile_id=anon["id"], tool="greet")
+    act = sb.activity([p1["id"]])
+    assert act["progress"][0]["activity_id"] == "SA-D1-read-company" and "correct" not in act["quiz"][0]
+    assert act["turns"][0]["cited_ids"] == ["K01"]
+
+    counts = sb.purge_demo_profiles()
+    assert counts["profiles"] == 1 and counts["turn_logs"] == 1
+    assert len(fake.tables["profiles"]) == 2  # dry run
+    assert sb.purge_demo_profiles(apply=True)["profiles"] == 1
+    assert [p["id"] for p in fake.tables["profiles"]] == [p1["id"]]
+    assert {t["profile_id"] for t in fake.tables["turn_logs"]} == {p1["id"], None}
+    assert sb.name == "supabase" and sb.fallback_reason is None
+    assert FAKE_KEY not in logs.getvalue()
+    sb.close()
+
+
+def test_supabase_intern_profile_race_reads_the_winner(tmp_path: Path) -> None:
+    fake = FakePostgrest()
+    fake.tables["interns"] = []
+    sb = make_sb(tmp_path, fake)
+    sb.seed_interns(SEED)
+    sara = (sb.list_interns() or [])[0]
+    real_call = fake.__call__
+    raced = {"done": False}
+
+    def racing(request: httpx.Request) -> httpx.Response:
+        # Another server creates the profile between our lookup and our insert.
+        if request.method == "POST" and request.url.path.endswith("/profiles") and not raced["done"]:
+            raced["done"] = True
+            fake.tables["profiles"].append({"id": str(uuid.uuid4()), "alias": "x", "role": "Sales",
+                                            "intern_id": sara["id"], "created_at": "2026-11-11T00:00:00+00:00"})
+        return real_call(request)
+
+    sb2 = make_sb(tmp_path, racing)
+    won = sb2.intern_profile(sara["id"], "Sales")
+    assert won["id"] == fake.tables["profiles"][0]["id"] and len(fake.tables["profiles"]) == 1
+    sb.close()
+    sb2.close()
 
 
 def _status(code: int) -> Callable[[httpx.Request], httpx.Response]:
@@ -378,7 +535,7 @@ def test_supabase_failure_falls_back_to_local(
     assert sb.set_progress(prof["id"], ["SA-D1-read-company"])
     assert sb.get_progress(prof["id"]) == ["SA-D1-read-company"]
     assert sb.kb_upsert(ROW, "seed") is not None
-    assert sb.manager_summary()[0]["activities_done"] == 1
+    assert sb.activity([prof["id"]])["progress"][0]["activity_id"] == "SA-D1-read-company"
     assert (tmp_path / "live" / "local.sqlite").exists()
 
     evs = [e for e in events(logs) if e.get("event") == "store_fallback"]

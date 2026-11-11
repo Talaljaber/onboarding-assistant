@@ -4,6 +4,9 @@
 import { useEffect, useRef, type ComponentType } from "react";
 import AboutScreen from "@/components/about/AboutScreen";
 import AdminScreen from "@/components/admin/AdminScreen";
+import { AdminShell } from "@/components/admin/AdminShell";
+import InternDetailScreen from "@/components/admin/InternDetailScreen";
+import InternsScreen from "@/components/admin/InternsScreen";
 import { getAdminSession } from "@/api/client";
 import { getAdminToken, useIsAdmin } from "@/api/adminToken";
 import ChatScreen from "@/components/chat/ChatScreen";
@@ -22,10 +25,12 @@ import { AppStateProvider, useAppState } from "@/state/useAppState";
 interface RouteDef {
   path: string;
   Screen: ComponentType;
-  /** Redirects to "#/" while no role is stored (plan D1.1: every route except "#/" and "#/about"). */
+  /** Intern only: redirects to the sign-in screen "#/" while no intern is signed in. */
   needsRole: boolean;
-  /** Admin only (P10): redirects to the sign-in screen "#/admin" without an admin token. */
+  /** Admin only (P10): redirects to the admin sign-in screen "#/admin" without an admin token. */
   needsAdmin?: boolean;
+  /** Matches paths with a parameter (the intern detail page). */
+  match?: RegExp;
 }
 
 export const ROUTES: readonly RouteDef[] = [
@@ -36,6 +41,14 @@ export const ROUTES: readonly RouteDef[] = [
   { path: "/quiz", Screen: QuizScreen, needsRole: true },
   { path: "/progress", Screen: ProgressScreen, needsRole: true },
   { path: "/kb", Screen: KbScreen, needsRole: false, needsAdmin: true },
+  { path: "/admin/interns", Screen: InternsScreen, needsRole: false, needsAdmin: true },
+  {
+    path: "/admin/interns/:id",
+    Screen: InternDetailScreen,
+    needsRole: false,
+    needsAdmin: true,
+    match: /^\/admin\/interns\/[0-9a-f-]{36}$/,
+  },
   { path: "/admin", Screen: AdminScreen, needsRole: false },
   { path: "/about", Screen: AboutScreen, needsRole: false },
 ];
@@ -61,9 +74,10 @@ function Routes() {
   const path = usePath();
   const { role } = useAppState();
   const admin = useIsAdmin();
-  const route = ROUTES.find((r) => r.path === path);
-  // "#/" with a stored role goes to the assistant; unknown paths and role-less guarded paths go to "#/";
-  // admin screens go to the sign-in screen without an admin token, and the signed-in admin skips it.
+  const route = ROUTES.find((r) => (r.match ? r.match.test(path) : r.path === path));
+  // "#/" with a signed-in intern goes to the assistant; unknown paths and intern screens without an intern
+  // go to "#/" (sign-in); admin screens go to the admin sign-in without an admin token, and the signed-in
+  // admin skips it.
   const target = !route
     ? "/"
     : route.path === "/" && role
@@ -73,7 +87,7 @@ function Routes() {
         : route.needsAdmin && !admin
           ? "/admin"
           : route.path === "/admin" && admin
-            ? "/kb"
+            ? "/admin/interns"
             : null;
   const redirect = target !== null && target !== path ? target : null;
   useEffect(() => {
@@ -94,7 +108,7 @@ function Routes() {
   }, [path, dismissTransient]);
   if (!route || redirect) return null;
   const { Screen } = route;
-  return <Screen key={route.path} />;
+  return <Screen key={route.match ? path : route.path} />;
 }
 
 /** On load, check a stored admin token with the server (a restart or expiry forgets it). */
@@ -108,16 +122,27 @@ function AdminCheck() {
   return null;
 }
 
+/** The admin area (signed in) gets the admin shell; everything else the intern shell. */
+function Frame() {
+  const path = usePath();
+  const admin = useIsAdmin();
+  const adminArea = admin && (path === "/kb" || path.startsWith("/admin/"));
+  const Shell = adminArea ? AdminShell : AppShell;
+  return (
+    <Shell>
+      <ErrorBoundary>
+        <Routes />
+      </ErrorBoundary>
+    </Shell>
+  );
+}
+
 export default function App() {
   return (
     <ToastProvider>
       <AppStateProvider>
         <AdminCheck />
-        <AppShell>
-          <ErrorBoundary>
-            <Routes />
-          </ErrorBoundary>
-        </AppShell>
+        <Frame />
       </AppStateProvider>
     </ToastProvider>
   );

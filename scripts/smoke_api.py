@@ -101,7 +101,16 @@ def run_storyboard(api: Api) -> str:
     page = api.call("GET", "/")
     check("<html" in page.lower() and 'id="root"' in page, "web/dist index.html served at /")
 
-    # 1. role selection: the Sales lists and a greeting
+    # 1. sign-in: the intern Sara (a seeded fictional demo intern; the admin set her track to Sales)
+    roster = api.call("GET", "/api/interns")["interns"]
+    sara = next((i for i in roster if i["name_en"] == "Sara Al-Khatib"), None)
+    check(sara is not None and sara["role"] == "Sales", "1 Sara on the sign-in list (Sales)")
+    assert sara is not None
+    sess = api.call("POST", f"/api/interns/{sara['id']}/session", {})
+    again = api.call("POST", f"/api/interns/{sara['id']}/session", {})
+    check(sess["role"] == "Sales" and again["profile_id"] == sess["profile_id"], "1 one profile per intern and track")
+    pid = sess["profile_id"]
+    # the Sales lists and a greeting
     check(len(api.call("GET", "/api/scenarios?role=Sales")["scenarios"]) >= 1, "1 scenarios for Sales")
     check(len(api.call("GET", "/api/plan?role=Sales")["milestones"]) == 4, "1 plan for Sales")
     check(kind(api.chat("مرحبا", role="Sales")) == "text", "1 greeting")
@@ -145,7 +154,7 @@ def run_storyboard(api: Api) -> str:
     r = api.chat("أكملت نشاط اليوم 30", role="Sales")
     check(kind(r) == "progress_proposal" and r["reply"]["proposal"]["milestone"] == "Day 30", "6 T08 proposal")
     acts = r["reply"]["proposal"]["activity_ids"]
-    r = api.chat("", role="Sales", confirm={"milestone": "Day 30", "activity_ids": acts})
+    r = api.chat("", role="Sales", confirm={"milestone": "Day 30", "activity_ids": acts}, profile_id=pid)
     check(kind(r) == "progress_confirmed" and r["reply"]["progress"]["completed_ids"] == acts
           and r["reply"]["progress"]["percent"] > 0, "6 progress confirmed")
 
@@ -161,6 +170,18 @@ def run_storyboard(api: Api) -> str:
     api.call("PUT", "/api/kb/K02", {"topic": "x"}, expect=401)
     api.token = api.call("POST", "/api/admin/login",
                          {"password": os.environ.get("ADMIN_PASSWORD") or "dada2026"})["token"]
+    # 8a. the admin's interns list and Sara's detail show the confirmed progress (counts and dates only)
+    deadline = time.monotonic() + 5  # the confirm is written after the response is sent
+    detail: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        detail = api.call("GET", f"/api/admin/interns/{sara['id']}")
+        if detail["progress"]["done"] >= len(acts):
+            break
+        time.sleep(0.1)
+    done = {a["id"] for m in detail["progress"]["milestones"] for a in m["activities"] if a["completed_at"]}
+    check(set(acts) <= done and detail["progress"]["percent"] > 0, "8a detail shows the confirmed activities")
+    row = next(i for i in api.call("GET", "/api/admin/interns")["interns"] if i["id"] == sara["id"])
+    check(row["percent"] == detail["progress"]["percent"] and row["last_active"], "8a interns list row")
     rows = {row["id"]: row for row in api.call("GET", "/api/kb")["rows"]}
     k02 = rows["K02"]["answer_ar"]
     check("17" in k02, "8 K02 holds 17")

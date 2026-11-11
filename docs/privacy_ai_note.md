@@ -81,7 +81,7 @@ With a key, per message, at most:
 A "short follow-up" is a message of a few words or with a follow-up cue (such as a leading «و») that
 is not confident on its own; any other message is sent alone.
 
-**Never sent:** the user's role or track, demo alias, profile id, progress, quiz results or the
+**Never sent:** the user's role or track, the intern's name, demo alias, profile id, progress, quiz results or the
 chat history beyond the previous message. The role never reaches the answer prompt.
 
 Every OpenRouter request carries `provider.data_collection: "deny"`, so OpenRouter routes only to providers
@@ -101,7 +101,8 @@ policies for anonymous or signed-in clients.
 | Table | Contents |
 |---|---|
 | `kb_rows`, `kb_row_history` | the 18 rows and any live edits, with before/after and source (seed, editor, reset) |
-| `profiles` | a demo alias such as «متدرب ١» and the track. An alias that looks like an email or phone is rejected |
+| `interns` | a fictional demo intern's Arabic and optional English name, track, active flag, created/updated time (added and edited by the admin; names that look like an email or phone are rejected) |
+| `profiles` | one per intern and track: the intern link, a generated label such as «متدرب ١» and the track. Older anonymous profiles (no intern) are removed by `scripts/purge_demo_profiles.py` |
 | `progress` | profile id, activity id, time |
 | `quiz_attempts` | profile id, question id, option chosen, correct or not |
 | `scenario_attempts` | profile id, scenario id, mode, option id, checklist ids met and missing, value label. **No free text** |
@@ -126,11 +127,17 @@ chat thread. «امسح بيانات هذا المتصفح» on the «حول و�
 ## 5. Personal data
 
 - No real employee or customer data is used anywhere: not in the data, the tests or the demo.
-- Profiles are demo aliases, not accounts. There is no login.
-- The manager view («عرض المدير», a tab of the knowledge-base screen) shows each demo alias with its
-  track, completion percentage and practice counts only, no correctness or scores, under the label
-  «ملفات تجريبية، ليست موظفين حقيقيين — ليست تقييماً».
-- Knowledge-base editing and the manager view are admin only: one shared admin password
+- Interns are **fictional demo personas** (the four seeded names and any the admin adds for the demo),
+  never real employees. An intern signs in by picking their name: there is no intern password in this
+  demo; a production version would use real authentication.
+- An intern's name is shown in the intern's header and the admin interface only. It never reaches the AI
+  service, a chat request (which carries the profile id only), a turn log or generated text.
+- The admin's interns list and detail page show completion, activities with their completion dates,
+  scenarios practised, quiz questions answered per day, chat question counts and the K-rows cited, and a
+  timeline. No correctness and no scores (quiz attempts are stored with correctness but it is never shown),
+  and never chat text (turn logs hold ids only), under the label
+  «متدربون للعرض بأسماء افتراضية — أعداد الإكمال والتدريب فقط، ليست تقييماً».
+- Knowledge-base editing and the interns screens are admin only: one shared admin password
   (`ADMIN_PASSWORD`, demo default `dada2026`) gives a signed token that expires (8 h) and dies with a
   server restart. Employees never sign in and no account or personal data is stored for the admin.
   The server listens on `127.0.0.1` only and refuses write requests that come from another website.
@@ -167,7 +174,8 @@ invented a contact. The earlier held-out 1 run, before the panel, gave offline 2
   the server.
 - Rows added live, and rows rewritten beyond a small edit, are matched less confidently offline (they
   have no anchor questions).
-- One shared admin password for the knowledge editor and the manager view; no per-person accounts.
+- One shared admin password for the knowledge editor and the interns screens; no per-person accounts.
+  Interns sign in without a password (demo only).
 - The verifier checks grounding, not style. A grounded but clumsy sentence can pass.
 - The English helper translation is checked for invented numbers, contacts, ids and names, not for
   meaning: a fluent but slightly off sentence can pass. The Arabic answer and rows remain the

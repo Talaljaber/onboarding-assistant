@@ -516,18 +516,94 @@ export interface ProgressResponse {
   total: number;
 }
 
-/** Completion and practice counts only: no correctness, no scores. */
-export interface ManagerProfileRow {
-  alias: string;
+// ---------------------------------------------------------------- interns (P11.2)
+
+/** An active intern as the sign-in picker shows it; the track is set by the admin. Fictional demo personas. */
+export interface InternPublic {
+  id: string;
+  name_ar: string;
+  name_en: string | null;
   role: Role;
-  percent: number;
-  activities_done: number;
-  scenarios_practised: number;
-  quiz_practised: number;
 }
 
-export interface ManagerSummaryResponse {
-  profiles: ManagerProfileRow[];
+export interface InternsResponse {
+  interns: InternPublic[];
+}
+
+/** `POST /api/interns/{id}/session`: the intern's profile on their current track. */
+export interface InternSession {
+  intern: InternPublic;
+  profile_id: string;
+  role: Role;
+}
+
+export interface InternOut extends InternPublic {
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InternCreate {
+  name_ar: string;
+  name_en: string | null;
+  role: Role;
+}
+
+/** Partial update: absent = unchanged; `name_en: null` clears it. */
+export interface InternPatch {
+  name_ar?: string;
+  name_en?: string | null;
+  role?: Role;
+  active?: boolean;
+}
+
+/** One row of the admin's interns list. Completion and practice counts only: no correctness, no scores. */
+export interface InternSummary extends InternPublic {
+  active: boolean;
+  created_at: string;
+  percent: number;
+  activities_done: number;
+  activities_total: number;
+  scenarios_practised: number;
+  quiz_attempts: number;
+  questions_asked: number;
+  last_active: string | null;
+}
+
+export interface AdminInternsResponse {
+  interns: InternSummary[];
+  label_ar: string;
+}
+
+export interface DetailActivity {
+  id: string;
+  kind: ActivityKind;
+  title_ar: string;
+  completed_at: string | null;
+}
+
+export interface DetailMilestone {
+  name: MilestoneKey;
+  name_ar: string;
+  done: number;
+  total: number;
+  activities: DetailActivity[];
+}
+
+export type TimelineKind = "activity" | "scenario" | "quiz" | "chat";
+
+export interface InternDetail {
+  intern: InternOut;
+  last_active: string | null;
+  progress: { role: Role; percent: number; done: number; total: number; milestones: DetailMilestone[] };
+  /** Practice only: how often and when, never a score. */
+  scenarios: { scenario_id: string; value: CompanyValue | null; times: number; first_at: string; last_at: string }[];
+  /** Questions answered per UTC day (never correctness). */
+  quiz: { answered: number; days: { date: string; answered: number }[] };
+  /** From turn logs (ids only; chat text is never stored). */
+  chat: { questions: number; turns: number; cited: { id: string; topic: string; count: number }[] };
+  /** Newest first. */
+  timeline: { at: string; kind: TimelineKind; role: Role; ids: string[] }[];
   label_ar: string;
 }
 
@@ -811,20 +887,54 @@ export function isProgressResponse(x: unknown): x is ProgressResponse {
   );
 }
 
-function isManagerProfileRow(x: unknown): x is ManagerProfileRow {
+function isInternPublic(x: unknown): x is InternPublic {
+  return isObj(x) && isStr(x.id) && isStr(x.name_ar) && isStrOrNull(x.name_en) && isOneOf(ROLES, x.role);
+}
+
+export function isInternsResponse(x: unknown): x is InternsResponse {
+  return isObj(x) && isArrayOf(x.interns, isInternPublic);
+}
+
+export function isInternSession(x: unknown): x is InternSession {
+  return isObj(x) && isInternPublic(x.intern) && isStr(x.profile_id) && isOneOf(ROLES, x.role);
+}
+
+export function isInternOut(x: unknown): x is InternOut {
+  return isInternPublic(x) && isObj(x) && isBool(x.active) && isStr(x.created_at) && isStr(x.updated_at);
+}
+
+function isInternSummary(x: unknown): x is InternSummary {
   return (
+    isInternPublic(x) &&
     isObj(x) &&
-    isStr(x.alias) &&
-    isOneOf(ROLES, x.role) &&
+    isBool(x.active) &&
     isNum(x.percent) &&
     isNum(x.activities_done) &&
+    isNum(x.activities_total) &&
     isNum(x.scenarios_practised) &&
-    isNum(x.quiz_practised)
+    isNum(x.quiz_attempts) &&
+    isNum(x.questions_asked) &&
+    isStrOrNull(x.last_active)
   );
 }
 
-export function isManagerSummaryResponse(x: unknown): x is ManagerSummaryResponse {
-  return isObj(x) && isArrayOf(x.profiles, isManagerProfileRow) && isStr(x.label_ar);
+export function isAdminInternsResponse(x: unknown): x is AdminInternsResponse {
+  return isObj(x) && isArrayOf(x.interns, isInternSummary) && isStr(x.label_ar);
+}
+
+export function isInternDetail(x: unknown): x is InternDetail {
+  return (
+    isObj(x) &&
+    isInternOut(x.intern) &&
+    isStrOrNull(x.last_active) &&
+    isObj(x.progress) &&
+    Array.isArray(x.progress.milestones) &&
+    Array.isArray(x.scenarios) &&
+    isObj(x.quiz) &&
+    isObj(x.chat) &&
+    Array.isArray(x.timeline) &&
+    isStr(x.label_ar)
+  );
 }
 
 function isProbe(x: unknown): x is Probe {

@@ -19,7 +19,7 @@ Part D §7.4 is superseded by this file.
 - Ids: K-rows `^K\d{2,3}$`; scenarios `^S0[1-6]$`; options `^S0[1-6]-O[1-3]$`; quiz `^Q\d{2}$`;
   activities `^[A-Z]{1,2}-[A-Za-z0-9-]{1,32}$` (canonical ids `SA-…` for Sales and `DE-…` for Delivery,
   e.g. `SA-D1-read-company`, `SA-D30-quiz`, `DE-D60-s05`); out-of-scope examples `^OOS\d{2,3}$`;
-  `profile_id` is a lowercase UUID string.
+  `profile_id` and intern ids are lowercase UUID strings.
 - Enums (constants in `app/schemas.py` and `types.ts`):
   - roles `"Sales" | "Delivery"` (the CSV values);
   - milestone keys `"Days 1-7" | "Day 30" | "Day 60" | "Day 90"` (the CSV names);
@@ -253,8 +253,8 @@ was local and not synced).
 
 ### Admin sign-in (P10)
 
-The knowledge editor writes (`PUT /api/kb/{id}`, `POST /api/kb`, `POST /api/kb/reset`) and
-`GET /api/manager/summary` are **admin only**: they need `Authorization: Bearer <token>` and answer 401
+The knowledge editor writes (`PUT /api/kb/{id}`, `POST /api/kb`, `POST /api/kb/reset`) and every
+`/api/admin/interns` endpoint are **admin only**: they need `Authorization: Bearer <token>` and answer 401
 `unauthorized` without a valid one (checked before the body). Every other endpoint, `GET /api/kb` included,
 stays open to employees.
 
@@ -286,10 +286,12 @@ assigns the next `K` id → **201** `KbWriteResponse` (row `status: "added"`). 4
 → `KbResetResponse` `{rows, version, reindex_ms}`. Restores the official rows (history `source=reset`)
 and re-enables every out-of-scope example.
 
-### POST /api/profiles
+### POST /api/profiles (legacy)
 
 Body `ProfileCreate` `{role, alias?}` → **201** `Profile` `{profile_id, alias, role}`. With no alias the
-server generates «متدرب N». Aliases are demo labels, never real names, emails or phones.
+server generates «متدرب N». Aliases are demo labels, never real names, emails or phones. The web client no
+longer uses it (interns sign in with `POST /api/interns/{id}/session`); profiles it makes are not linked to
+an intern, never appear in the admin views and are removed by `scripts/purge_demo_profiles.py`.
 
 ### GET /api/progress?profile_id=…
 
@@ -303,11 +305,64 @@ view counts the same activities the employee sees. Idempotent. 400 when an id is
 profile's role plan (`field: "activity_ids"`), 404 unknown profile. The chat confirm card keeps writing
 progress through `POST /api/chat`.
 
-### GET /api/manager/summary (admin)
+## 6b. Interns (P11.2)
 
-→ `ManagerSummaryResponse` `{profiles: [{alias, role, percent, activities_done, scenarios_practised,
-quiz_practised}], label_ar}`. **Completion and practice counts only — no correctness, no scores.**
-`label_ar` = «ملفات تجريبية، ليست موظفين حقيقيين — ليست تقييماً».
+Interns are **fictional demo personas** managed by the admin (the four seeded ones: Sara Al-Khatib / سارة
+الخطيب – Sales, Omar Haddad / عمر حداد – Delivery, Layan Al-Ali / ليان العلي – Sales, Yousef Al-Najjar /
+يوسف النجار – Delivery; seeded once when the interns table is empty). The admin sets each intern's track.
+Each intern has one profile per track (a track change starts a new profile and keeps the old one as
+history); every intern action is recorded against that profile with a timestamp: plan ticks
+(`PUT /api/progress`, completion date kept; an untick deletes the completion), chat-confirmed progress,
+scenario attempts, quiz checks and chat turns (turn logs carry `profile_id`, ids and labels, never text).
+An intern's name never reaches the LLM, a chat request (which carries `profile_id` only), a turn log or
+generated text. Intern sign-in has no password in this demo: a production version adds real authentication.
+
+### GET /api/interns
+
+Open. → `InternsResponse` `{interns: [{id, name_ar, name_en, role}]}`: the **active** interns, oldest first,
+for the sign-in picker.
+
+### POST /api/interns/{id}/session
+
+Open, no body. → `InternSession` `{intern: {id, name_ar, name_en, role}, profile_id, role}`: get-or-create the
+intern's profile on the track the admin set (the same profile from any browser). 404 `not_found` for an
+unknown or deactivated intern. The client calls it at sign-in and on every load, so a track change or a
+deactivation by the admin takes effect.
+
+### GET /api/admin/interns (admin)
+
+→ `AdminInternsResponse` `{interns: [InternSummary], label_ar}`, every intern (deactivated ones too), oldest
+first. `InternSummary` = `{id, name_ar, name_en, role, active, created_at, percent, activities_done,
+activities_total, scenarios_practised, quiz_attempts, questions_asked, last_active}`. Completion is for the
+current track; practice counts and `last_active` (latest timestamp of any record, or `null`) cover every track.
+`questions_asked` counts chat turns routed to answering or refusing a question. **Completion and practice
+counts only — no correctness, no scores.**
+
+### POST /api/admin/interns (admin)
+
+Body `InternCreate` `{name_ar, name_en = null, role}` → **201** `InternOut` `{id, name_ar, name_en, role,
+active, created_at, updated_at}`. Names: 2–40 characters after whitespace collapse, refused when they look like
+an email or a phone number (`field: "name_ar"` / `"name_en"`).
+
+### PATCH /api/admin/interns/{id} (admin)
+
+Body `InternPatch` `{name_ar?, name_en?, role?, active?}`: absent = unchanged, at least one field,
+`name_en: null` clears the English name, `name_ar`/`role`/`active` may not be null. → `InternOut`.
+`active: false` deactivates (soft delete: the intern leaves the sign-in picker, all records are kept;
+`active: true` restores). 404 unknown intern.
+
+### GET /api/admin/interns/{id} (admin)
+
+→ `InternDetail` `{intern: InternOut, last_active, progress, scenarios, quiz, chat, timeline, label_ar}`:
+
+- `progress` `{role, percent, done, total, milestones: [{name, name_ar, done, total, activities: [{id, kind,
+  title_ar, completed_at}]}]}` for the current track (`completed_at` `null` when not done);
+- `scenarios` `[{scenario_id, value, times, first_at, last_at}]` (practice only, never a score);
+- `quiz` `{answered, days: [{date, answered}]}` (questions answered per UTC day; never correctness);
+- `chat` `{questions, turns, cited: [{id, topic, count}]}` from turn logs (K-rows cited by question turns);
+- `timeline` `[{at, kind: activity|scenario|quiz|chat, role, ids}]`, newest first, at most 200 events.
+
+404 unknown intern. `label_ar` = «متدربون للعرض بأسماء افتراضية — أعداد الإكمال والتدريب فقط، ليست تقييماً».
 
 ### GET /api/health
 
@@ -327,7 +382,7 @@ store: "supabase"|"local", store_probe: Probe, uptime_s}` with `Probe` = `{ok, l
 | scenario list `label_ar` | «مواقف تدريبية افتراضية» |
 | plan `disclaimer_ar` | «خطة تعلم مقترحة للمسابقة، وليست جدول تقييم رسمياً» |
 | quiz `label_ar` | «اختبار تدريبي» |
-| manager `label_ar` | «ملفات تجريبية، ليست موظفين حقيقيين — ليست تقييماً» |
+| admin interns `label_ar` | «متدربون للعرض بأسماء افتراضية — أعداد الإكمال والتدريب فقط، ليست تقييماً» |
 
 The refusal, not-confirmed, partial, contact, employment and injection texts are the fixed server texts
 of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
@@ -347,12 +402,13 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
   `scenario_feedback_request_option.json`, `scenario_feedback.json`, `plan.json`, `quiz.json`,
   `quiz_check_request.json`, `quiz_check.json`, `kb_list.json`, `kb_patch_request.json`, `kb_put.json`,
   `kb_new_request.json`, `kb_post.json`, `kb_reset.json`, `profile_create_request.json`, `profile.json`,
-  `progress.json`, `progress_update_request.json`, `manager_summary.json`, `health.json`, `health_llm.json`, `admin_login_request.json`,
+  `progress.json`, `progress_update_request.json`, `interns.json`, `intern_session.json`, `admin_interns.json`,
+  `intern_create_request.json`, `intern_patch_request.json`, `intern.json`, `intern_detail.json`, `health.json`, `health_llm.json`, `admin_login_request.json`,
   `admin_session.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,
   `error_423.json`, `error_500.json`, `error_401.json`, `error_429.json`.
 
 `tests/test_contract.py` checks that every fixture validates and is canonical, that every reply kind and
 refusal reason is covered, the request rules and limits, that no quiz GET carries the correct option, that
-the manager summary has no correctness or score field, and that `types.ts` names every enum value.
+the admin intern views have no correctness or score field, and that `types.ts` names every enum value.
 W3-A's `tests/test_api.py` should validate real responses with the same models.

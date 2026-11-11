@@ -47,6 +47,18 @@ export function fromProposal(done: DoneMap, ids: readonly string[], now: string 
 }
 
 /**
+ * The server's ticks win (an intern ticks on another browser, or unticks there): exactly `ids`,
+ * keeping the local completion date of ids already done. Returns `done` itself when nothing changes.
+ */
+export function fromServer(done: DoneMap, ids: readonly string[], now: string = new Date().toISOString()): DoneMap {
+  const keys = Object.keys(done);
+  if (keys.length === ids.length && ids.every((id) => id in done)) return done;
+  const next: DoneMap = {};
+  for (const id of ids) next[id] = done[id] ?? now;
+  return next;
+}
+
+/**
  * The one definition of "practised scenarios" (scenarios screen, progress, Day 90 summary): every
  * scenario recorded as practised, plus every scenario referenced by a ticked plan scenario
  * activity. Returns scenario id -> ISO date (the practice date when known, else the tick date).

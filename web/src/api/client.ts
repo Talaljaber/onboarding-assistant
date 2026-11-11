@@ -10,7 +10,11 @@ import {
   isKbListResponse,
   isKbResetResponse,
   isKbWriteResponse,
-  isManagerSummaryResponse,
+  isAdminInternsResponse,
+  isInternDetail,
+  isInternOut,
+  isInternSession,
+  isInternsResponse,
   isPlanResponse,
   isProfile,
   isProgressResponse,
@@ -28,7 +32,13 @@ import {
   type KbPatch,
   type KbResetResponse,
   type KbWriteResponse,
-  type ManagerSummaryResponse,
+  type AdminInternsResponse,
+  type InternCreate,
+  type InternDetail,
+  type InternOut,
+  type InternPatch,
+  type InternSession,
+  type InternsResponse,
   type PlanResponse,
   type Profile,
   type ProfileCreate,
@@ -56,7 +66,7 @@ export interface ApiError {
 export type Result<T, E = ApiError> = { ok: true; value: T } | { ok: false; error: E };
 
 export interface RequestOptions<T> {
-  method?: "GET" | "POST" | "PUT";
+  method?: "GET" | "POST" | "PUT" | "PATCH";
   body?: unknown;
   timeoutMs?: number;
   signal?: AbortSignal;
@@ -208,8 +218,27 @@ export const getProgress = (profileId: string, signal?: AbortSignal) =>
 export const putProgress = (body: ProgressUpdate, signal?: AbortSignal) =>
   request<ProgressResponse>("/api/progress", { method: "PUT", body, guard: isProgressResponse, signal });
 
-export const getManagerSummary = (signal?: AbortSignal) =>
-  request<ManagerSummaryResponse>("/api/manager/summary", { guard: isManagerSummaryResponse, signal, admin: true });
+// ---- interns (P11.2)
+
+/** Active interns for the sign-in picker (open). */
+export const getInterns = (signal?: AbortSignal) =>
+  request<InternsResponse>("/api/interns", { guard: isInternsResponse, signal });
+
+/** Sign in as an intern: their profile on the track the admin set (no password in this demo). */
+export const startInternSession = (internId: string, signal?: AbortSignal) =>
+  request<InternSession>(`/api/interns/${q(internId)}/session`, { method: "POST", body: {}, guard: isInternSession, signal });
+
+export const getAdminInterns = (signal?: AbortSignal) =>
+  request<AdminInternsResponse>("/api/admin/interns", { guard: isAdminInternsResponse, signal, admin: true });
+
+export const addIntern = (body: InternCreate, signal?: AbortSignal) =>
+  request<InternOut>("/api/admin/interns", { method: "POST", body, guard: isInternOut, signal, admin: true });
+
+export const patchIntern = (internId: string, body: InternPatch, signal?: AbortSignal) =>
+  request<InternOut>(`/api/admin/interns/${q(internId)}`, { method: "PATCH", body, guard: isInternOut, signal, admin: true });
+
+export const getInternDetail = (internId: string, signal?: AbortSignal) =>
+  request<InternDetail>(`/api/admin/interns/${q(internId)}`, { guard: isInternDetail, signal, admin: true });
 
 // ---------------------------------------------------------------- admin sign-in
 

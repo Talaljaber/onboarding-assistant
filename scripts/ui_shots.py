@@ -11,8 +11,8 @@ then:
     python scripts/ui_shots.py --only plan,quiz     # names containing "plan" or "quiz"
     python scripts/ui_shots.py --widths 360 --base http://127.0.0.1:8021
 
-Extending: append a Shot to SHOTS. `setup(page)` runs on a page that has already chosen the Sales role
-(unless needs_role=False, then storage is empty); it must leave the page in the state to capture. Shots run
+Extending: append a Shot to SHOTS. `setup(page)` runs on a page where the intern Sara (Sales) has signed
+in (unless needs_role=False, then storage is empty and the sign-in screen shows); it must leave the page in the state to capture. Shots run
 in list order inside one browser context per width, so a shot may build on the previous one only if it
 says so in its setup (prefer self-contained setups that navigate by hash).
 """
@@ -47,8 +47,19 @@ def go(page: Page, hash_: str, ready: str) -> None:
     page.wait_for_selector(ready, state="visible")
 
 
+INTERN = "Sara Al-Khatib"  # a seeded fictional demo intern (Sales)
+
+
 def welcome(page: Page) -> None:
+    """The sign-in screen with the intern choice and a name picked."""
+    page.wait_for_selector('[data-testid="intern-option"]', state="visible")
+    page.locator(f'[data-testid="intern-option"][data-intern="{INTERN}"]').click()
+
+
+def signin_admin_choice(page: Page) -> None:
     page.wait_for_selector('[data-screen="welcome"]', state="visible")
+    page.get_by_test_id("signin-admin").click()
+    page.wait_for_selector('[data-testid="admin-continue"]', state="visible")
 
 
 def chat_greeting(page: Page) -> None:
@@ -63,7 +74,7 @@ def screen(name: str) -> Callable[[Page], None]:
     return _setup
 
 
-# --- Worker D (kb, manager, about) setup helpers ---
+# --- Worker D (kb, interns, about) setup helpers ---
 KB_EXHIBITS_Q = "كم عدد المعارض؟"  # "how many showrooms?"
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD") or "dada2026"  # the README demo default
 ADMIN_HEADER = "{Authorization: 'Bearer ' + sessionStorage.getItem('dada.v1.admin')}"
@@ -83,7 +94,7 @@ def admin_sign_in(page: Page) -> None:
     go(page, "#/admin", '[data-screen="admin"] input[type="password"]')
     page.locator('[data-screen="admin"] input[type="password"]').fill(ADMIN_PASSWORD)
     page.locator('[data-screen="admin"] button[type="submit"]').click()
-    page.wait_for_selector('[data-screen="kb"]', state="visible")
+    page.wait_for_selector('[data-screen="admin-interns"]', state="visible")
 
 
 def kb_list(page: Page) -> None:
@@ -121,11 +132,23 @@ def kb_try(page: Page) -> None:
     page.wait_for_selector('[data-try-result] [data-kind="answer"]', state="visible")
 
 
-def kb_manager(page: Page) -> None:
-    kb_list(page)
-    page.get_by_role("tab", name="عرض المدير").click()
-    page.wait_for_selector("[data-manager-label]", state="visible")
+def admin_interns(page: Page) -> None:
+    admin_sign_in(page)
+    go(page, "#/admin/interns", '[data-screen="admin-interns"] [data-interns-label]')
     page.wait_for_load_state("networkidle")
+
+
+def admin_intern_detail(page: Page) -> None:
+    admin_interns(page)
+    page.locator('[data-screen="admin-interns"] a[href^="#/admin/interns/"]').first.click()
+    page.wait_for_selector("[data-detail-milestones]", state="visible")
+    page.wait_for_load_state("networkidle")
+
+
+def admin_intern_add(page: Page) -> None:
+    admin_interns(page)
+    page.get_by_test_id("intern-add").click()
+    page.wait_for_selector("[data-intern-form]", state="visible")
 
 
 def about_ready(page: Page) -> None:
@@ -233,6 +256,7 @@ def chat_trace_side(page: Page) -> None:
 
 SHOTS: list[Shot] = [
     Shot("welcome", welcome, needs_role=False),
+    Shot("signin_admin", signin_admin_choice, needs_role=False),
     Shot("chat_greeting", chat_greeting),
     Shot("about", screen("about")),
     Shot("scenarios_empty", screen("scenarios")),
@@ -248,12 +272,14 @@ SHOTS: list[Shot] = [
     Shot("learning_progress", lambda page: learning_progress(page)),
     Shot("learning_scenarios", lambda page: learning_scenarios(page)),
     # --- end C ---
-    # --- Worker D (kb, manager, about) ---
+    # --- Worker D (kb, interns, about) ---
     Shot("admin_kb_list", kb_list),
     Shot("admin_kb_edit_dialog", kb_edit_dialog, full_page=False),
     Shot("admin_kb_edited", kb_edited),
     Shot("admin_kb_try", kb_try),  # builds on admin_kb_edited
-    Shot("admin_manager", kb_manager),
+    Shot("admin_interns", admin_interns),
+    Shot("admin_intern_detail", admin_intern_detail),
+    Shot("admin_intern_add", admin_intern_add, full_page=False),
     Shot("admin_about", about_ready),
     # ---- B (chat)
     Shot("chat_trace_side", chat_trace_side, full_page=False),
@@ -320,13 +346,14 @@ def learning_scenarios(page: Page) -> None:
 
 
 def fresh(page: Page, base: str, role: bool) -> None:
-    """Empty storage, reload on the welcome screen, optionally choose the Sales role."""
+    """Empty storage, reload on the sign-in screen, optionally sign in as the intern Sara (Sales)."""
     page.goto(base + "/#/")
     page.evaluate("localStorage.clear(); sessionStorage.clear()")
-    page.goto(base + "/#/")
+    page.reload()  # a goto to the same URL keeps the page (and the sign-in choice) as it is
     page.wait_for_selector('[data-screen="welcome"]', state="visible")
     if role:
-        page.get_by_test_id("role-sales").click()
+        page.locator(f'[data-testid="intern-option"][data-intern="{INTERN}"]').click()
+        page.get_by_test_id("intern-signin").click()
         page.wait_for_selector('[data-kind="greeting"]', state="visible")
 
 

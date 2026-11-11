@@ -22,7 +22,10 @@ ADMIN_ONLY: list[tuple[str, str, dict[str, Any] | None]] = [
     ("PUT", "/api/kb/K02", {"topic": "Policy"}),
     ("POST", "/api/kb", {"topic": "Policy", "answer_ar": "نص تجريبي للصف.", "source_document": "d"}),
     ("POST", "/api/kb/reset", {}),
-    ("GET", "/api/manager/summary", None),
+    ("GET", "/api/admin/interns", None),
+    ("POST", "/api/admin/interns", {"name_ar": "رنا الحسن", "role": "Sales"}),
+    ("PATCH", "/api/admin/interns/6f1c2b9e-4d3a-4e8b-9c71-2a5d0e7f3b14", {"active": False}),
+    ("GET", "/api/admin/interns/6f1c2b9e-4d3a-4e8b-9c71-2a5d0e7f3b14", None),
     ("GET", "/api/admin/session", None),
 ]
 
@@ -56,6 +59,10 @@ def test_employee_endpoints_stay_open(client: TestClient) -> None:
     assert client.get("/api/kb").status_code == 200  # the cited rows are what every answer shows anyway
     assert client.get("/api/plan?role=Sales").status_code == 200
     assert client.post("/api/profiles", json={"role": "Sales"}).status_code == 201
+    roster = client.get("/api/interns")
+    assert roster.status_code == 200  # the sign-in picker
+    first = roster.json()["interns"][0]["id"]
+    assert client.post(f"/api/interns/{first}/session").status_code == 200
 
 
 def test_login_then_admin_endpoints_work(client: TestClient) -> None:
@@ -64,7 +71,7 @@ def test_login_then_admin_endpoints_work(client: TestClient) -> None:
     sess = AdminSession.model_validate(r.json())
     assert sess.expires_in_s > 0 and PASSWORD not in r.text
     auth = {"Authorization": f"Bearer {sess.token}"}
-    assert client.get("/api/manager/summary", headers=auth).status_code == 200
+    assert client.get("/api/admin/interns", headers=auth).status_code == 200
     assert client.get("/api/admin/session", headers=auth).json()["token"] == sess.token
     assert client.post("/api/kb/reset", json={}, headers=auth).status_code == 200
 

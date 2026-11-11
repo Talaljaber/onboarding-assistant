@@ -13,9 +13,14 @@ function setHash(h: string) {
   window.history.replaceState(null, "", h);
 }
 
+const INTERN = "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14";
+
+/** A signed-in intern on `role` (the track the admin set). */
 function seed(role: StoredState["role"]) {
   const s = defaultState();
   s.role = role;
+  s.intern = INTERN;
+  s.internName = { name_ar: "سارة الخطيب", name_en: "Sara Al-Khatib" };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
 }
 
@@ -45,12 +50,23 @@ afterEach(() => {
 });
 
 describe("App routes", () => {
-  it("registers all 9 routes, with the knowledge editor admin only", () => {
-    expect(ROUTES.map((r) => r.path)).toEqual(["/", "/chat", "/scenarios", "/plan", "/quiz", "/progress", "/kb", "/admin", "/about"]);
-    expect(ROUTES.filter((r) => r.needsAdmin).map((r) => r.path)).toEqual(["/kb"]);
+  it("registers all 11 routes, with the knowledge editor and the interns screens admin only", () => {
+    expect(ROUTES.map((r) => r.path)).toEqual([
+      "/", "/chat", "/scenarios", "/plan", "/quiz", "/progress", "/kb", "/admin/interns", "/admin/interns/:id", "/admin", "/about",
+    ]);
+    expect(ROUTES.filter((r) => r.needsAdmin).map((r) => r.path)).toEqual(["/kb", "/admin/interns", "/admin/interns/:id"]);
   });
 
-  it("no role: shows the welcome screen at #/", async () => {
+  it("an older anonymous session (a track without an intern) starts at the sign-in screen", async () => {
+    const s = defaultState();
+    s.role = "Sales";
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    setHash("#/chat");
+    renderApp();
+    await waitFor(() => expect(screens()).toEqual(["welcome"]));
+  });
+
+  it("not signed in: shows the sign-in screen at #/", async () => {
     renderApp();
     await waitFor(() => expect(screens()).toEqual(["welcome"]));
     expect(window.location.hash).toBe("#/");
@@ -89,12 +105,29 @@ describe("App routes", () => {
     expect(window.location.hash).toBe("#/admin");
   });
 
-  it("the signed-in admin opens #/kb without a role, and #/admin forwards to it", async () => {
+  it("the signed-in admin gets the admin shell: #/admin forwards to the interns list, #/kb and a detail page open", async () => {
     setAdminToken("4102444800.sig");
     setHash("#/admin");
     renderApp();
+    await waitFor(() => expect(screens()).toEqual(["admin-interns"]));
+    expect(window.location.hash).toBe("#/admin/interns");
+    expect(document.querySelector("[data-admin-shell]")).not.toBeNull();
+    expect(screen.queryByTestId("role-chip")).toBeNull();
+    act(() => {
+      window.location.hash = "#/kb";
+    });
     await waitFor(() => expect(screens()).toEqual(["kb"]));
-    expect(window.location.hash).toBe("#/kb");
+    act(() => {
+      window.location.hash = `#/admin/interns/${INTERN}`;
+    });
+    await waitFor(() => expect(screens()).toEqual(["admin-intern"]));
+  });
+
+  it("the interns screens without the admin token go to the admin sign-in", async () => {
+    setHash(`#/admin/interns/${INTERN}`);
+    renderApp();
+    await waitFor(() => expect(screens()).toEqual(["admin"]));
+    expect(window.location.hash).toBe("#/admin");
   });
 
   it("#/about is open without a role", async () => {

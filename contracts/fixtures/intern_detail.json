@@ -1,0 +1,225 @@
+{
+  "intern": {
+    "id": "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+    "name_ar": "سارة الخطيب",
+    "name_en": "Sara Al-Khatib",
+    "role": "Sales",
+    "active": true,
+    "created_at": "2026-11-10T09:00:00.000+00:00",
+    "updated_at": "2026-11-10T09:00:00.000+00:00"
+  },
+  "last_active": "2026-11-10T09:07:00.000+00:00",
+  "progress": {
+    "role": "Sales",
+    "percent": 38,
+    "done": 3,
+    "total": 8,
+    "milestones": [
+      {
+        "name": "Days 1-7",
+        "name_ar": "الأيام 1–7",
+        "done": 3,
+        "total": 3,
+        "activities": [
+          {
+            "id": "SA-D1-read-company",
+            "kind": "read",
+            "title_ar": "تعرّف على الشركة: التأسيس والمعارض والرؤية والرسالة والعلامات التجارية",
+            "completed_at": "2026-11-10T09:02:00.000+00:00"
+          },
+          {
+            "id": "SA-D1-read-values",
+            "kind": "read",
+            "title_ar": "اقرأ القيم المشتركة الخمس",
+            "completed_at": "2026-11-10T09:02:00.000+00:00"
+          },
+          {
+            "id": "SA-D1-read-onboarding",
+            "kind": "read",
+            "title_ar": "راجع سياسات التهيئة والحضور والإجازات والسرية",
+            "completed_at": "2026-11-10T09:02:00.000+00:00"
+          }
+        ]
+      },
+      {
+        "name": "Day 30",
+        "name_ar": "اليوم 30",
+        "done": 0,
+        "total": 2,
+        "activities": [
+          {
+            "id": "SA-D30-quiz",
+            "kind": "quiz",
+            "title_ar": "اختبار قصير",
+            "completed_at": null
+          },
+          {
+            "id": "SA-D30-s01",
+            "kind": "scenario",
+            "title_ar": "موقف عملي: زبون يسأل عن ثلاجة",
+            "completed_at": null
+          }
+        ]
+      },
+      {
+        "name": "Day 60",
+        "name_ar": "اليوم 60",
+        "done": 0,
+        "total": 2,
+        "activities": [
+          {
+            "id": "SA-D60-s02",
+            "kind": "scenario",
+            "title_ar": "موقف عملي: ميزة غير مؤكدة في منتج",
+            "completed_at": null
+          },
+          {
+            "id": "SA-D60-s03",
+            "kind": "scenario",
+            "title_ar": "موقف عملي: تنسيق موعد تسليم",
+            "completed_at": null
+          }
+        ]
+      },
+      {
+        "name": "Day 90",
+        "name_ar": "اليوم 90",
+        "done": 0,
+        "total": 1,
+        "activities": [
+          {
+            "id": "SA-D90-summary",
+            "kind": "summary",
+            "title_ar": "اعرض ملخص تقدمك للمراجعة البشرية فقط",
+            "completed_at": null
+          }
+        ]
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario_id": "S02",
+      "value": "Integrity",
+      "times": 1,
+      "first_at": "2026-11-10T09:05:00.000+00:00",
+      "last_at": "2026-11-10T09:05:00.000+00:00"
+    }
+  ],
+  "quiz": {
+    "answered": 2,
+    "days": [
+      {
+        "date": "2026-11-10",
+        "answered": 2
+      }
+    ]
+  },
+  "chat": {
+    "questions": 2,
+    "turns": 2,
+    "cited": [
+      {
+        "id": "K01",
+        "topic": "Company",
+        "count": 1
+      },
+      {
+        "id": "K05",
+        "topic": "Values",
+        "count": 1
+      },
+      {
+        "id": "K06",
+        "topic": "Values",
+        "count": 1
+      },
+      {
+        "id": "K07",
+        "topic": "Values",
+        "count": 1
+      },
+      {
+        "id": "K08",
+        "topic": "Values",
+        "count": 1
+      },
+      {
+        "id": "K09",
+        "topic": "Values",
+        "count": 1
+      }
+    ]
+  },
+  "timeline": [
+    {
+      "at": "2026-11-10T09:07:00.000+00:00",
+      "kind": "quiz",
+      "role": "Sales",
+      "ids": [
+        "Q02"
+      ]
+    },
+    {
+      "at": "2026-11-10T09:06:00.000+00:00",
+      "kind": "quiz",
+      "role": "Sales",
+      "ids": [
+        "Q01"
+      ]
+    },
+    {
+      "at": "2026-11-10T09:05:00.000+00:00",
+      "kind": "scenario",
+      "role": "Sales",
+      "ids": [
+        "S02"
+      ]
+    },
+    {
+      "at": "2026-11-10T09:04:00.000+00:00",
+      "kind": "chat",
+      "role": "Sales",
+      "ids": [
+        "K05",
+        "K06",
+        "K07",
+        "K08",
+        "K09"
+      ]
+    },
+    {
+      "at": "2026-11-10T09:03:00.000+00:00",
+      "kind": "chat",
+      "role": "Sales",
+      "ids": [
+        "K01"
+      ]
+    },
+    {
+      "at": "2026-11-10T09:02:00.000+00:00",
+      "kind": "activity",
+      "role": "Sales",
+      "ids": [
+        "SA-D1-read-company"
+      ]
+    },
+    {
+      "at": "2026-11-10T09:02:00.000+00:00",
+      "kind": "activity",
+      "role": "Sales",
+      "ids": [
+        "SA-D1-read-onboarding"
+      ]
+    },
+    {
+      "at": "2026-11-10T09:02:00.000+00:00",
+      "kind": "activity",
+      "role": "Sales",
+      "ids": [
+        "SA-D1-read-values"
+      ]
+    }
+  ],
+  "label_ar": "متدربون للعرض بأسماء افتراضية — أعداد الإكمال والتدريب فقط، ليست تقييماً"
+}

@@ -59,7 +59,13 @@ FIXTURES: dict[str, type[BaseModel]] = {
     "profile_create_request.json": s.ProfileCreate,
     "profile.json": s.Profile,
     "progress.json": s.ProgressResponse,
-    "manager_summary.json": s.ManagerSummaryResponse,
+    "interns.json": s.InternsResponse,
+    "intern_session.json": s.InternSession,
+    "admin_interns.json": s.AdminInternsResponse,
+    "intern_create_request.json": s.InternCreate,
+    "intern_patch_request.json": s.InternPatch,
+    "intern.json": s.InternOut,
+    "intern_detail.json": s.InternDetail,
     "health.json": s.Health,
     "health_llm.json": s.Health,
     "error_400_validation.json": s.ErrorBody,
@@ -90,7 +96,12 @@ ENDPOINT_FIXTURES = {
     "POST /api/profiles": "profile.json",
     "GET /api/progress": "progress.json",
     "PUT /api/progress": "progress.json",
-    "GET /api/manager/summary": "manager_summary.json",
+    "GET /api/interns": "interns.json",
+    "POST /api/interns/{id}/session": "intern_session.json",
+    "GET /api/admin/interns": "admin_interns.json",
+    "POST /api/admin/interns": "intern.json",
+    "PATCH /api/admin/interns/{id}": "intern.json",
+    "GET /api/admin/interns/{id}": "intern_detail.json",
     "GET /api/health": "health.json",
     "POST /api/admin/login": "admin_session.json",
     "GET /api/admin/session": "admin_session.json",
@@ -105,6 +116,8 @@ REQUEST_MODELS: dict[type[BaseModel], str] = {
     s.ProfileCreate: "profile_create_request.json",
     s.AdminLogin: "admin_login_request.json",
     s.ProgressUpdate: "progress_update_request.json",
+    s.InternCreate: "intern_create_request.json",
+    s.InternPatch: "intern_patch_request.json",
 }
 
 
@@ -224,11 +237,38 @@ def test_quiz_get_never_has_the_correct_option() -> None:
         )
 
 
-def test_manager_summary_has_no_correctness_or_score() -> None:
+def test_admin_intern_views_have_no_correctness_or_score() -> None:
     banned = re.compile(r"correct|score|grade|accuracy|rating")
-    keys = all_keys(load("manager_summary.json")) | set(s.ManagerProfileRow.model_fields)
+    models = (s.InternSummary, s.InternDetail, s.DetailProgress, s.DetailScenario, s.DetailQuiz, s.DetailQuizDay,
+              s.DetailChat, s.TimelineEvent)
+    keys = all_keys(load("admin_interns.json")) | all_keys(load("intern_detail.json"))
+    keys |= {f for m in models for f in m.model_fields}
     assert not [k for k in keys if banned.search(k)]
-    assert load("manager_summary.json")["label_ar"] == s.MANAGER_LABEL_AR
+    assert load("admin_interns.json")["label_ar"] == s.INTERNS_LABEL_AR
+    assert load("intern_detail.json")["label_ar"] == s.INTERNS_LABEL_AR
+
+
+def test_intern_fixtures_are_the_seed_and_requests_validate() -> None:
+    from app.interns import SEED
+
+    assert [(i["name_ar"], i["name_en"], i["role"]) for i in load("interns.json")["interns"]] == [
+        (i["name_ar"], i["name_en"], i["role"]) for i in SEED
+    ]
+    req = load("intern_create_request.json")
+    for bad in ("a", "x" * 41, "a@b.co", "0791234567"):
+        with pytest.raises(ValidationError):
+            s.InternCreate.model_validate({**req, "name_ar": bad})
+    with pytest.raises(ValidationError):
+        s.InternCreate.model_validate({**req, "role": "Manager"})
+    with pytest.raises(ValidationError):  # at least one field
+        s.InternPatch.model_validate({})
+    for bad in ({"name_ar": None}, {"role": None}, {"active": None}):
+        with pytest.raises(ValidationError):
+            s.InternPatch.model_validate(bad)
+    assert s.InternPatch.model_validate({"name_en": None}).changes() == {"name_en": None}
+    detail = load("intern_detail.json")
+    kinds = {e["kind"] for e in detail["timeline"]}
+    assert kinds == {"activity", "scenario", "quiz", "chat"}
 
 
 def test_feedback_and_progress_carry_no_score() -> None:

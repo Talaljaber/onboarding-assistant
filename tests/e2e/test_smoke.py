@@ -34,6 +34,10 @@ Q_DELIVERY = "أنا موظف توصيل والعميل غاضب بسبب الت
 Q_EXHIBITS = "كم عدد المعارض؟"
 END_PRACTICE = "إنهاء التدريب"
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD") or "dada2026"  # the README demo default
+# Seeded fictional demo interns: (English name for the picker, Arabic full name). Progress follows the intern
+# on the server, so each viewport signs in as a different intern on the shared test server.
+SALES_INTERN = {"1280": ("Sara Al-Khatib", "سارة الخطيب"), "360": ("Layan Al-Ali", "ليان العلي")}
+DELIVERY_INTERN = {"1280": ("Omar Haddad", "عمر حداد"), "360": ("Yousef Al-Najjar", "يوسف النجار")}
 
 
 @pytest.fixture(scope="module")
@@ -118,17 +122,22 @@ def storyboard(r: Run) -> None:
     page = r.page
     page.goto(r.base + "/")
     expect(page.locator('[data-screen="welcome"]')).to_be_visible()
-    expect(page.get_by_test_id("role-sales")).to_be_visible()
-    expect(page.get_by_test_id("role-delivery")).to_be_visible()
+    expect(page.get_by_test_id("signin-intern")).to_be_visible()
+    expect(page.get_by_test_id("signin-admin")).to_be_visible()
+    expect(page.get_by_test_id("intern-option")).to_have_count(4)  # the seeded fictional demo interns
+    expect(page.get_by_test_id("intern-signin")).to_be_disabled()
+    sales_en, sales_ar = SALES_INTERN[r.vp]
+    page.locator(f'[data-testid="intern-option"][data-intern="{sales_en}"]').click()
     r.no_overflow("01")
     r.shot("01_welcome")
 
-    # 1. role selection
-    page.get_by_test_id("role-sales").click()
+    # 1. sign in as the Sales intern (the track is set by the admin)
+    page.get_by_test_id("intern-signin").click()
     expect(page).to_have_url(re.compile(r"#/chat"))
     expect(page.locator('[data-kind="greeting"]')).to_be_visible()
     expect(page.locator('[data-kind="starters"] button')).to_have_count(5)
     expect(page.get_by_test_id("role-chip")).to_contain_text("المبيعات")
+    expect(page.get_by_test_id("role-chip")).to_contain_text(sales_ar.split()[0])
     r.no_overflow("02")
     r.shot("02_chat_greeting")
 
@@ -175,7 +184,7 @@ def storyboard(r: Run) -> None:
     r.shot("07_scenario_feedback", card)
     expect(card.get_by_role("button", name=END_PRACTICE)).to_have_count(0)  # only the practice bar has it
     page.get_by_role("button", name=END_PRACTICE).click()
-    expect(page.get_by_test_id("role-chip")).to_be_enabled()
+    expect(page.locator("[data-practice-banner]")).to_have_count(0)  # practice mode has ended
 
     # 6. T08 progress proposal, confirm, dashboard
     r.send(Q_PROGRESS)
@@ -234,6 +243,23 @@ def storyboard(r: Run) -> None:
     r.shot("14a_admin_sign_in")
     form_in.get_by_label("كلمة مرور المسؤول").fill(ADMIN_PASSWORD)
     form_in.get_by_role("button", name="دخول", exact=True).click()
+    # The admin shell opens on the interns list: the intern has progress from step 6 and questions from 2-3.
+    interns = page.locator('[data-screen="admin-interns"]')
+    expect(interns).to_be_visible()
+    expect(page.locator("[data-admin-shell]")).to_be_visible()
+    expect(page.get_by_test_id("role-chip")).to_have_count(0)
+    sara = interns.get_by_role("link", name=sales_ar).first
+    expect(sara).to_be_visible()
+    r.no_overflow("14b")
+    r.shot("14b_admin_interns")
+    sara.click()
+    detail = page.locator('[data-screen="admin-intern"]')
+    expect(detail.locator("[data-detail-milestones]")).to_be_visible()
+    expect(detail.locator("[data-detail-cited]")).to_contain_text("K01")
+    expect(detail.locator("[data-detail-timeline] li").first).to_be_visible()
+    r.no_overflow("14c")
+    r.shot("14c_admin_intern_detail")
+    page.locator('[data-admin-shell] a[href="#/kb"]:visible').first.click()
     kb = page.locator('[data-screen="kb"]')
     expect(kb).to_be_visible()
     kb.get_by_role("button", name="تعديل K02").first.click()
@@ -285,12 +311,17 @@ def storyboard(r: Run) -> None:
     r.no_overflow("17")
     r.shot("17_trace_open", trace)
 
-    # 18. role switch to Delivery
-    page.get_by_test_id("role-chip").click()
-    page.get_by_test_id("role-delivery").click()
+    # 18. sign out, then sign in as a Delivery intern (the track the admin set)
+    page.get_by_test_id("header-more").click()
+    page.get_by_test_id("sign-out").click()
+    expect(page.locator('[data-screen="welcome"]')).to_be_visible()
+    delivery_en, delivery_ar = DELIVERY_INTERN[r.vp]
+    page.locator(f'[data-testid="intern-option"][data-intern="{delivery_en}"]').click()
+    page.get_by_test_id("intern-signin").click()
     expect(page.get_by_test_id("role-chip")).to_contain_text("التوصيل")
+    expect(page.get_by_test_id("role-chip")).to_contain_text(delivery_ar.split()[0])
     r.no_overflow("18")
-    r.shot("18_role_switch_delivery")
+    r.shot("18_signin_delivery_intern")
 
     # 19. T07 scenario S04
     r.send(Q_DELIVERY)
@@ -322,6 +353,6 @@ def test_storyboard(server: str, browser: Browser, vp: str) -> None:
         assert run.errors == [], f"console errors: {run.errors}"
         assert run.overflows == [], f"horizontal overflow at 360: {run.overflows}"
         assert run.foreign == [], f"non-same-origin requests: {run.foreign}"
-        assert len(run.shots) == 21  # the 20 storyboard steps plus 14a (admin sign-in)
+        assert len(run.shots) == 23  # the 20 storyboard steps plus 14a-c (admin sign-in, interns, detail)
     finally:
         run.ctx.close()

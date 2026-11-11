@@ -30,17 +30,18 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app import __version__
 from app.agent import Agent
+from app import interns as interns_view
 from app.errors import ApiError
 from app.kb import Row
 from app.logging_setup import log_event
-from app.plan import percent_of
 from app.schemas import (
     BODY_MAX_BYTES,
     AdminLogin,
     AdminSession,
     KB_ID_RE,
-    MANAGER_LABEL_AR,
+    INTERNS_LABEL_AR,
     PROFILE_ID_RE,
+    INTERN_ID_RE,
     QUIZ_LABEL_AR,
     ROLES,
     ChatRequest,
@@ -50,14 +51,17 @@ from app.schemas import (
     HealthCache,
     HealthEncoder,
     HealthKb,
+    AdminInternsResponse,
+    InternCreate,
+    InternPatch,
+    InternSession,
+    InternsResponse,
     KbListResponse,
     KbNewRow,
     KbPatch,
     KbResetResponse,
     KbRow,
     KbWriteResponse,
-    ManagerProfileRow,
-    ManagerSummaryResponse,
     Probe,
     Profile,
     ProfileCreate,
@@ -326,6 +330,17 @@ def _timed_kb_write(agent: Agent, fn: Callable[[], Any]) -> tuple[Any, int]:
         lock.release()
 
 
+def _intern_or_404(store: Any, intern_id: str) -> dict[str, Any]:
+    intern = store.get_intern(intern_id) if re.match(INTERN_ID_RE, intern_id) else None
+    if not intern:
+        raise ApiError("not_found", 404, "unknown intern")
+    return intern  # type: ignore[no-any-return]
+
+
+def _group(act: dict[str, list[dict[str, Any]]], ids: set[str]) -> dict[str, list[dict[str, Any]]]:
+    return {k: [r for r in rows if str(r.get("profile_id")) in ids] for k, rows in act.items()}
+
+
 def _progress_of(request: Request, store: Any, profile_id: str, prof: dict[str, Any]) -> ProgressResponse:
     role = str(prof["role"]) if prof.get("role") in ROLES else "Sales"
     completed = [i for i in store.get_progress(profile_id) if isinstance(i, str) and _ACTIVITY_RE.match(i)]
@@ -486,23 +501,75 @@ def build_router() -> APIRouter:
             raise ApiError("internal_error", 500, "progress not saved")
         return _json(_progress_of(request, store, body.profile_id, prof))
 
-    @r.get("/manager/summary", dependencies=ADMIN_ONLY)
-    def manager_summary(request: Request) -> JSONResponse:
+    # -------------------------------------------------------------------------- interns (P11.2)
+    @r.get("/interns")
+    def interns_list(request: Request) -> JSONResponse:
+        """Active interns for the sign-in picker (open: a demo has no intern passwords)."""
+        rows = _store(request).list_interns() or []
+        return _json(InternsResponse(interns=[interns_view.public(i) for i in rows if i["active"]]))
+
+    @r.post("/interns/{intern_id}/session")
+    def intern_session(intern_id: str, request: Request) -> JSONResponse:
+        """The intern's profile on the track the admin set (get-or-create). 404 unknown or deactivated."""
+        store = _store(request)
+        intern = _intern_or_404(store, intern_id)
+        if not intern["active"]:
+            raise ApiError("not_found", 404, "unknown intern")
+        prof = store.intern_profile(intern["id"], intern["role"])
+        if not prof or not prof.get("id"):
+            raise ApiError("internal_error", 500, "profile not created")
+        return _json(InternSession(intern=interns_view.public(intern), profile_id=str(prof["id"]),
+                                   role=intern["role"]))
+
+    @r.get("/admin/interns", dependencies=ADMIN_ONLY)
+    def admin_interns(request: Request) -> JSONResponse:
+        store = _store(request)
         plan = _agent(request).features.plan
-        rows: list[ManagerProfileRow] = []
-        for p in _store(request).manager_summary():
-            role = p.get("role")
-            if role not in ROLES:
-                continue
-            total = len(plan.activities(role))
-            done = min(int(p.get("activities_done") or 0), total)
-            rows.append(ManagerProfileRow(
-                alias=str(p.get("alias") or ""), role=role, percent=percent_of(done, total),
-                activities_done=int(p.get("activities_done") or 0),
-                scenarios_practised=int(p.get("scenarios_practised") or 0),
-                quiz_practised=int(p.get("quiz_practised") or 0),
-            ))
-        return _json(ManagerSummaryResponse(profiles=rows, label_ar=MANAGER_LABEL_AR))
+        rows = store.list_interns() or []
+        profiles = store.intern_profiles()
+        act = store.activity([str(p["id"]) for p in profiles])
+        out = []
+        for i in rows:
+            mine = [p for p in profiles if str(p.get("intern_id")) == i["id"]]
+            ids = {str(p["id"]) for p in mine}
+            out.append(interns_view.summary_row(i, mine, _group(act, ids), plan))
+        return _json(AdminInternsResponse(interns=out, label_ar=INTERNS_LABEL_AR))
+
+    @r.post("/admin/interns", status_code=201, dependencies=ADMIN_ONLY)
+    def admin_intern_add(body: InternCreate, request: Request) -> JSONResponse:
+        rec = _store(request).create_intern(body.name_ar, body.name_en, body.role)
+        if not rec:
+            raise ApiError("validation_error", 400, "intern not created: check the names", "name_ar")
+        log_event("intern_added", request_id=_rid(request), role=body.role)
+        return _json(interns_view.out(rec), 201)
+
+    @r.patch("/admin/interns/{intern_id}", dependencies=ADMIN_ONLY)
+    def admin_intern_edit(intern_id: str, body: InternPatch, request: Request) -> JSONResponse:
+        store = _store(request)
+        _intern_or_404(store, intern_id)
+        rec = store.update_intern(intern_id, body.changes())
+        if not rec:
+            raise ApiError("validation_error", 400, "intern not updated: check the names", None)
+        log_event("intern_updated", request_id=_rid(request), fields=sorted(body.model_fields_set))
+        return _json(interns_view.out(rec))
+
+    @r.get("/admin/interns/{intern_id}", dependencies=ADMIN_ONLY)
+    def admin_intern_detail(intern_id: str, request: Request) -> JSONResponse:
+        store = _store(request)
+        intern = _intern_or_404(store, intern_id)
+        agent = _agent(request)
+        profiles = store.intern_profiles(intern["id"])
+        act = store.activity([str(p["id"]) for p in profiles])
+        idx = agent.features.scenarios
+
+        def scenario_value(sid: str) -> str | None:
+            return idx.get(sid).company_value if idx.has(sid) else None
+
+        def kb_topic(kid: str) -> str | None:
+            row = agent.kb.get(kid)
+            return row.topic if row is not None else None
+
+        return _json(interns_view.detail(intern, profiles, act, agent.features.plan, scenario_value, kb_topic))
 
     # -------------------------------------------------------------------------- health
     @r.get("/health")
