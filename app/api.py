@@ -69,6 +69,16 @@ from app.store import alias_problem, store_status
 KB_LOCK_WAIT_S = 2.0
 _ACTIVITY_RE = re.compile(r"^[A-Z]{1,2}-[A-Za-z0-9-]{1,32}$")
 _BODY_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+# The web client is fully bundled (scripts, styles, fonts under /assets) and talks to its own origin only.
+# React style props are set through the CSSOM, which style-src 'self' allows. No CORS headers are sent.
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; "
+       "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+SECURITY_HEADERS: tuple[tuple[str, str], ...] = (
+    ("X-Content-Type-Options", "nosniff"),
+    ("Referrer-Policy", "no-referrer"),
+    ("X-Frame-Options", "DENY"),
+    ("Content-Security-Policy", CSP),
+)
 
 
 # ======================================================================================= errors
@@ -101,7 +111,8 @@ def validation_field(exc: RequestValidationError) -> tuple[str | None, str]:
 
 
 class RequestContextMiddleware:
-    """Pure ASGI: request id + X-Request-Id, the 32 KB body limit (before parsing), last-resort 500."""
+    """Pure ASGI: request id + X-Request-Id, security headers, the 32 KB body limit (before parsing),
+    last-resort 500 (generic body; the exception type goes to the log, never a stack trace)."""
 
     def __init__(self, app: ASGIApp, max_body: int = BODY_MAX_BYTES) -> None:
         self.app = app
@@ -112,6 +123,7 @@ class RequestContextMiddleware:
         await send({"type": "http.response.start", "status": status, "headers": [
             (b"content-type", b"application/json"), (b"content-length", str(len(raw)).encode()),
             (b"x-request-id", rid.encode()),
+            *((k.lower().encode(), v.encode()) for k, v in SECURITY_HEADERS),
         ]})
         await send({"type": "http.response.body", "body": raw})
 
@@ -167,7 +179,10 @@ class RequestContextMiddleware:
             nonlocal started
             if message["type"] == "http.response.start":
                 started = True
-                MutableHeaders(scope=message)["X-Request-Id"] = rid
+                headers = MutableHeaders(scope=message)
+                headers["X-Request-Id"] = rid
+                for name, value in SECURITY_HEADERS:
+                    headers[name] = value
             await send(message)
 
         try:
@@ -250,6 +265,16 @@ def _turn_log_fields(resp: ChatResponse, profile_id: str | None) -> dict[str, An
     }
 
 
+def explain_offline(agent: Agent, trace: Any, force_offline: bool) -> None:
+    """§C9 item 5: a turn that is offline because the configured LLM is down (budget exhausted, a failed
+    probe) says why in `trace.agent.fallback_reason`. Offline-by-design turns (no key, OFFLINE=1,
+    force_offline) are left as they are."""
+    llm = agent.llm
+    if force_offline or trace.mode != "offline" or trace.agent.fallback_reason or llm is None or llm.chat is None:
+        return
+    trace.agent.fallback_reason = llm.reason or "llm_unavailable"
+
+
 def _record_attempt(store: Any, profile_id: str, attempt: dict[str, Any]) -> None:
     _safe_store("scenario_attempt", lambda: store.add_scenario_attempt(
         profile_id, attempt["scenario_id"], attempt["mode"], attempt.get("option_id"), list(attempt.get("met") or []),
@@ -283,6 +308,7 @@ def build_router() -> APIRouter:
         agent = _agent(request)
         wait_for_reindex(agent)
         resp, result = agent.run_turn(body, request_id=_rid(request))
+        explain_offline(agent, resp.trace, body.force_offline)
         store = _store(request)
         pid = body.profile_id
         if pid and body.confirm is not None and resp.reply.kind == "progress_confirmed":
@@ -304,6 +330,7 @@ def build_router() -> APIRouter:
                           background: BackgroundTasks) -> JSONResponse:
         agent = _agent(request)
         resp, result = agent.scenario_feedback(scenario_id, body, request_id=_rid(request))
+        explain_offline(agent, resp.trace, body.force_offline)
         if body.profile_id and result.attempt is not None:
             background.add_task(_record_attempt, _store(request), body.profile_id, dict(result.attempt))
         return _json(resp)
@@ -457,5 +484,5 @@ def install_api(app: FastAPI) -> None:
     app.include_router(build_router())
 
 
-__all__ = ["KB_LOCK_WAIT_S", "RequestContextMiddleware", "build_router", "error_body", "install_api",
+__all__ = ["CSP", "KB_LOCK_WAIT_S", "SECURITY_HEADERS", "RequestContextMiddleware", "build_router", "error_body", "install_api",
            "validation_field", "wait_for_reindex"]
