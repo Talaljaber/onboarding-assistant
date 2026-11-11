@@ -1,5 +1,6 @@
 import type { Source } from "@/api/types";
 import { useT } from "@/i18n";
+import { highlightNumbers } from "@/lib/highlight";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { sourceQuote } from "../ui/recipes";
@@ -33,8 +34,17 @@ function DocLine({ source, meta, className }: { source: Source; meta: SourceMeta
  * One cited K-row as a compact quote: the K-id (an LTR isolate) and any live-edit badge sit inline
  * at the start of the verbatim Arabic row text, the copy button at the end of the line (44px hit
  * area). Document and page print here only when they differ from the other rows of the block.
+ * With `answer` (P14.4), every digit number of the row that the answer also states is highlighted.
  */
-export function SourceRow({ source, meta = { doc: true, page: true } }: { source: Source; meta?: SourceMeta }) {
+export function SourceRow({
+  source,
+  meta = { doc: true, page: true },
+  answer,
+}: {
+  source: Source;
+  meta?: SourceMeta;
+  answer?: string;
+}) {
   const t = useT();
   const toast = useToast();
   const copy = async () => {
@@ -79,7 +89,17 @@ export function SourceRow({ source, meta = { doc: true, page: true } }: { source
               {t("chat.addedLive")}
             </Badge>
           )}
-          {source.answer_ar}
+          {answer
+            ? highlightNumbers(source.answer_ar, answer).map((seg, i) =>
+                seg.hit ? (
+                  <mark key={i} data-num-mark className="rounded-sm bg-amber-soft px-0.5 font-semibold text-fg-1">
+                    {seg.text}
+                  </mark>
+                ) : (
+                  seg.text
+                ),
+              )
+            : source.answer_ar}
         </p>
       </div>
       <DocLine source={source} meta={meta} className="mt-0.5 pe-2" />
@@ -90,8 +110,9 @@ export function SourceRow({ source, meta = { doc: true, page: true } }: { source
 /**
  * The "Sources" block under an answer: one SourceRow per cited id, in the order cited. When all rows
  * share a document (and page) it is named once, as the block caption, instead of under every row.
+ * `answer` (P14.4) is the answer text whose numbers are highlighted in the rows.
  */
-export function SourcesBlock({ sources }: { sources: readonly Source[] }) {
+export function SourcesBlock({ sources, answer }: { sources: readonly Source[]; answer?: string }) {
   const t = useT();
   const first = sources[0];
   if (!first) return null;
@@ -105,7 +126,7 @@ export function SourcesBlock({ sources }: { sources: readonly Source[] }) {
       </h4>
       <ul className="flex flex-col gap-2">
         {sources.map((s) => (
-          <SourceRow key={s.id} source={s} meta={{ doc: !sameDoc, page: !samePage }} />
+          <SourceRow key={s.id} source={s} meta={{ doc: !sameDoc, page: !samePage }} answer={answer} />
         ))}
       </ul>
       <DocLine source={first} meta={{ doc: sameDoc, page: samePage }} className="mt-2" />

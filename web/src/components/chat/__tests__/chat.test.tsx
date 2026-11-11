@@ -172,6 +172,17 @@ describe("card mapping", () => {
     expect(card("partial")!.querySelector("[data-en-helper]")).toHaveTextContent(/rest of your question/i);
   });
 
+  it("P14.4: highlights in the cited row the numbers the answer states, and only those", async () => {
+    backend([answerOffline]);
+    mount();
+    await ask("ما مدة فترة التجربة؟");
+    await waitFor(() => expect(card("answer")).not.toBeNull());
+    const row = document.querySelector('[data-source-id="K14"]') as HTMLElement;
+    const marks = Array.from(row.querySelectorAll("[data-num-mark]"), (m) => m.textContent);
+    expect(marks).toEqual(["90"]);
+    expect(row).toHaveTextContent(answerOffline.reply.sources[0]!.answer_ar); // still verbatim
+  });
+
   it("names a document shared by every source once, as the block caption", async () => {
     backend([listValues]);
     mount();
