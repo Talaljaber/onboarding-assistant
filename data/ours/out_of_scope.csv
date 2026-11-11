@@ -39,3 +39,5 @@ OOS37,كم يوم إجازة سنوية بستحق؟,holidays,true,ours
 OOS38,هل عيد الاستقلال عطلة رسمية؟,holidays,true,ours
 OOS39,كم سنة كفالة الغسالات؟,warranty,true,ours
 OOS40,كيف بيشتغل الضمان على الأجهزة؟,warranty,true,ours
+OOS41,كم عدد موظفي الشركة؟,smalltalk,true,ours
+OOS42,كم موظف بالمجموعة؟,smalltalk,true,ours
