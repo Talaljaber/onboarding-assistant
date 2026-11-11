@@ -1,4 +1,4 @@
-# Results (2026-11-11 06:28, commit e86fe09)
+# Results (2026-11-11 06:32, commit e45fb7b)
 
 ## DEV — llm mode: correct 152/154 (98.7%)
 - answerable: answered correctly 78 · answered wrong 2 · not attempted (refused) 0 — of 80
@@ -121,6 +121,24 @@ Not correct: D002 (ids_ok,content_ok); D014 (content_ok); D015 (ids_ok,content_o
 - guards 5/7 · progress 1/1 · scenario 1/2
 - invented contacts: 0 · errors: 0
 - latency p50 / p95: 8 / 10 ms · cached 0 · escalated 0
+
+## Held-out 2 (final run) — llm mode: correct 45/50 (90.0%)
+- answerable: answered correctly 28 · answered wrong 2 · not attempted (refused) 0 — of 30
+- unanswerable: refused 10/10 (100.0%) · refused or not-confirmed 10/10 (100.0%)
+- guards 5/7 · progress 0/1 · scenario 2/2
+- invented contacts: 0 · errors: 0
+- latency p50 / p95: 2630 / 5697 ms · cached 2 · escalated 11
+- LLM-vs-router disagreement: 2 rows
+- panel rows 41: escalation rate 11/41 (26.8%) · acceptance rate 30/41 (73.2%) · mean flash calls/row 3.54 (uncached votes)
+- cost per 100 rows: $0.0847 (over 50 rows)
+- latency p50 / p95 escalated: 4800 / 6187 ms (11) · not escalated: 2116 / 3597 ms (39)
+
+## Held-out 2 (final run) — offline mode: correct 26/50 (52.0%)
+- answerable: answered correctly 16 · answered wrong 13 · not attempted (refused) 1 — of 30
+- unanswerable: refused 4/10 (40.0%) · refused or not-confirmed 10/10 (100.0%)
+- guards 5/7 · progress 0/1 · scenario 1/2
+- invented contacts: 0 · errors: 0
+- latency p50 / p95: 6 / 8 ms · cached 0 · escalated 0
 
 ## Limitations
 - offline unseen-unanswerable refusals: 5/14; the not-confirmed band shows the closest row instead.
