@@ -127,6 +127,21 @@ def load_bands() -> Bands:
     return read_bands(ROOT / "results" / "bands.json")
 
 
+def load_anchors(path: Path | None = None) -> list[tuple[str, str]]:
+    """(row_id, question_ar) pairs from `data/ours/kb_anchors.csv`; [] when the file is absent.
+
+    Anchors feed only the row side of the out-of-scope margin (D-W2-offline-bands), never ranking.
+    """
+    if path is None:
+        from app.config import ROOT
+
+        path = ROOT / "data" / "ours" / "kb_anchors.csv"
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8", newline="") as fh:
+        return [(r["row_id"], r["question_ar"]) for r in csv.DictReader(fh) if r.get("question_ar")]
+
+
 def load_out_of_scope(path: Path) -> list[OOSExample]:
     """Read `data/ours/out_of_scope.csv` (UTF-8, `enabled` true/false)."""
     with Path(path).open(encoding="utf-8-sig", newline="") as f:
@@ -231,6 +246,7 @@ class Retriever:
         *,
         bands: Bands | None = None,
         subscribe: bool = True,
+        anchors_enabled: bool = True,
     ) -> None:
         self.encoder = encoder
         self.kb = kb
@@ -245,6 +261,13 @@ class Retriever:
             else np.zeros((0, encoder.dim), dtype=np.float32)
         )
         self.last_disabled: list[str] = []
+        anchors = load_anchors() if anchors_enabled else []
+        self._anchor_ids = [rid for rid, _ in anchors]
+        self._anchor_mat = (
+            self.encoder.encode_array([q for _, q in anchors])
+            if anchors
+            else np.zeros((0, encoder.dim), dtype=np.float32)
+        )
         self.reindex()
         if subscribe:
             kb.subscribe(self._on_kb_change)
@@ -332,6 +355,16 @@ class Retriever:
             enabled = [i for i, o in enumerate(self.oos) if o.enabled]
         q = self._qvec(query)
         dense = mat @ q
+        if len(self._anchor_ids):
+            # Row side = max(row-text cosine, best anchor cosine) for rows still official;
+            # live-edited or added rows keep the row-text cosine only.
+            dense = dense.copy()
+            official = {r.id: i for i, r in enumerate(rows) if not r.edited}
+            a_sims = self._anchor_mat @ q
+            for rid, s in zip(self._anchor_ids, a_sims, strict=True):
+                i = official.get(rid)
+                if i is not None and s > dense[i]:
+                    dense[i] = s
         bi = int(np.argmax(dense))
         best_cos = float(dense[bi])
         if not enabled:
