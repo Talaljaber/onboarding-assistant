@@ -62,6 +62,55 @@ def screen(name: str) -> Callable[[Page], None]:
     return _setup
 
 
+# --- Worker D (kb, manager, about) setup helpers ---
+KB_EXHIBITS_Q = "كم عدد المعارض؟"  # "how many showrooms?"
+
+
+def kb_list(page: Page) -> None:
+    go(page, "#/kb", '[data-screen="kb"] .font-id')
+    page.wait_for_load_state("networkidle")
+
+
+def kb_edit_dialog(page: Page) -> None:
+    kb_list(page)
+    page.locator('[data-screen="kb"]').get_by_role("button", name="تعديل K02").first.click()
+    page.wait_for_selector('[data-kb-form="edit"]', state="visible")
+
+
+def kb_edited(page: Page) -> None:
+    """Restore the official rows, edit K02 (17 -> 18) through the dialog, show only the changed rows."""
+    page.evaluate("fetch('/api/kb/reset', {method: 'POST'})")
+    page.evaluate("location.hash = '#/'")
+    kb_edit_dialog(page)
+    area = page.locator('[data-kb-form="edit"] textarea')
+    area.fill(area.input_value().replace("17", "18"))
+    page.locator('[data-kb-form="edit"] button[type="submit"]').click()
+    page.wait_for_selector('[data-kb-form="edit"]', state="detached")
+    page.wait_for_selector('[data-screen="kb"] [data-status="edited"]', state="visible")
+    page.get_by_role("button", name="المعدّلة مباشرة (1)").click()
+    page.wait_for_timeout(4500)  # let the save toast leave the frame
+
+
+def kb_try(page: Page) -> None:
+    """Builds on kb_edited: ask the try-it panel about the edited row."""
+    box = page.locator("[data-try-panel] input")
+    box.fill(KB_EXHIBITS_Q)
+    box.press("Enter")
+    page.wait_for_selector('[data-try-result] [data-kind="answer"]', state="visible")
+
+
+def kb_manager(page: Page) -> None:
+    kb_list(page)
+    page.get_by_role("tab", name="عرض المدير").click()
+    page.wait_for_selector("[data-manager-label]", state="visible")
+    page.wait_for_load_state("networkidle")
+
+
+def about_ready(page: Page) -> None:
+    screen("about")(page)
+    page.wait_for_selector('[data-testid="health"]', state="visible")
+
+
 SHOTS: list[Shot] = [
     Shot("welcome", welcome, needs_role=False),
     Shot("chat_greeting", chat_greeting),
@@ -78,6 +127,13 @@ SHOTS: list[Shot] = [
     Shot("learning_progress", lambda page: learning_progress(page)),
     Shot("learning_scenarios", lambda page: learning_scenarios(page)),
     # --- end C ---
+    # --- Worker D (kb, manager, about) ---
+    Shot("admin_kb_list", kb_list),
+    Shot("admin_kb_edit_dialog", kb_edit_dialog, full_page=False),
+    Shot("admin_kb_edited", kb_edited),
+    Shot("admin_kb_try", kb_try),  # builds on admin_kb_edited
+    Shot("admin_manager", kb_manager),
+    Shot("admin_about", about_ready),
 ]
 
 

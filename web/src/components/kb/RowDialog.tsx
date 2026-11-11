@@ -5,10 +5,18 @@ import type { KbNewRow, KbPatch, KbRow } from "@/api/types";
 import { useT } from "@/i18n";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
+import { Notice } from "../ui/Notice";
 import { Select } from "../ui/Select";
 import { TextArea, TextField } from "../ui/TextField";
+import { StatusBadges } from "./KbTable";
 
-type Draft = { topic: string; answer: string; keyword: string; document: string; page: string };
+type Draft = {
+  topic: string;
+  answer: string;
+  keyword: string;
+  document: string;
+  page: string;
+};
 type Errors = Partial<Record<keyof Draft, string>>;
 
 export interface RowDialogProps {
@@ -85,67 +93,76 @@ export function RowDialog({ row, nextId, topics, onClose, onSubmit }: RowDialogP
   }
 
   return (
-    <Dialog open onClose={onClose} title={row ? t("extra.kbEditTitle", { id: row.id }) : t("extra.kbAddTitle")}>
-      <form onSubmit={(e) => void submit(e)} noValidate className="flex flex-col gap-3" data-kb-form={row ? "edit" : "add"}>
-        {!row && (
-          <p className="text-sm text-fg-2">
+    <Dialog open onClose={onClose} size="lg" title={row ? t("extra.kbEditTitle", { id: row.id }) : t("extra.kbAddTitle")}>
+      <form onSubmit={(e) => void submit(e)} noValidate className="flex flex-col gap-4" data-kb-form={row ? "edit" : "add"}>
+        {row ? (
+          <div className="flex flex-wrap items-center gap-2 text-sm text-fg-2">
+            <StatusBadges row={row} />
+          </div>
+        ) : (
+          <Notice tone="info">
             {t("kb.nextId", { id: "" })}
-            <span className="font-id font-bold" dir="ltr">
+            <bdi dir="ltr" className="font-id font-bold">
               {nextId}
-            </span>
-          </p>
+            </bdi>
+          </Notice>
         )}
-        <Select
-          label={t("kb.fields.topic")}
-          value={d.topic}
-          options={options}
-          onChange={(e) => set("topic")(e.target.value)}
-          description={errors.topic}
-        />
         <TextArea
           label={t("kb.fields.answer")}
-          rows={4}
+          rows={5}
           value={d.answer}
           lang="ar"
+          dir="auto"
           onChange={(e) => set("answer")(e.target.value)}
           aria-invalid={errors.answer ? true : undefined}
           description={errors.answer}
         />
-        <TextField
-          label={t("kb.fields.keyword")}
-          value={d.keyword}
-          dir="ltr"
-          onChange={(e) => set("keyword")(e.target.value)}
-          aria-invalid={errors.keyword ? true : undefined}
-          description={errors.keyword}
-        />
-        <TextField
-          label={t("kb.fields.document")}
-          value={d.document}
-          dir="auto"
-          onChange={(e) => set("document")(e.target.value)}
-          aria-invalid={errors.document ? true : undefined}
-          description={errors.document}
-        />
-        <TextField
-          label={t("kb.fields.page")}
-          value={d.page}
-          inputMode="numeric"
-          dir="ltr"
-          onChange={(e) => set("page")(e.target.value)}
-          aria-invalid={errors.page ? true : undefined}
-          description={errors.page}
-        />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Select
+            label={t("kb.fields.topic")}
+            value={d.topic}
+            options={options}
+            onChange={(e) => set("topic")(e.target.value)}
+            description={errors.topic}
+          />
+          <TextField
+            label={t("kb.fields.keyword")}
+            value={d.keyword}
+            dir="ltr"
+            onChange={(e) => set("keyword")(e.target.value)}
+            aria-invalid={errors.keyword ? true : undefined}
+            description={errors.keyword}
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_8rem]">
+          <TextField
+            label={t("kb.fields.document")}
+            value={d.document}
+            dir="auto"
+            onChange={(e) => set("document")(e.target.value)}
+            aria-invalid={errors.document ? true : undefined}
+            description={errors.document}
+          />
+          <TextField
+            label={t("kb.fields.page")}
+            value={d.page}
+            inputMode="numeric"
+            dir="ltr"
+            onChange={(e) => set("page")(e.target.value)}
+            aria-invalid={errors.page ? true : undefined}
+            description={errors.page}
+          />
+        </div>
         {failure && (
-          <p role="alert" className="rounded-md border border-danger border-s-4 bg-surface-1 p-2 text-sm text-fg-1">
+          <Notice tone="danger" role="alert">
             {failure}
-          </p>
+          </Notice>
         )}
-        <div className="flex flex-wrap justify-end gap-2 pt-1">
+        <div className="flex flex-col-reverse gap-2 border-t border-line pt-4 sm:flex-row sm:justify-end">
           <Button variant="secondary" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button type="submit" loading={busy}>
+          <Button type="submit" icon="check" loading={busy}>
             {t("common.save")}
           </Button>
         </div>

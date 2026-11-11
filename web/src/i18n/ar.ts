@@ -438,6 +438,19 @@ export const ar = {
   },
   uiAdmin: {
     // Worker D (kb, manager, about) appends here.
+    staffMode: "وضع الموظفين: بلا تسجيل دخول",
+    filterLabel: "عرض الصفوف",
+    filterAll: "الكل ({n})",
+    filterChanged: "المعدّلة مباشرة ({n})",
+    changedEmpty: "لم يُعدَّل أو يُضَف أي صف مباشرة بعد. عدّل صفاً ليظهر هنا مع وسم «معدّل مباشرة».",
+    colSource: "المصدر",
+    rowsLabel: "صفوف قاعدة المعرفة",
+    tryLead: "اختبر التعديل فوراً",
+    mgrStatProfiles: "ملفات تجريبية",
+    mgrStatHint: "مجموع كل الملفات",
+    aboutGroupHow: "كيف يعمل",
+    aboutGroupPrivacy: "الخصوصية وبياناتك",
+    aboutGroupService: "عن الخدمة",
   },
 };
 
