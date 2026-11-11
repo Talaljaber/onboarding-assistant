@@ -2,8 +2,7 @@
 
 This note covers the Dada Academy onboarding assistant, a competition prototype. It says what the app
 sends out, what it stores, where, and what it cannot do. Every statement describes the code in this
-repository. Sentences marked {{VERIFY}} describe parts still being finished and are checked before
-submission.
+repository.
 
 ## 1. Knowledge sources
 
@@ -27,18 +26,24 @@ submission.
 | Model | Where it runs | What it does |
 |---|---|---|
 | `intfloat/multilingual-e5-small`, int8 ONNX (`models/e5`, about 77 MB) | on the laptop, ONNX Runtime | embeds rows and questions for search; also matches a message to a scenario |
-| `deepseek/deepseek-v4.1-flash` via OpenRouter (pinned; optional) | OpenRouter, only with a key | chooses the tool, words the answer from cited rows, gives checklist feedback on practice replies {{VERIFY}} |
+| `deepseek/deepseek-v4.1-flash` via OpenRouter (pinned; optional) | OpenRouter, only with a key | chooses the tool (an invalid choice falls back to the rule router), words the answer from cited rows, marks the checklist for free-text practice replies |
 
 - No model was trained or fine-tuned. Search is e5 plus BM25, fused by reciprocal-rank fusion.
 - The AI model never decides alone. The server runs the guards first (employment decisions, requests for
-  phone numbers or contacts). It checks every proposed tool call against fixed lists. It checks every
+  phone numbers or contacts); a guarded message is never sent to the model. It checks every proposed
+  tool call against fixed lists; an invalid choice falls back to the rule router. It checks every
   answer: cited ids must be rows it was sent, each id needs a verbatim quote from that row, every number
   must appear in the cited rows or the question, and no phone, email or link is allowed. A reply that
-  fails is dropped and the offline result is shown. Only verified replies are cached. {{VERIFY}}
+  fails is dropped and the offline result is shown. Only verified replies are cached.
 - Scenario feedback is never a score. The server writes the feedback from fixed checklist sentences;
-  the model only marks which items the reply covered and may add one short tip, which is also checked. {{VERIFY}}
-- Calls use temperature 0 and seed 42, no automatic model routing, and a spending cap of USD 3 enforced
-  in code (`.cache/budget.json`).
+  the model only marks which items the reply covered and may add one short tip (at most 25 words),
+  which is also checked; a failing tip is dropped.
+- Calls use temperature 0, seed 42, reasoning off, a 5 s turn budget, no automatic model routing (an
+  `openrouter/...` model id is rejected at startup), and a spending cap of USD 3 enforced in code
+  (`.cache/budget.json`). The whole build night, evaluations included, spent 0.054 USD.
+- A one-off comparison with `google/gemini-3.5-flash-lite` could not run (OpenRouter returned HTTP 400
+  with the pinned privacy and reasoning settings), so `deepseek/deepseek-v4.1-flash` was kept. The
+  optional second model was not enabled: the verifier rejected about 1% of DEV answers.
 
 ## 3. What leaves the laptop, and when
 
@@ -47,15 +52,19 @@ submission.
 | No key in `.env` (a fresh copy has none) | **nothing** to any AI service | — |
 | Header switch «بلا اتصال» | **nothing** to any AI service for that request | — |
 | Key present, mode «تلقائي» | see below | OpenRouter |
-| Supabase variables present | store records (section 4) | the project's Supabase database ({{SUPABASE_REGION}}) |
+| Supabase variables present | store records (section 4) | the project's Supabase database (Supabase-hosted project; region: to be confirmed) |
 
 With a key, per message, at most:
-- **tool choice:** the message, the previous message, the list of scenario titles and milestone names,
-  and whether a practice is active {{VERIFY}};
+- **tool choice:** the message, the previous message (only for short follow-ups), the six scenario
+  situations with their ids and tracks, the milestone names, and whether a practice is active;
 - **answer:** the question, the previous question (only for short follow-ups), the list hint, and the
   live knowledge-base rows with their search ranks;
 - **practice feedback:** the scenario text, its checklist sentences and the user's reply;
-- **startup probe:** one tiny fixed test message. {{VERIFY}}
+- **status probe:** one tiny fixed test message (`Reply with {"ping":true}`, at most 10 tokens) at
+  start, on a throttled status re-check, and once after a failure.
+
+A "short follow-up" is a message of a few words or with a follow-up cue (such as a leading «و») that
+is not confident on its own; any other message is sent alone.
 
 **Never sent:** the user's role or track, demo alias, profile id, progress, quiz results or the
 chat history beyond the previous message. The role never reaches the answer prompt.
@@ -102,26 +111,33 @@ chat thread. «امسح بيانات هذا المتصفح» on the «حول و�
 
 - No real employee or customer data is used anywhere: not in the data, the tests or the demo.
 - Profiles are demo aliases, not accounts. There is no login.
-- The manager view shows completion and practice counts only, labelled as demo profiles, not real
-  employees and not an evaluation. {{VERIFY}}
+- The manager view («عرض المدير», a tab of the knowledge-base screen) shows each demo alias with its
+  track, completion percentage and practice counts only, no correctness or scores, under the label
+  «ملفات تجريبية، ليست موظفين حقيقيين — ليست تقييماً».
+- Knowledge-base editing and the manager view have no login ("staff mode", a demo limitation). The
+  server listens on `127.0.0.1` only and refuses write requests that come from another website
+  (cross-origin), but anyone using this laptop's browser can edit rows.
 - The assistant does not make or predict employment decisions (probation outcome, pay, firing,
   promotion). Those questions get a fixed reply that points to HR.
 
 ## 6. Offline mode: what it can and cannot do
 
-Offline mode answers from approved rows only. It shows the best row verbatim, a "not confirmed" card
+Offline mode answers from the knowledge-base rows only. It shows the best row verbatim, a "not confirmed" card
 with the closest row, or the fixed refusal. It never writes new text about the company.
 
 Measured on the DEV set (154 questions, used to pick thresholds; these are **DEV numbers**, not a
 held-out result):
+- all questions: 106/154 correct;
 - answerable questions: 62/80 correct, 0 refused;
-- unanswerable questions: 7/43 refused outright, 40/43 refused or "not confirmed", 3/43 answered with a
-  wrong row;
+- unanswerable questions: 13/43 refused outright, 40/43 refused or "not confirmed", 3/43 answered with
+  a wrong row;
 - invented contacts: 0.
 
-Held-out set (sealed, run once after the freeze): offline {{HELDOUT_OFFLINE_CORRECT}} correct;
-unanswerable refused {{HELDOUT_OFFLINE_UNANS_REFUSED}}, refused or not confirmed
-{{HELDOUT_OFFLINE_UNANS_REFUSED_OR_NC}}; AI mode {{HELDOUT_LLM_CORRECT}} correct.
+Held-out set (50 questions written blind, sealed, run once after the freeze): offline mode answered
+25/50 correctly and refused 2 of 26 answerable questions; it refused 5 of 14 unanswerable questions
+outright and showed "not confirmed" for the other 9 (14/14 refused or not confirmed). AI mode answered
+43/50 correctly, refused no answerable question and refused all 14 unanswerable ones. Neither mode
+invented a contact. **Offline mode is clearly weaker on unseen wording.**
 
 ## 7. Limitations
 
@@ -129,9 +145,12 @@ unanswerable refused {{HELDOUT_OFFLINE_UNANS_REFUSED}}, refused or not confirmed
   with the closest row, which the user must check.
 - Offline mode cannot combine rows or answer part of a question; only the five-values list is built by
   the server.
-- Edited or added rows are matched less confidently offline (they have no anchor questions).
+- Rows added live, and rows rewritten beyond a small edit, are matched less confidently offline (they
+  have no anchor questions).
+- Knowledge-base editing has no authentication (demo staff mode).
 - The verifier checks grounding, not style. A grounded but clumsy sentence can pass.
 - The AI layer depends on a third-party service; its availability and retention follow OpenRouter's and
   the provider's terms, limited by `data_collection: deny`.
 - No sync between the local fallback and Supabase.
+- The Supabase project's region is still to be confirmed.
 - 18 rows only. The assistant is not an HR system and does not replace HR.

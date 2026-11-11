@@ -11,7 +11,12 @@ LLM answer p95 ≤ 5 s or the offline fallback.
 | Offline answer, in-process, first pass over DEV (154 questions) | **p50 10.7 ms, p95 13.6 ms**, max 72 ms | p95 ≤ 300 ms | `Agent.turn(ChatRequest(message=q))` per DEV `question_ar`, after one warm-up turn |
 | Offline answer, in-process, 3 passes (462 turns; repeats hit the query cache) | p50 2.0 ms, p95 12.7 ms | — | same loop ×3 |
 | Offline answer through the HTTP app (TestClient, 154 DEV questions) | p50 12.8 ms, p95 17.7–24.6 ms, max 77 ms | — | `POST /api/chat` |
-| LLM answer (OpenRouter, pinned model) | p50 {{LLM_P50_MS}} ms, p95 {{LLM_P95_MS}} ms | p95 ≤ 5 s or offline | measured by the integrator in `main` with the key |
+| LLM turn (OpenRouter, `deepseek/deepseek-v4.1-flash`), DEV, fresh uncached run | **p50 1516 ms, p95 3118 ms** | p95 ≤ 5 s or offline | `scripts\run_eval.py --set dev --mode llm` with the key, no cache hits |
+| LLM turn, held-out set (50 questions, run once after the freeze, uncached) | p50 1586 ms, p95 4102 ms | p95 ≤ 5 s or offline | held-out run; totals only in `results/summary.md` |
+
+The DEV row in `results/summary.md` shows p50 7 ms / p95 12 ms for AI mode because that committed run
+re-used the verified-reply cache (137 cache hits); the uncached figures above are the ones a judge would
+feel on a first question.
 
 The offline path is about 20× under its target, so the 5 s LLM deadline (`LLM_DEADLINE_S`) is the only
 latency that a judge can feel. When the LLM misses its deadline the turn falls back to the offline answer
@@ -25,8 +30,9 @@ import and the first encoder session.
 ## Machine
 
 Windows 11 Home (10.0.26300), Intel Core (Family 6 Model 142, 4 cores / 8 threads), Python 3.13.1,
-onnxruntime 1.31.0 on CPU, laptop on mains power, other apps open (editor, browser). Offline mode
-(`OFFLINE=1`, `STORE=local`). Numbers measured on 11 Nov 2026 from the `w4/harden` branch.
+onnxruntime 1.31.0 on CPU, laptop on mains power, other apps open (editor, browser). Offline rows:
+`OFFLINE=1`, `STORE=local`, measured on 11 Nov 2026 from the `w4/harden` branch. LLM rows: measured on
+`main` with the key on 11 Nov 2026.
 
 ## Reproduce
 
