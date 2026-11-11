@@ -1,9 +1,12 @@
 """Run the live demo storyboard (plan Part D §3) against the HTTP API and assert kinds and cited ids.
 
-    python scripts/smoke_api.py [--base http://127.0.0.1:8010] [--serve] [--offline]
+    python scripts/smoke_api.py [--base http://127.0.0.1:8010] [--serve] [--offline] [--session 60]
 
 `--serve` starts uvicorn on port 8010 itself (STORE=local, plus OFFLINE=1 with `--offline`), waits for
-`/api/health`, runs the sequence and always stops the server. `--offline` also sends `force_offline` on
+`/api/health`, runs the sequence and always stops the server. With `--serve --offline` the server itself
+runs under the `scripts/no_network.py` tripwire (loopback only) and every blocked attempt is reported, so
+the check fails if the app tried to leave the machine. `--session N` repeats the sequence until N seconds
+have passed (the 60-s app session of plan P5.3). `--offline` also sends `force_offline` on
 every chat and feedback request. The KB edit of step 8 is always reset afterwards. Prints
 "demo sequence OK (offline)" (or "(llm)") and exits 0; any failed check prints the step and exits 1.
 Stdlib only, so it also runs under `scripts/no_network.py` (loopback only).
@@ -16,6 +19,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -25,6 +29,22 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_BASE = "http://127.0.0.1:8010"
 SERVE_PORT = 8010
+BLOCKED_MARK = "NETWORK-BLOCKED"
+# The server process under the tripwire: no_network's blocker also writes a marker to stderr, so an
+# attempt the app swallows (the store and LLM layers never raise) is still seen by this script.
+TRIPWIRE_SERVER = """
+import sys
+sys.path[:0] = [{root!r}, {scripts!r}]
+import no_network
+def _blocked(*_a, **_k):
+    sys.stderr.write({mark!r} + chr(10))
+    sys.stderr.flush()
+    raise OSError(no_network.MESSAGE)
+no_network._blocked = _blocked
+no_network.disable_network()
+import uvicorn
+uvicorn.run("app.main:app", host="127.0.0.1", port={port}, log_level="warning")
+"""
 
 
 class SmokeFailure(AssertionError):
@@ -205,12 +225,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--base", default=DEFAULT_BASE)
     ap.add_argument("--serve", action="store_true", help="start uvicorn on 8010 and stop it afterwards")
     ap.add_argument("--offline", action="store_true", help="OFFLINE=1 for --serve and force_offline on requests")
+    ap.add_argument("--session", type=float, default=0.0, help="repeat the sequence for this many seconds")
     args = ap.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
 
     proc: subprocess.Popen[bytes] | None = None
     base = args.base
+    errlog = tempfile.TemporaryFile() if args.serve else None
+    rounds = 0
     try:
         if args.serve:
             base = f"http://127.0.0.1:{SERVE_PORT}"
@@ -218,17 +241,26 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"smoke FAILED: port {SERVE_PORT} is already in use")
                 return 1
             env = dict(os.environ, STORE="local", PYTHONIOENCODING="utf-8")
+            cmd = [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port",
+                   str(SERVE_PORT), "--log-level", "warning"]
             if args.offline:
                 env["OFFLINE"] = "1"
-            proc = subprocess.Popen(
-                [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(SERVE_PORT),
-                 "--log-level", "warning"],
-                cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
+                code = TRIPWIRE_SERVER.format(root=str(ROOT), scripts=str(ROOT / "scripts"), mark=BLOCKED_MARK,
+                                              port=SERVE_PORT)
+                cmd = [sys.executable, "-c", code]
+            started = time.monotonic()
+            proc = subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=errlog)
             if not wait_health(base, 90, proc):
                 print("smoke FAILED: the server did not answer /api/health within 90 s")
                 return 1
+            print(f"server ready in {time.monotonic() - started:.1f} s"
+                  + (" (network tripwire on)" if args.offline else ""))
+        session_end = time.monotonic() + max(0.0, args.session)
         mode = run_storyboard(Api(base, args.offline))
+        rounds = 1
+        while time.monotonic() < session_end:
+            run_storyboard(Api(base, args.offline))
+            rounds += 1
     except SmokeFailure as exc:
         print(f"smoke FAILED at step: {exc}")
         return 1
@@ -238,6 +270,17 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         if proc is not None:
             stop(proc)
+    if errlog is not None:
+        errlog.seek(0)
+        blocked = errlog.read().decode("utf-8", "replace").count(BLOCKED_MARK)
+        errlog.close()
+        if blocked:
+            print(f"smoke FAILED: the server tried to reach the network {blocked} time(s) (tripwire)")
+            return 1
+        if args.offline:
+            print("tripwire: 0 network attempts by the server")
+    if rounds > 1:
+        print(f"session: {rounds} rounds")
     print(f"demo sequence OK ({mode})")
     return 0
 

@@ -5,11 +5,12 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import SecretStr, model_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.errors import StartupError
@@ -26,6 +27,20 @@ OFFICIAL_SHA256 = {
     "JURY_TEST_CASES.csv": "420866950ebf8b201b7af1403c705afd30dcb82196fe53e8677525d2fc284fc0",
 }
 
+# A pinned OpenRouter model id: "vendor/name" (lowercase, optional ":variant"). OpenRouter auto-routing
+# ("openrouter/auto" and every other "openrouter/..." id) is never allowed (plan §A4).
+MODEL_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*(?::[a-z0-9._-]+)?$")
+
+
+def check_model_id(value: str) -> str:
+    """The model id unchanged, or ValueError with the fix (bad shape or auto-routing)."""
+    v = value.strip()
+    if not MODEL_ID_RE.match(v) or v.startswith("openrouter/"):
+        raise ValueError(
+            f"{value!r} is not a pinned vendor/model id (use e.g. deepseek/deepseek-v4.1-flash; never openrouter/...)"
+        )
+    return v
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -38,10 +53,10 @@ class Settings(BaseSettings):
     openrouter_api_key: SecretStr | None = None
     llm_model: str = "deepseek/deepseek-v4.1-flash"
     llm_escalation_model: str | None = None
-    llm_deadline_s: float = 5.0
-    llm_agent_deadline_s: float = 1.5
-    llm_max_retries: int = 0
-    llm_budget_usd: float = 3.0
+    llm_deadline_s: float = Field(default=5.0, gt=0, le=60)
+    llm_agent_deadline_s: float = Field(default=1.5, gt=0, le=60)
+    llm_max_retries: int = Field(default=0, ge=0, le=3)
+    llm_budget_usd: float = Field(default=3.0, ge=0)
     llm_cache_path: Path = Path(".cache/llm.sqlite")
     llm_budget_path: Path = Path(".cache/budget.json")
     encoder_dir: Path = Path("models/e5")
@@ -50,7 +65,7 @@ class Settings(BaseSettings):
     data_live: Path = Path("data/live")
     log_level: str = "INFO"
     host: str = "127.0.0.1"
-    port: int = 8000
+    port: int = Field(default=8000, ge=1, le=65535)
     offline: bool = False
 
     store: Literal["auto", "local"] = "auto"
@@ -58,6 +73,26 @@ class Settings(BaseSettings):
     supabase_publishable_key: str | None = None
     supabase_secret_key: SecretStr | None = None
     database_url: SecretStr | None = None
+
+    @field_validator("llm_model")
+    @classmethod
+    def _model(cls, v: str) -> str:
+        return check_model_id(v)
+
+    @field_validator("log_level")
+    @classmethod
+    def _log_level(cls, v: str) -> str:
+        level = v.strip().upper()
+        if level not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+            raise ValueError("use one of DEBUG, INFO, WARNING, ERROR, CRITICAL")
+        return level
+
+    @field_validator("llm_escalation_model")
+    @classmethod
+    def _escalation(cls, v: str | None) -> str | None:
+        if v is None or not v.strip():
+            return None
+        return check_model_id(v)
 
     @model_validator(mode="after")
     def _finish(self) -> Settings:
@@ -78,9 +113,21 @@ class Settings(BaseSettings):
         return self
 
 
+def settings_error(exc: ValidationError) -> StartupError:
+    """One line naming the bad variable and the fix (never the value of a secret)."""
+    errs = exc.errors()
+    loc = ".".join(str(x) for x in errs[0]["loc"]) if errs else "settings"
+    msg = str(errs[0]["msg"] if errs else "invalid value").removeprefix("Value error, ")
+    return StartupError(f"Invalid setting {loc.upper()}: {msg}. Fix it in .env (see .env.example).")
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    return Settings()
+    """The process settings; a bad env value raises StartupError with a one-line fix."""
+    try:
+        return Settings()
+    except ValidationError as exc:
+        raise settings_error(exc) from None
 
 
 def validate_startup(s: Settings) -> list[str]:

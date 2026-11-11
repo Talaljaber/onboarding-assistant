@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import time
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -24,6 +25,7 @@ from app import __version__
 from app.agent import Agent, build_agent, build_default_agent
 from app.api import error_body, install_api
 from app.config import ROOT, Settings, get_settings, validate_startup
+from app.errors import StartupError
 from app.logging_setup import log_event, setup_logging
 from app.store import get_store
 
@@ -50,7 +52,7 @@ def create_app(settings: Settings | None = None, *, agent: Agent | None = None, 
     meta = json.loads((s.encoder_dir / "encoder_meta.json").read_text(encoding="utf-8"))
     st = store if store is not None else get_store(s)
     if agent is None:
-        agent = build_default_agent() if s == get_settings() else build_agent(s, store=st)
+        agent = _build_agent(s, st)
     agent.probe_llm(3.0)  # no network call without a key or with OFFLINE=1
 
     app = FastAPI(title="Dada Academy", version=__version__, docs_url=None, redoc_url=None, openapi_url=None)
@@ -70,6 +72,30 @@ def create_app(settings: Settings | None = None, *, agent: Agent | None = None, 
     return app
 
 
+def _build_agent(s: Settings, store: Any) -> Agent:
+    """The agent over `store`; a data file that cannot be loaded becomes a StartupError with the fix."""
+    try:
+        return build_default_agent() if s == get_settings() else build_agent(s, store=store)
+    except StartupError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - the user gets one line; the type goes to the log
+        detail = (str(exc).splitlines() or [""])[0][:160]
+        log_event("startup_failed", error=type(exc).__name__)
+        raise StartupError(
+            f"App data could not be loaded ({type(exc).__name__}: {detail}): run scripts/check_ours.py and "
+            "restore data/ours and models/e5 from the release zip."
+        ) from None
+
+
+def main_app() -> FastAPI:
+    """`create_app()` for uvicorn: a StartupError prints one line (no stack trace) and exits 1."""
+    try:
+        return create_app()
+    except StartupError as exc:
+        print(f"Dada Academy cannot start: {exc}", file=sys.stderr, flush=True)
+        raise SystemExit(1) from None
+
+
 def _mount_web(app: FastAPI, dist: Path) -> None:
     @app.api_route(
         "/api/{rest:path}",
@@ -84,4 +110,4 @@ def _mount_web(app: FastAPI, dist: Path) -> None:
         app.frontend("/", directory=dist, fallback="index.html")
 
 
-app = create_app()
+app = main_app()
