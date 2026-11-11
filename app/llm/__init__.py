@@ -34,7 +34,7 @@ PROMPTS_DIR = ROOT / "prompts"
 PROBE_MESSAGES = [{"role": "user", "content": 'Reply with {"ping":true}'}]
 PROBE_MAX_TOKENS = 10
 #: The escalation model runs with reasoning on (per-call param; provider data_collection deny is kept).
-ESCALATION_PARAMS: dict[str, object] = {"reasoning": {"enabled": True}}
+ESCALATION_PARAMS: dict[str, object] = {"reasoning": {"effort": "low"}}  # full reasoning took 5-26 s
 ESCALATION_MAX_TOKENS = 2000
 
 __all__ = ["LLM", "ProbeResult", "build_llm", "probe", "PROMPTS_DIR"]

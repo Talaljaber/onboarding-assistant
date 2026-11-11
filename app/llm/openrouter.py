@@ -117,7 +117,7 @@ class OpenRouterClient:
         deadline_s: float | None = None,
     ) -> ChatResult:
         """POST one chat completion. `params` are the pinned request parameters; a `reasoning` entry in
-        `params` (e.g. `{"enabled": True}` for the escalation model) replaces the client's reasoning-off
+        `params` (e.g. `{"effort": "low"}` for the escalation model) replaces the client's reasoning-off
         default for this call. The provider preferences (data_collection deny) are always sent."""
         body: dict[str, object] = {
             "model": model_id,

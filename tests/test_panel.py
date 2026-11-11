@@ -213,7 +213,7 @@ def test_coverage_doubt_escalates_with_notes_as_data(tmp_path: Path, kb: Knowled
     p = panel_of(info)
     assert not p.accepted and p.escalated_to == ESC and p.votes[-1].role == "escalation" and p.votes[-1].ok
     esc = fake.of("escalation")[0]
-    assert esc["params"]["reasoning"] == {"enabled": True} and esc["params"]["temperature"] == 0
+    assert esc["params"]["reasoning"] == {"effort": "low"} and esc["params"]["temperature"] == 0
     assert esc["deadline_s"] <= 6.0
     review = esc["system"].split("REVIEW (data):\n```json\n", 1)[1].split("\n```", 1)[0]
     assert "only one answered" in json.loads(review)[1]["note"]  # the notes travel inside the DATA block
@@ -364,7 +364,7 @@ def test_escalation_request_has_reasoning_on_and_data_collection_deny() -> None:
         client.chat(MODEL, [{"role": "user", "content": "x"}], params={"temperature": 0})
     finally:
         client.close()
-    assert bodies[0]["reasoning"] == {"enabled": True} and bodies[0]["provider"]["data_collection"] == "deny"
+    assert bodies[0]["reasoning"] == {"effort": "low"} and bodies[0]["provider"]["data_collection"] == "deny"
     assert bodies[1]["reasoning"] == {"enabled": False} and bodies[1]["provider"]["data_collection"] == "deny"
 
 
