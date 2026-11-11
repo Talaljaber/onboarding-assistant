@@ -191,7 +191,18 @@ def _csv_blocks(text: str) -> list[Block]:
 
 
 # ------------------------------------------------------------------------------------------- docx
-def _docx_xml(data: bytes) -> bytes:
+def _docx_part(zf: zipfile.ZipFile, name: str) -> bytes:
+    with zf.open(zf.getinfo(name)) as fh:  # read at most the cap even if the header lies about the size
+        xml = fh.read(DOCX_MAX_UNCOMPRESSED + 1)
+    if len(xml) > DOCX_MAX_UNCOMPRESSED:
+        raise ImportRejected("content_b64", "too_large_unpacked", "the .docx file unpacks too large")
+    if b"<!DOCTYPE" in xml[:4096].upper() or b"<!ENTITY" in xml.upper():
+        raise ImportRejected("content_b64", "bad_docx", "the .docx file has a document type declaration")
+    return xml
+
+
+def _docx_xml(data: bytes) -> tuple[bytes, bytes | None]:
+    """`word/document.xml` and, when present, `word/styles.xml`."""
     try:
         zf = zipfile.ZipFile(io.BytesIO(data))
     except (zipfile.BadZipFile, OSError, ValueError):
@@ -200,27 +211,45 @@ def _docx_xml(data: bytes) -> bytes:
         infos = zf.infolist()
         if len(infos) > DOCX_MAX_ENTRIES or sum(i.file_size for i in infos) > DOCX_MAX_UNCOMPRESSED:
             raise ImportRejected("content_b64", "too_large_unpacked", "the .docx file unpacks too large")
-        try:
-            info = zf.getinfo("word/document.xml")
-        except KeyError:
-            raise ImportRejected("content_b64", "bad_docx", "not a Word document") from None
-        with zf.open(info) as fh:  # read at most the cap even if the header lies about the size
-            xml = fh.read(DOCX_MAX_UNCOMPRESSED + 1)
-    if len(xml) > DOCX_MAX_UNCOMPRESSED:
-        raise ImportRejected("content_b64", "too_large_unpacked", "the .docx file unpacks too large")
-    if b"<!DOCTYPE" in xml[:4096].upper() or b"<!ENTITY" in xml.upper():
-        raise ImportRejected("content_b64", "bad_docx", "the .docx file has a document type declaration")
-    return xml
+        names = set(zf.namelist())
+        if "word/document.xml" not in names:
+            raise ImportRejected("content_b64", "bad_docx", "not a Word document")
+        xml = _docx_part(zf, "word/document.xml")
+        styles = _docx_part(zf, "word/styles.xml") if "word/styles.xml" in names else None
+    return xml, styles
+
+
+def _heading_style_ids(styles: bytes | None) -> set[str]:
+    """Paragraph style ids that are headings. Word in another UI language renames the style id (Arabic Word
+    saves "Heading 1" as id "1"), but the stored `w:name` stays "heading 1"; an outline level also counts."""
+    if not styles:
+        return set()
+    try:
+        root = ET.fromstring(styles)
+    except ET.ParseError:
+        return set()
+    ids: set[str] = set()
+    for st in root.iter(f"{_W}style"):
+        sid = st.get(f"{_W}styleId")
+        if not sid or st.get(f"{_W}type", "paragraph") != "paragraph":
+            continue
+        name = st.find(f"{_W}name")
+        named = name is not None and bool(_HEADING_STYLE.match(name.get(f"{_W}val", "")))
+        if named or st.find(f"{_W}pPr/{_W}outlineLvl") is not None:
+            ids.add(sid)
+    return ids
 
 
 def _docx_blocks(data: bytes) -> tuple[list[Block], int]:
     try:
-        root = ET.fromstring(_docx_xml(data))
+        xml, styles = _docx_xml(data)
+        root = ET.fromstring(xml)
     except ET.ParseError:
         raise ImportRejected("content_b64", "bad_docx", "the .docx text cannot be read") from None
     body = root.find(f"{_W}body")
     if body is None:
         return [], 1
+    heading_ids = _heading_style_ids(styles)
     page = 1
     # Word writes `lastRenderedPageBreak` right after an explicit break too: count one break, not two.
     just_broke = False
@@ -236,7 +265,8 @@ def _docx_blocks(data: bytes) -> tuple[list[Block], int]:
 
     for p in body.iter(f"{_W}p"):
         style = p.find(f"{_W}pPr/{_W}pStyle")
-        heading = (style is not None and bool(_HEADING_STYLE.match(style.get(f"{_W}val", "")))) or (
+        style_id = style.get(f"{_W}val", "") if style is not None else ""
+        heading = bool(style_id) and (style_id in heading_ids or bool(_HEADING_STYLE.match(style_id))) or (
             p.find(f"{_W}pPr/{_W}outlineLvl") is not None
         )
         if p.find(f"{_W}pPr/{_W}pageBreakBefore") is not None and blocks:

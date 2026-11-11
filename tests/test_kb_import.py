@@ -61,8 +61,9 @@ def b64(data: bytes | str) -> str:
 _W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
-def make_docx(paragraphs: list[tuple[str | None, str, str]]) -> bytes:
-    """(style or None, text, break) where break is "" | "page" (w:br page before the text) | "rendered"."""
+def make_docx(paragraphs: list[tuple[str | None, str, str]], styles: str | None = None) -> bytes:
+    """(style or None, text, break) where break is "" | "page" (w:br page before the text) | "rendered".
+    `styles` is an optional `word/styles.xml` body (the `w:style` elements)."""
     body = []
     for style, text, brk in paragraphs:
         ppr = f'<w:pPr><w:pStyle w:val="{style}"/></w:pPr>' if style else ""
@@ -73,6 +74,8 @@ def make_docx(paragraphs: list[tuple[str | None, str, str]]) -> bytes:
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("[Content_Types].xml", "<Types/>")
         zf.writestr("word/document.xml", xml)
+        if styles is not None:
+            zf.writestr("word/styles.xml", f'<?xml version="1.0" encoding="UTF-8"?><w:styles xmlns:w="{_W}">{styles}</w:styles>')
     return buf.getvalue()
 
 
@@ -131,6 +134,18 @@ def test_docx_headings_and_page_breaks() -> None:
     assert [(b.kind, b.text, b.page) for b in blocks] == [
         ("heading", "Leave", 1), ("para", "Annual leave is 14 days.", 1),
         ("para", "Second page text here.", 2), ("para", "Third page text here.", 3)]
+
+
+def test_docx_headings_saved_by_word_in_another_language() -> None:
+    """Arabic Word stores "heading 1" under the style id "1": the style's name, not its id, makes the heading."""
+    styles = ('<w:style w:type="paragraph" w:styleId="1"><w:name w:val="heading 1"/></w:style>'
+              '<w:style w:type="paragraph" w:styleId="a"><w:name w:val="Normal"/></w:style>'
+              '<w:style w:type="paragraph" w:styleId="x7"><w:name w:val="Custom"/><w:pPr><w:outlineLvl w:val="1"/></w:pPr></w:style>')
+    doc = make_docx([("1", "الحاسوب", ""), ("a", "يستلم الموظف جهازاً في يومه الأول.", ""),
+                     ("x7", "التذاكر", ""), (None, "تُرفع المشكلات عبر نظام التذاكر.", "")], styles)
+    _, blocks, _ = extract("ar.docx", doc)
+    assert [b.kind for b in blocks] == ["heading", "para", "heading", "para"]
+    assert [p.heading for p in chunk(blocks)] == ["الحاسوب", "التذاكر"]
 
 
 def test_docx_explicit_break_then_rendered_break_counts_once() -> None:
