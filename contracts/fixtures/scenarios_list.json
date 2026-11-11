@@ -10,17 +10,21 @@
       "options": [
         {
           "id": "S01-O1",
-          "text_ar": "أسأله عن عدد أفراد الأسرة والمساحة المتاحة والميزانية قبل أن أقترح ثلاجة."
+          "text_ar": "أنصحه مباشرة بأكبر ثلاجة في المعرض لأنها الأنسب للأسر الكبيرة.",
+          "text_en": "I recommend the biggest fridge in the showroom straight away, because it suits large families best."
         },
         {
           "id": "S01-O2",
-          "text_ar": "أقترح أغلى ثلاجة في المعرض لأنها الأفضل دائماً."
+          "text_ar": "أسأله عن حجم الأسرة والمساحة المتاحة والميزانية وطريقة الاستخدام، ثم أقترح خيارين مناسبين.",
+          "text_en": "I ask about the family size, the available space, the budget and how they will use it, then suggest two suitable options."
         },
         {
           "id": "S01-O3",
-          "text_ar": "أطلب منه أن يتصفح الثلاجات وحده ويعود إن احتاج شيئاً."
+          "text_ar": "أعرض عليه الموديل الذي عليه عرض هذا الأسبوع حتى لو لم أعرف احتياجه.",
+          "text_en": "I show them the model that is on offer this week, even if I don't know what they need."
         }
-      ]
+      ],
+      "scenario_en": "A customer asks about a fridge suitable for a large family."
     },
     {
       "id": "S02",
@@ -32,17 +36,21 @@
       "options": [
         {
           "id": "S02-O1",
-          "text_ar": "أقول له إنني لست متأكداً، وسأتحقق من الكتالوج أو أسأل المسؤول ثم أعود إليه."
+          "text_ar": "أقول للزبون إنني غير متأكد، وأتحقق من الكتالوج الرسمي أو أسأل المسؤول، ثم أعود إليه بالمعلومة المؤكدة.",
+          "text_en": "I tell the customer I'm not sure, check the official catalogue or ask the person in charge, then come back to them with the confirmed information."
         },
         {
           "id": "S02-O2",
-          "text_ar": "أؤكد له أن الميزة موجودة حتى لا يذهب إلى منافس."
+          "text_ar": "أقول له إن الميزة موجودة غالباً حتى لا أخسر البيعة.",
+          "text_en": "I tell them the feature is probably there so I don't lose the sale."
         },
         {
           "id": "S02-O3",
-          "text_ar": "أخبره أن هذا ليس من اختصاصي."
+          "text_ar": "أحيله إلى زميل آخر وأنتقل إلى زبون غيره دون متابعة.",
+          "text_en": "I pass them to another colleague and move on to another customer without following up."
         }
-      ]
+      ],
+      "scenario_en": "The customer asks about an unconfirmed feature of a product."
     },
     {
       "id": "S03",
@@ -54,17 +62,21 @@
       "options": [
         {
           "id": "S03-O1",
-          "text_ar": "أنسق مع فريق التسليم وأبلغ العميل بالموعد المؤكد فقط."
+          "text_ar": "أعطي العميل موعداً تقريبياً من عندي لأنه مستعجل.",
+          "text_en": "I give the customer a rough date of my own because they are in a hurry."
         },
         {
           "id": "S03-O2",
-          "text_ar": "أعطيه موعداً تقريبياً من عندي."
+          "text_ar": "أطلب من العميل أن يتواصل مع قسم التسليم بنفسه.",
+          "text_en": "I ask the customer to contact the delivery department themselves."
         },
         {
           "id": "S03-O3",
-          "text_ar": "أطلب منه الاتصال بفريق التسليم بنفسه."
+          "text_ar": "أنسّق مع فريق التسليم لمعرفة المواعيد المتاحة، ثم أبلغ العميل بالموعد المؤكد فقط.",
+          "text_en": "I coordinate with the delivery team to find the available dates, then give the customer the confirmed date only."
         }
-      ]
+      ],
+      "scenario_en": "A customer needs a delivery date coordinated."
     }
   ],
   "label_ar": "مواقف تدريبية افتراضية"

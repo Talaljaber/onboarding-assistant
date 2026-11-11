@@ -11,17 +11,24 @@
       "scenario_id": "S02",
       "option_id": null,
       "strengths_ar": [
-        "لم تخترع مواصفات",
-        "وعدت بالتحقق من مصدر موثوق"
+        "لم تخترع مواصفات غير مؤكدة.",
+        "رجعت إلى مصدر موثوق أو إلى المسؤول للتحقق."
       ],
-      "improve_ar": "أخبر الزبون متى ستعود إليه بالمعلومة المؤكدة.",
+      "improve_ar": "أخبر الزبون أنك ستعود إليه بالمعلومة المؤكدة حتى لا يبقى دون إجابة.",
       "value": "Integrity",
       "value_ar": "النزاهة",
       "tip_ar": "قل للزبون إنك ستتأكد من الكتالوج أو المسؤول وتعود إليه.",
       "suggested_good_response_ar": "لا تخترع مواصفات؛ تحقق من مصدر موثوق أو اسأل المسؤول.",
       "mode": "llm",
       "label_ar": "ملاحظات تدريبية، ليست تقييماً",
-      "customer_ar": "أكيد؟ رح أشتريها عشانها بالذات، فاحكيلي آه أو لأ هلّق."
+      "customer_ar": "أكيد؟ رح أشتريها عشانها بالذات، فاحكيلي آه أو لأ هلّق.",
+      "strengths_en": [
+        "You did not invent unconfirmed specifications.",
+        "You went back to a reliable source or to the person in charge to verify."
+      ],
+      "improve_en": "Tell the customer you will come back to them with the confirmed information so they are not left without an answer.",
+      "suggested_good_response_en": "Do not invent specifications; check a reliable source or ask the person in charge.",
+      "customer_en": "Are you sure? I'm buying it for that feature, so tell me yes or no right now."
     },
     "proposal": null,
     "progress": null,

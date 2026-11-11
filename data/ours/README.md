@@ -60,6 +60,19 @@ Offline practice: the user picks one of three replies and sees fixed feedback li
 | `feedback_ar` | names the value in Arabic (النزاهة، فريق واحد، المثابرة، محورية العميل، المسؤولية الاجتماعية) and explains why the option fits or not; no digits, no scores |
 | `source` | `ours` |
 
+## content_en.csv — 135 rows (P16.3)
+Authored English for the fixed learning content, a helper for the English UI only (Arabic stays the
+reference; the official CSVs stay Arabic). Keyed by stable ids so the Arabic files can be reworded without a
+merge conflict here. `tests/test_content_en.py` checks that every shown Arabic item has a row, that no row is
+orphaned, that the English has no Arabic letters, contact or link, and adds no number the Arabic lacks.
+Not covered on purpose: checklist `text_ar` (model input only), K-rows (cited verbatim) and the model's tip.
+
+| column | meaning |
+|---|---|
+| `key` | `goal:<milestone>`, `activity:<id>`, `scenario:<S>`, `suggested:<S>`, `customer:<S>`, `option:<O>`, `option_feedback:<O>`, `check_done:<C>`, `check_add:<C>`, `quiz:<Q>`, `quiz:<Q>:<A\|B\|C>`, `reply:<name>` |
+| `text_en` | the faithful English; value names use the official English (`Customer Centricity`, `One Team`, …) |
+| `source` | `ours` |
+
 ## plan_activities.csv — 16 rows (8 per role)
 The suggested 90-day plan's activities; progress percent = done / 8 for the role.
 

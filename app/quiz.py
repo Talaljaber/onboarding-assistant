@@ -18,7 +18,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Protocol
 
-from app import schemas
+from app import content_en, schemas
 
 OPTION_KEYS: tuple[str, ...] = ("A", "B", "C")
 
@@ -33,11 +33,15 @@ class QuizItem:
     source_knowledge_id: str
 
     def to_schema(self) -> schemas.QuizItem:
+        question_en, options_en = content_en.en(f"quiz:{self.id}"), content_en.quiz_options_en(self.id)
+        both = question_en is not None and options_en is not None
         return schemas.QuizItem(
             id=self.id,
             question_ar=self.question_ar,
             options=dict(self.options),  # type: ignore[arg-type]
             source_knowledge_id=self.source_knowledge_id,
+            question_en=question_en if both else None,
+            options_en=options_en if both else None,  # type: ignore[arg-type]
         )
 
 

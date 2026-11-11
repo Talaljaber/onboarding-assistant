@@ -9,6 +9,11 @@ Text sources: K-rows, scenarios, plan goals and quiz items are copied verbatim f
 `data/official/*.csv` (read with `utf-8-sig`). Option texts, activity titles, the K19 row and
 the not-confirmed / out-of-scope questions are illustrative placeholders until
 `data/ours/*.csv` exists; scores, latencies and ids in traces are illustrative.
+P16.3: plan, quiz, scenario, option, proposal and feedback fixtures now use the real `data/ours` Arabic texts
+and carry the optional `*_en` fields (`title_en`, `learning_goal_en`, `scenario_en`, `text_en`,
+`strengths_en`, `improve_en`, `suggested_good_response_en`, `customer_en`, `titles_en`, `question_en`,
+`options_en`) from `data/ours/content_en.csv`; `chat_scenario_end.json`, `chat_plan.json` and
+`chat_quiz.json` carry the fixed reply's authored English in `reply.text_en`.
 
 ## POST /api/chat — requests (`ChatRequest`)
 

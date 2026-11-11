@@ -1,0 +1,136 @@
+key,text_en,source
+goal:Days 1-7,"Get to know the company, its values and the basic onboarding policies",ours
+goal:Day 30,Complete a short quiz and a simple practical scenario,ours
+goal:Day 60,Practise a more complex job scenario and get feedback,ours
+goal:Day 90,Present a summary of your learning progress for human review only,ours
+activity:SA-D1-read-company,"Get to know the company: founding, showrooms, vision, mission and brands",ours
+activity:SA-D1-read-values,Read the five shared values,ours
+activity:SA-D1-read-onboarding,"Review the onboarding, attendance, leave and confidentiality policies",ours
+activity:SA-D30-quiz,Short quiz,ours
+activity:SA-D30-s01,Practice scenario: a customer asks about a fridge,ours
+activity:SA-D60-s02,Practice scenario: an unconfirmed product feature,ours
+activity:SA-D60-s03,Practice scenario: coordinating a delivery date,ours
+activity:SA-D90-summary,Present your progress summary for human review only,ours
+activity:DE-D1-read-company,"Get to know the company: founding, showrooms, vision, mission and brands",ours
+activity:DE-D1-read-values,Read the five shared values,ours
+activity:DE-D1-read-onboarding,"Review the onboarding, attendance, leave and confidentiality policies",ours
+activity:DE-D30-quiz,Short quiz,ours
+activity:DE-D30-s04,Practice scenario: a delayed delivery,ours
+activity:DE-D60-s05,Practice scenario: possible damage to the packaging,ours
+activity:DE-D60-s06,Practice scenario: order details that do not match,ours
+activity:DE-D90-summary,Present your progress summary for human review only,ours
+scenario:S01,A customer asks about a fridge suitable for a large family.,ours
+suggested:S01,"Ask about the family size, the space, the budget and how it will be used before making a recommendation.",ours
+scenario:S02,The customer asks about an unconfirmed feature of a product.,ours
+suggested:S02,Do not invent specifications; check a reliable source or ask the person in charge.,ours
+scenario:S03,A customer needs a delivery date coordinated.,ours
+suggested:S03,Work with the delivery team and give the customer confirmed information only.,ours
+scenario:S04,The delivery is late and the customer is upset.,ours
+suggested:S04,"Apologise politely, explain the confirmed information, and escalate the problem to the person in charge when needed.",ours
+scenario:S05,The employee notices possible damage to the packaging.,ours
+suggested:S05,"Document what you noticed, inform the person in charge and do not hide the problem.",ours
+scenario:S06,The order details and the delivery details do not match.,ours
+suggested:S06,Contact the relevant department to verify before acting.,ours
+customer:S01,"Enough, no more questions. Just tell me: is this your best fridge? Do you promise it will be enough for all of us?",ours
+customer:S02,"Are you sure? I'm buying it for that feature, so tell me yes or no right now.",ours
+customer:S03,"I don't want to wait for someone to get back to me. Just confirm it will arrive on the day I want, and we're done.",ours
+customer:S04,"I don't want an apology. Tell me exactly when the order will arrive, and promise me it won't be late again.",ours
+customer:S05,"The box looks a bit damaged, but reassure me the appliance inside is fine and I'll take it now.",ours
+customer:S06,"This is definitely my order, and the difference in the details is a small mistake. Just drop it here and we're done, or are you going to make me wait?",ours
+option:S01-O1,"I recommend the biggest fridge in the showroom straight away, because it suits large families best.",ours
+option_feedback:S01-O1,Customer Centricity starts with understanding what the customer needs; the biggest fridge is not necessarily the best fit for their space or budget.,ours
+option:S01-O2,"I ask about the family size, the available space, the budget and how they will use it, then suggest two suitable options.",ours
+option_feedback:S01-O2,"This reflects Customer Centricity: you asked what the customer needs before recommending, so the recommendation was based on their own situation.",ours
+option:S01-O3,"I show them the model that is on offer this week, even if I don't know what they need.",ours
+option_feedback:S01-O3,"Integrity means the recommendation serves the customer's interest; ask what they need first, then mention the offer if it suits them.",ours
+option:S02-O1,"I tell the customer I'm not sure, check the official catalogue or ask the person in charge, then come back to them with the confirmed information.",ours
+option_feedback:S02-O1,"This reflects Integrity: you did not invent specifications, you checked a reliable source, and you promised the customer confirmed information.",ours
+option:S02-O2,I tell them the feature is probably there so I don't lose the sale.,ours
+option_feedback:S02-O2,Integrity means not inventing specifications; an unconfirmed answer can harm the customer and their trust in the company.,ours
+option:S02-O3,I pass them to another colleague and move on to another customer without following up.,ours
+option_feedback:S02-O3,Customer Centricity means the customer is not left without an answer; check yourself or follow up with your colleague until the information reaches them.,ours
+option:S03-O1,I give the customer a rough date of my own because they are in a hurry.,ours
+option_feedback:S03-O1,Integrity means not promising an unconfirmed date; a rough date may let the customer down later.,ours
+option:S03-O2,I ask the customer to contact the delivery department themselves.,ours
+option_feedback:S03-O2,"The One Team value means coordinating between departments is our responsibility, not the customer's.",ours
+option:S03-O3,"I coordinate with the delivery team to find the available dates, then give the customer the confirmed date only.",ours
+option_feedback:S03-O3,This reflects the One Team value: you worked with the delivery team and gave the customer confirmed information only.,ours
+option:S04-O1,"I apologise to the customer politely, explain the latest confirmed information about their order, and escalate the problem to the person in charge when needed.",ours
+option_feedback:S04-O1,"This reflects Customer Centricity: you apologised, explained the confirmed information, and escalated the problem so it gets solved.",ours
+option:S04-O2,I promise them the order will arrive within an hour so they calm down.,ours
+option_feedback:S04-O2,Integrity means not inventing a time you don't know; explain only the confirmed information and escalate the problem to the person in charge.,ours
+option:S04-O3,"I explain to them that the warehouse caused the delay, not me.",ours
+option_feedback:S04-O3,The One Team value means we carry the problem together in front of the customer; apologise and follow up on the solution instead of looking for who is to blame.,ours
+option:S05-O1,I deliver the order as it is; the damage may not have reached the appliance itself.,ours
+option_feedback:S05-O1,Integrity means not hiding a problem you noticed; document it and inform the person in charge before delivering.,ours
+option:S05-O2,"I document the state of the packaging and inform the person in charge before delivering, and I don't hide what I noticed.",ours
+option_feedback:S05-O2,"This reflects Integrity: you documented what you noticed, informed the person in charge and did not hide the problem.",ours
+option:S05-O3,I repack the box myself without telling anyone.,ours
+option_feedback:S05-O3,The One Team value means involving the person in charge in the problem so the team decides the right step together.,ours
+option:S06-O1,I go by the address written on the box and complete the delivery.,ours
+option_feedback:S06-O1,Customer Centricity means the right order reaches the right place; acting before verifying can harm the customer.,ours
+option:S06-O2,"I call the customer to find out the correct details, then change the order myself.",ours
+option_feedback:S06-O2,The One Team value means the relevant department verifies the order details; changing it on your own may confuse the rest of the team.,ours
+option:S06-O3,I contact the relevant department to verify the correct details before doing anything.,ours
+option_feedback:S06-O3,This reflects the One Team value: you contacted the relevant department and verified before acting.,ours
+check_done:S01-C1,You asked about the family size and how they will use it before recommending anything.,ours
+check_add:S01-C1,Ask about the family size and how they will use it before recommending a specific model.,ours
+check_done:S01-C2,You checked the available space so the fridge fits the place.,ours
+check_add:S01-C2,Ask about the available space in the kitchen before choosing the size.,ours
+check_done:S01-C3,You took the customer's budget into account and linked your recommendation to what they need.,ours
+check_add:S01-C3,"Ask about the budget, then link your recommendation to what you heard from the customer.",ours
+check_done:S02-C1,You did not invent unconfirmed specifications.,ours
+check_add:S02-C1,"Do not confirm a feature you are not sure about, even if that seems quicker.",ours
+check_done:S02-C2,You went back to a reliable source or to the person in charge to verify.,ours
+check_add:S02-C2,Check the official catalogue or ask the person in charge before answering.,ours
+check_done:S02-C3,You told the customer you would come back to them with the confirmed information.,ours
+check_add:S02-C3,Tell the customer you will come back to them with the confirmed information so they are not left without an answer.,ours
+check_done:S03-C1,You worked with the delivery team instead of deciding the date on your own.,ours
+check_add:S03-C1,Contact the delivery team to find out the available dates.,ours
+check_done:S03-C2,You gave the customer confirmed information only.,ours
+check_add:S03-C2,"Give the customer confirmed information only, without estimates of your own.",ours
+check_done:S03-C3,You did not promise the customer a date before the delivery team confirmed it.,ours
+check_add:S03-C3,Do not promise a date before the delivery team confirms it.,ours
+check_done:S04-C1,You started by apologising to the customer politely.,ours
+check_add:S04-C1,"Start by apologising to the customer politely, before any explanation.",ours
+check_done:S04-C2,You explained the confirmed information about the order to the customer.,ours
+check_add:S04-C2,"Explain the latest confirmed information about the order to the customer, without unconfirmed promises.",ours
+check_done:S04-C3,You escalated the problem to the person in charge so it is followed up.,ours
+check_add:S04-C3,Escalate the problem to the person in charge when needed so it gets solved.,ours
+check_done:S05-C1,You documented what you noticed about the state of the packaging.,ours
+check_add:S05-C1,Document what you noticed about the state of the packaging before any other step.,ours
+check_done:S05-C2,You informed the person in charge about the possible damage.,ours
+check_add:S05-C2,Inform the person in charge about the possible damage so they decide the next step.,ours
+check_done:S05-C3,You did not hide the problem.,ours
+check_add:S05-C3,Do not hide the problem from the team or the customer.,ours
+check_done:S06-C1,You stopped at the mismatch and did not act before verifying.,ours
+check_add:S06-C1,Do not complete the delivery before checking the mismatch between the details.,ours
+check_done:S06-C2,You contacted the relevant department to verify.,ours
+check_add:S06-C2,Contact the department responsible for the order to verify the details.,ours
+check_done:S06-C3,You acted after the correct details were confirmed.,ours
+check_add:S06-C3,Act only after the relevant department confirms the correct details.,ours
+quiz:Q01,Which value means cooperation between colleagues?,ours
+quiz:Q01:A,One Team,ours
+quiz:Q01:B,Perseverance,ours
+quiz:Q01:C,Customer Centricity,ours
+quiz:Q02,How long is the probation period?,ours
+quiz:Q02:A,30 days,ours
+quiz:Q02:B,60 days,ours
+quiz:Q02:C,90 days,ours
+quiz:Q03,Who is responsible for carrying out the employee onboarding policy?,ours
+quiz:Q03:A,Human Resources,ours
+quiz:Q03:B,The customer,ours
+quiz:Q03:C,The supplier,ours
+quiz:Q04,What is the right step when you are not sure about an internal policy?,ours
+quiz:Q04:A,Make up an answer,ours
+quiz:Q04:B,Go back to the source or to Human Resources,ours
+quiz:Q04:C,Ignore the question,ours
+quiz:Q05,When is the welcome message sent to someone who has a work email?,ours
+quiz:Q05:A,Within the first three days,ours
+quiz:Q05:B,After 90 days,ours
+quiz:Q05:C,A year before,ours
+reply:scenario_end,Practice on this scenario has ended. You can start another scenario whenever you like.,ours
+reply:plan,"This is the suggested learning plan for your first ninety days. It is a suggested plan, not an evaluation schedule.",ours
+reply:plan_milestone,"{milestone}: {goal}. This is a suggested plan, not an evaluation schedule.",ours
+reply:quiz_intro,Here is a short practice quiz.,ours
+reply:quiz_intro_five,Here is a short practice quiz with five questions.,ours

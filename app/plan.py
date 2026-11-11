@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from app import schemas
+from app import content_en, schemas
 
 MILESTONES: tuple[str, ...] = schemas.MILESTONES
 ROLES: tuple[str, ...] = schemas.ROLES
@@ -39,7 +39,8 @@ class Activity:
     title_ar: str
 
     def to_schema(self) -> schemas.Activity:
-        return schemas.Activity(id=self.id, kind=self.kind, title_ar=self.title_ar, refs=list(self.refs))  # type: ignore[arg-type]
+        return schemas.Activity(id=self.id, kind=self.kind, title_ar=self.title_ar, refs=list(self.refs),  # type: ignore[arg-type]
+                                title_en=content_en.en(f"activity:{self.id}"))
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,7 @@ class Plan:
                     name_ar=m.name_ar,
                     learning_goal_ar=m.goal_ar,
                     activities=[a.to_schema() for a in m.activities],
+                    learning_goal_en=content_en.en(f"goal:{m.name}"),
                 )
                 for m in self.milestones
             ],

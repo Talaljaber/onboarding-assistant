@@ -599,6 +599,31 @@ Body `AdminCommentCreate` `{body, files}` → 201 `RequestComment` (`author: "ad
 
 → the file bytes, same headers as the intern route.
 
+## 6i. Bilingual learning content (P16.3, additive)
+
+The fixed learning content carries optional authored English beside the Arabic, from
+`data/ours/content_en.csv` (`key,text_en,source`; the official CSVs stay Arabic only). Every field is
+optional, `null` when no English row exists, and never replaces or changes an Arabic field: Arabic stays the
+reference the server checks, cites and stores. The English UI shows a `*_en` field when it is set and
+otherwise the Arabic with `lang="ar" dir="rtl"`; the Arabic UI never shows them.
+
+| Shape | Added field(s) | Key in `content_en.csv` |
+|---|---|---|
+| `Activity`, `DetailActivity` | `title_en` | `activity:<id>` |
+| `Milestone` | `learning_goal_en` | `goal:<milestone>` (the official goal is the same for both roles) |
+| `ScenarioOut` | `scenario_en` | `scenario:<S>` |
+| `Option` | `text_en` | `option:<O>` |
+| `Feedback` | `strengths_en[]` (aligned with `strengths_ar`, `null` unless every sentence has English), `improve_en`, `suggested_good_response_en`, `customer_en` | `check_done:<C>`, `check_add:<C>`, `option_feedback:<O>`, `suggested:<S>`, `customer:<S>` |
+| `Proposal` | `titles_en[]` (aligned with `activity_ids`, `null` unless all exist) | `activity:<id>` |
+| `QuizItem` | `question_en`, `options_en {A, B, C}` (set together or both `null`, so a question and its options share one direction) | `quiz:<Q>`, `quiz:<Q>:<A\|B\|C>` |
+| `Reply` (`scenario_end`, `plan`, `quiz`) | `text_en`: the authored English of the fixed reply text | `reply:scenario_end`, `reply:plan`, `reply:plan_milestone`, `reply:quiz_intro`, `reply:quiz_intro_five` |
+
+Not translated: `tip_ar` (model-written; the English UI labels it once "Arabic only"), cited K-rows
+(`Source.answer_ar`, quoted verbatim; the quiz explanation is a K-row), and the value names, whose English
+is the official `company_value` / `value` key itself. Feedback English is matched sentence by sentence to
+the checklist or option row it came from, so a reworded or deduplicated Arabic sentence without a row
+leaves the whole list Arabic, never half translated.
+
 ## 7. Fixed labels
 
 | constant | text |

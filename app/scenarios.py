@@ -25,7 +25,7 @@ from typing import Any, Protocol
 import numpy as np
 from numpy.typing import NDArray
 
-from app import schemas
+from app import content_en, schemas
 from app.llm.paths import FEEDBACK_MAX_S, llm_feedback
 
 ROLES = schemas.ROLES
@@ -83,7 +83,12 @@ class Scenario:
 
     def to_out(self, *, with_options: bool) -> schemas.ScenarioOut:
         """The contract shape; options are sent in offline mode and in the scenario list."""
-        opts = [schemas.Option(id=o.option_id, text_ar=o.text_ar) for o in self.options] if with_options else None
+        opts = (
+            [schemas.Option(id=o.option_id, text_ar=o.text_ar, text_en=content_en.en(f"option:{o.option_id}"))
+             for o in self.options]
+            if with_options
+            else None
+        )
         return schemas.ScenarioOut(
             id=self.id,
             department=self.department,  # type: ignore[arg-type]
@@ -92,6 +97,7 @@ class Scenario:
             scenario_ar=self.scenario_ar,
             data_status=self.data_status,
             options=opts,
+            scenario_en=content_en.en(f"scenario:{self.id}"),
         )
 
 

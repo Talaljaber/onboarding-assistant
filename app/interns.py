@@ -15,7 +15,7 @@ from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from typing import Any
 
-from app import schemas
+from app import content_en, schemas
 from app.plan import PlanBook, percent_of
 
 # Invented demo personas (two women, two men), not employees. Seeded once, then managed by the admin.
@@ -103,7 +103,8 @@ def detail(intern: dict[str, Any], profiles: list[dict[str, Any]], act: dict[str
     milestones: list[schemas.DetailMilestone] = []
     for m in plan.plan_for(role).milestones:
         acts = [schemas.DetailActivity(id=a.id, kind=a.kind, title_ar=a.title_ar,  # type: ignore[arg-type]
-                                       completed_at=when.get(a.id)) for a in m.activities]
+                                       completed_at=when.get(a.id), title_en=content_en.en(f"activity:{a.id}"))
+                for a in m.activities]
         milestones.append(schemas.DetailMilestone(
             name=m.name, name_ar=m.name_ar, done=sum(1 for a in acts if a.completed_at),  # type: ignore[arg-type]
             total=len(acts), activities=acts,
