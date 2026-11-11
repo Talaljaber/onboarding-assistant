@@ -12,6 +12,8 @@ import { getAdminToken, useIsAdmin } from "@/api/adminToken";
 import ChatScreen from "@/components/chat/ChatScreen";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import KbScreen from "@/components/kb/KbScreen";
+import ImportReviewScreen from "@/components/kb/import/ImportReviewScreen";
+import ImportScreen from "@/components/kb/import/ImportScreen";
 import PlanScreen from "@/components/plan/PlanScreen";
 import ProgressScreen from "@/components/progress/ProgressScreen";
 import QuizScreen from "@/components/quiz/QuizScreen";
@@ -48,6 +50,14 @@ export const ROUTES: readonly RouteDef[] = [
     needsRole: false,
     needsAdmin: true,
     match: /^\/admin\/interns\/[0-9a-f-]{36}$/,
+  },
+  { path: "/admin/kb/import", Screen: ImportScreen, needsRole: false, needsAdmin: true },
+  {
+    path: "/admin/kb/import/:id",
+    Screen: ImportReviewScreen,
+    needsRole: false,
+    needsAdmin: true,
+    match: /^\/admin\/kb\/import\/[0-9a-f-]{36}$/,
   },
   { path: "/admin", Screen: AdminScreen, needsRole: false },
   { path: "/about", Screen: AboutScreen, needsRole: false },

@@ -50,11 +50,14 @@ afterEach(() => {
 });
 
 describe("App routes", () => {
-  it("registers all 11 routes, with the knowledge editor and the interns screens admin only", () => {
+  it("registers all 13 routes, with the knowledge editor, document import and the interns screens admin only", () => {
     expect(ROUTES.map((r) => r.path)).toEqual([
-      "/", "/chat", "/scenarios", "/plan", "/quiz", "/progress", "/kb", "/admin/interns", "/admin/interns/:id", "/admin", "/about",
+      "/", "/chat", "/scenarios", "/plan", "/quiz", "/progress", "/kb", "/admin/interns", "/admin/interns/:id",
+      "/admin/kb/import", "/admin/kb/import/:id", "/admin", "/about",
     ]);
-    expect(ROUTES.filter((r) => r.needsAdmin).map((r) => r.path)).toEqual(["/kb", "/admin/interns", "/admin/interns/:id"]);
+    expect(ROUTES.filter((r) => r.needsAdmin).map((r) => r.path)).toEqual([
+      "/kb", "/admin/interns", "/admin/interns/:id", "/admin/kb/import", "/admin/kb/import/:id",
+    ]);
   });
 
   it("an older anonymous session (a track without an intern) starts at the sign-in screen", async () => {

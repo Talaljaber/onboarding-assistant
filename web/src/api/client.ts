@@ -4,6 +4,11 @@
 import { getAdminToken, setAdminToken } from "./adminToken";
 import {
   isAdminSession,
+  isApproveResponse,
+  isImportCapabilities,
+  isImportDetail,
+  isImportListResponse,
+  isKbDraft,
   isChatResponse,
   isErrorBody,
   isHealth,
@@ -23,6 +28,13 @@ import {
   isScenarioFeedbackResponse,
   isScenarioListResponse,
   type AdminSession,
+  type ApproveResponse,
+  type DraftPatch,
+  type ImportCapabilities,
+  type ImportCreate,
+  type ImportDetail,
+  type ImportListResponse,
+  type KbDraft,
   type ChatRequest,
   type ChatResponse,
   type ErrorDetail,
@@ -207,6 +219,42 @@ export const postKb = (row: KbNewRow, signal?: AbortSignal) =>
 
 export const resetKb = (signal?: AbortSignal) =>
   request<KbResetResponse>("/api/kb/reset", { method: "POST", body: {}, guard: isKbResetResponse, signal, admin: true });
+
+// ---- document import (P12.1, admin only)
+
+/** Uploads can take a while (extraction, and up to ~45 s when the model organizes the passages). */
+export const IMPORT_TIMEOUT_MS = 90000;
+
+export const getImportCapabilities = (signal?: AbortSignal) =>
+  request<ImportCapabilities>("/api/admin/kb/import/capabilities", { guard: isImportCapabilities, signal, admin: true });
+
+export const createImport = (body: ImportCreate, signal?: AbortSignal) =>
+  request<ImportDetail>("/api/admin/kb/imports", {
+    method: "POST",
+    body,
+    guard: isImportDetail,
+    signal,
+    admin: true,
+    timeoutMs: IMPORT_TIMEOUT_MS,
+  });
+
+export const getImports = (signal?: AbortSignal) =>
+  request<ImportListResponse>("/api/admin/kb/imports", { guard: isImportListResponse, signal, admin: true });
+
+export const getImport = (id: string, signal?: AbortSignal) =>
+  request<ImportDetail>(`/api/admin/kb/imports/${q(id)}`, { guard: isImportDetail, signal, admin: true });
+
+export const patchDraft = (id: string, patch: DraftPatch, signal?: AbortSignal) =>
+  request<KbDraft>(`/api/admin/kb/drafts/${q(id)}`, { method: "PATCH", body: patch, guard: isKbDraft, signal, admin: true });
+
+export const approveDrafts = (importId: string, draftIds: string[], signal?: AbortSignal) =>
+  request<ApproveResponse>(`/api/admin/kb/imports/${q(importId)}/approve`, {
+    method: "POST",
+    body: { draft_ids: draftIds },
+    guard: isApproveResponse,
+    signal,
+    admin: true,
+  });
 
 export const createProfile = (body: ProfileCreate, signal?: AbortSignal) =>
   request<Profile>("/api/profiles", { method: "POST", body, guard: isProfile, signal });
