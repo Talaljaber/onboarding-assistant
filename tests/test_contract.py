@@ -549,3 +549,14 @@ def test_mentor_requests_are_text_only_and_carry_no_score() -> None:
 
 
 UUID = "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14"
+
+
+def test_feedback_customer_line_is_optional() -> None:
+    """P14.3: the feedback fixtures carry `customer_ar`; a feedback without it (older server) still validates."""
+    for name in ("chat_scenario_feedback.json", "chat_scenario_feedback_option.json", "scenario_feedback.json"):
+        data = load(name)
+        fb = data["reply"]["feedback"] if "reply" in data else data["feedback"]
+        assert fb["customer_ar"], name
+        without = {k: v for k, v in fb.items() if k != "customer_ar"}
+        assert s.Feedback.model_validate(without).customer_ar is None
+        assert not re.search(r"\d|[٠-٩]", fb["customer_ar"]), name

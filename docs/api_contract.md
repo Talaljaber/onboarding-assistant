@@ -170,6 +170,10 @@ Shapes:
   suggested_good_response_ar, mode, label_ar}`. Option feedback: the best option's text goes to
   `strengths_ar`, a non-best option's text to `improve_ar`. Offline free text: no judgement, only the
   suggested response and the value. `tip_ar` is `null` when the verifier dropped it.
+  P14.3 adds optional `customer_ar`: the scenario's authored customer pressure line
+  (`data/ours/scenario_customer_lines.csv`; no number, name, time, honorific or policy noun). The server
+  always sends it (identical in both modes); the client shows it once per practice run, on the first
+  feedback after `scenario_start`. Clients must accept its absence.
 - `Proposal` = `{milestone, activity_ids[], titles_ar[], current_percent, proposed_percent}`
   (`titles_ar` aligned with `activity_ids`). Nothing changes until the client sends `confirm`.
 - `ProgressSummary` = `{percent, done, total, completed_ids}`; `completed_ids` is the merged list on

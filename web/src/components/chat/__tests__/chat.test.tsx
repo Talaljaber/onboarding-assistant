@@ -341,6 +341,10 @@ describe("practice mode", () => {
     await waitFor(() => expect(card("scenario_feedback")).not.toBeNull());
     expect(be.chat()[1]!.body).toMatchObject({ state: { active_scenario: "S02" } });
     const fb = card("scenario_feedback")!;
+    // P14.3: the first feedback of the run is the customer's turn; the suggested reply waits behind "Stuck?"
+    expect(fb.querySelector("[data-customer]")).toHaveTextContent(scenarioFeedback.reply.feedback.customer_ar);
+    expect(fb).not.toHaveTextContent("Suggested response in the training material");
+    await userEvent.click(within(fb as HTMLElement).getByRole("button", { name: "Stuck?" }));
     expect(fb).toHaveTextContent("Suggested response in the training material");
     expect(fb.textContent).not.toMatch(/\d+\s*%|score|grade/i);
 
@@ -349,6 +353,65 @@ describe("practice mode", () => {
     expect(document.querySelector("[data-practice-banner]")).toBeNull();
     // 1 of 8 done -> SA-D60-s02 completes -> 2 of 8 = 25%
     expect(await screen.findByText("Progress updated: 25%")).toBeInTheDocument();
+  });
+
+  it("P14.3: the customer line shows once per run; the second reply gets the normal card", async () => {
+    backend([scenarioStart, scenarioFeedback, scenarioFeedback, scenarioStart, scenarioFeedback]);
+    mount();
+    await ask("تدريب");
+    await waitFor(() => expect(card("scenario_start")).not.toBeNull());
+    await ask("بقوله إني رح أتأكد");
+    await waitFor(() => expect(document.querySelectorAll('[data-kind="scenario_feedback"]')).toHaveLength(1));
+    const first = document.querySelectorAll('[data-kind="scenario_feedback"]')[0] as HTMLElement;
+    expect(first.querySelector("[data-customer]")).not.toBeNull();
+    const stuck = within(first).getByRole("button", { name: "Stuck?" });
+    expect(stuck).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(stuck);
+    expect(stuck).toHaveAttribute("aria-expanded", "true");
+    expect(first).toHaveTextContent(scenarioFeedback.reply.feedback.suggested_good_response_ar);
+
+    await ask("ما بقدر أأكد قبل ما أسأل المسؤول");
+    await waitFor(() => expect(document.querySelectorAll('[data-kind="scenario_feedback"]')).toHaveLength(2));
+    const second = document.querySelectorAll('[data-kind="scenario_feedback"]')[1] as HTMLElement;
+    expect(second.querySelector("[data-customer]")).toBeNull();
+    expect(within(second).queryByRole("button", { name: "Stuck?" })).toBeNull();
+    expect(second).toHaveTextContent("Suggested response in the training material");
+    // the first card keeps its customer turn
+    expect(first.querySelector("[data-customer]")).not.toBeNull();
+
+    // a new run (new scenario_start) gets the customer line again on its first feedback
+    await ask("تدريب");
+    await waitFor(() => expect(document.querySelectorAll('[data-kind="scenario_start"]')).toHaveLength(2));
+    await ask("بقوله إني رح أتأكد");
+    await waitFor(() => expect(document.querySelectorAll('[data-kind="scenario_feedback"]')).toHaveLength(3));
+    const third = document.querySelectorAll('[data-kind="scenario_feedback"]')[2] as HTMLElement;
+    expect(third.querySelector("[data-customer]")).not.toBeNull();
+  });
+
+  it("P14.3: a practice started from the scenarios screen also gets the customer line", async () => {
+    window.history.replaceState(null, "", "#/chat?scenario=S02");
+    backend([scenarioFeedback]);
+    mount();
+    await waitFor(() => expect(card("scenario_start")).not.toBeNull());
+    await ask("بقوله إني رح أتأكد");
+    await waitFor(() => expect(card("scenario_feedback")).not.toBeNull());
+    expect(card("scenario_feedback")!.querySelector("[data-customer]")).toHaveTextContent(
+      scenarioFeedback.reply.feedback.customer_ar,
+    );
+  });
+
+  it("P14.3: a feedback without customer_ar (older server) shows the normal card", async () => {
+    const { customer_ar: _drop, ...old } = scenarioFeedback.reply.feedback;
+    void _drop;
+    backend([scenarioStart, { ...scenarioFeedback, reply: { ...scenarioFeedback.reply, feedback: old } }]);
+    mount();
+    await ask("تدريب");
+    await waitFor(() => expect(card("scenario_start")).not.toBeNull());
+    await ask("بقوله إني رح أتأكد");
+    await waitFor(() => expect(card("scenario_feedback")).not.toBeNull());
+    const fb = card("scenario_feedback") as HTMLElement;
+    expect(fb.querySelector("[data-customer]")).toBeNull();
+    expect(fb).toHaveTextContent("Suggested response in the training material");
   });
 
   it("feedback alone records the practice: leaving without 'end practice' still counts", async () => {

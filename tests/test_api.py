@@ -190,6 +190,7 @@ def test_scenarios(client: TestClient) -> None:
     assert fb.feedback.option_id == "S01-O2" and fb.mode == "offline" and fb.trace.feedback is not None
     free = ok(client.post("/api/scenarios/S01/feedback", json={"user_text": "سأساعد الزبون"}), ScenarioFeedbackResponse)
     assert free.feedback.strengths_ar == [] and free.feedback.mode == "offline"
+    assert free.feedback.customer_ar and free.feedback.customer_ar == fb.feedback.customer_ar  # P14.3
     err(client.post("/api/scenarios/S01/feedback", json={"option_id": "S02-O1"}), 400, "validation_error", "option_id")
     err(client.post("/api/scenarios/S01/feedback", json={}), 400, "validation_error", None)
     err(client.post("/api/scenarios/S01/feedback", json={"user_text": "x", "option_id": "S01-O1"}), 400,

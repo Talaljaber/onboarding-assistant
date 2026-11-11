@@ -794,6 +794,12 @@ export const ar = {
     unavailable: "الطلبات غير متاحة الآن.",
     changed: "آخر تغيير للحالة: {when}",
   },
+  // P14.3: the customer's pressure line on the first practice feedback.
+  pushback: {
+    title: "الزبون بيضغط عليك",
+    prompt: "كيف تردّ عليه؟ اكتب ردّك الآن.",
+    stuck: "علّقت؟",
+  },
 };
 
 /** Dictionary shape: the same nesting as `ar`, every leaf a string. */

@@ -21,7 +21,7 @@ import { StarterChips } from "./StarterChips";
 import { TracePanel } from "./TracePanel";
 import { TypingIndicator } from "./TypingIndicator";
 import { UserBubble } from "./UserBubble";
-import { activeValue, cardKind, type ReplyItem } from "./model";
+import { activeValue, cardKind, customerTurnIds, type ReplyItem } from "./model";
 import { STARTERS } from "./starters";
 import { useChat } from "./useChat";
 
@@ -153,6 +153,7 @@ function ChatInner() {
         i.type === "reply" && (i.reply.kind === "scenario_start" || i.reply.kind === "scenario_feedback"),
     )?.id;
   const value = active ? activeValue(items, active) : null;
+  const customerIds = customerTurnIds(items);
 
   const userTurns = items.filter((i) => i.type === "user").length;
   const lastItem = items[items.length - 1];
@@ -218,6 +219,7 @@ function ChatInner() {
                   item={item}
                   busy={busy}
                   live={active !== null && item.id === liveId}
+                  customer={customerIds.has(item.id)}
                   traceShown={shown}
                   onToggleTrace={() => toggleTrace(item.id)}
                   onPickOption={chat.pickOption}

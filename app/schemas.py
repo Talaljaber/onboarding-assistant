@@ -299,6 +299,8 @@ class Feedback(_Model):
     suggested_good_response_ar: str
     mode: Mode
     label_ar: str
+    #: P14.3: the scenario's authored customer pressure line (always set by the server; optional for old clients).
+    customer_ar: str | None = None
 
 
 class Proposal(_Model):

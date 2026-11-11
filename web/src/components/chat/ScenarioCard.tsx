@@ -1,5 +1,5 @@
 // Scenario cards (plan D2.4): start (with the three offline options) and feedback (never a score).
-import type { ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import type { Feedback, Option, ScenarioOut } from "@/api/types";
 import { useServerLabel, useT } from "@/i18n";
 import { Button } from "../ui/Button";
@@ -115,6 +115,8 @@ export function ScenarioStartCard({ scenario, label, live, busy, onPick }: Scena
 export interface ScenarioFeedbackCardProps {
   feedback: Feedback;
   live: boolean;
+  /** P14.3: the first feedback of a practice run shows the customer's pressure line and folds the suggested reply. */
+  customer?: boolean;
   onTryAgain: () => void;
   /** Kept for callers; the practice bar owns the "end practice" button. */
   onEnd?: () => void;
@@ -132,11 +134,43 @@ function Block({ title, icon, iconClass, children }: { title: string; icon: Icon
   );
 }
 
+/** P14.3: the customer's authored pressure line as a speech bubble (a data string: always Arabic). */
+function CustomerBubble({ text }: { text: string }) {
+  const t = useT();
+  return (
+    <section data-customer className="mt-4">
+      <h5 className="mb-1.5 flex items-center gap-1.5 text-sm font-bold text-fg-1">
+        <Icon name="user" size={16} className="shrink-0 text-amber-ink" />
+        {t("pushback.title")}
+      </h5>
+      <p
+        lang="ar"
+        dir="rtl"
+        className="rounded-lg rounded-ss-sm border border-line bg-amber-soft px-4 py-2.5 text-base leading-[1.8] text-fg-1"
+      >
+        {text}
+      </p>
+      <p className="mt-1.5 text-sm text-fg-2">{t("pushback.prompt")}</p>
+    </section>
+  );
+}
+
 /** Practice notes after a reply: what went well, what to add, the linked value and the suggested reply. Never a score. */
-export function ScenarioFeedbackCard({ feedback, live, onTryAgain }: ScenarioFeedbackCardProps) {
+export function ScenarioFeedbackCard({ feedback, live, customer = false, onTryAgain }: ScenarioFeedbackCardProps) {
   const t = useT();
   const judged = feedback.strengths_ar.length > 0 || feedback.improve_ar !== null;
   const notEval = useServerLabel(feedback.label_ar, "scenario.notEval");
+  // The customer turn folds the suggested reply behind «علّقت؟» so the trainee answers the pressure first.
+  const pushback = customer && Boolean(feedback.customer_ar);
+  const [open, setOpen] = useState(false);
+  const suggestedId = useId();
+  const suggested = (
+    <Block title={t("scenario.suggested")} icon="book" iconClass="text-brand">
+      <blockquote lang="ar" dir="rtl" className={`${sourceQuote} whitespace-pre-line text-base leading-[1.8] text-fg-1`}>
+        {feedback.suggested_good_response_ar}
+      </blockquote>
+    </Block>
+  );
   return (
     <article data-kind="scenario_feedback" className={`${surface.card} w-full min-w-0 p-4 sm:p-5`}>
       <header>
@@ -154,6 +188,7 @@ export function ScenarioFeedbackCard({ feedback, live, onTryAgain }: ScenarioFee
           {notEval}
         </p>
       </header>
+      {pushback && <CustomerBubble text={feedback.customer_ar!} />}
       {judged ? (
         <>
           {feedback.strengths_ar.length > 0 && (
@@ -184,11 +219,25 @@ export function ScenarioFeedbackCard({ feedback, live, onTryAgain }: ScenarioFee
           {feedback.tip_ar}
         </p>
       )}
-      <Block title={t("scenario.suggested")} icon="book" iconClass="text-brand">
-        <blockquote lang="ar" dir="rtl" className={`${sourceQuote} whitespace-pre-line text-base leading-[1.8] text-fg-1`}>
-          {feedback.suggested_good_response_ar}
-        </blockquote>
-      </Block>
+      {pushback ? (
+        <div className="mt-4">
+          <Button
+            variant="ghost"
+            icon={open ? "chevron-down" : "help"}
+            className="-ms-3"
+            aria-expanded={open}
+            aria-controls={suggestedId}
+            onClick={() => setOpen((v) => !v)}
+          >
+            {t("pushback.stuck")}
+          </Button>
+          <div id={suggestedId} hidden={!open}>
+            {open && suggested}
+          </div>
+        </div>
+      ) : (
+        suggested
+      )}
       {live && (
         <footer className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3">
           <Button variant="secondary" icon="refresh" onClick={onTryAgain}>
