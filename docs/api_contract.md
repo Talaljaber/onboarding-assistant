@@ -284,6 +284,14 @@ server generates «متدرب N». Aliases are demo labels, never real names, em
 
 → `ProgressResponse` `{completed_ids[], percent, done, total}`. 404 unknown profile, 400 missing id.
 
+### PUT /api/progress
+
+Body `ProgressUpdate` `{profile_id, activity_ids[] (1–40), completed = true}` → `ProgressResponse` (the
+server's progress after the change). Ticks and unticks from the Plan and Progress screens, so the manager
+view counts the same activities the employee sees. Idempotent. 400 when an id is not an activity of the
+profile's role plan (`field: "activity_ids"`), 404 unknown profile. The chat confirm card keeps writing
+progress through `POST /api/chat`.
+
 ### GET /api/manager/summary (admin)
 
 → `ManagerSummaryResponse` `{profiles: [{alias, role, percent, activities_done, scenarios_practised,
@@ -328,7 +336,7 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
   `scenario_feedback_request_option.json`, `scenario_feedback.json`, `plan.json`, `quiz.json`,
   `quiz_check_request.json`, `quiz_check.json`, `kb_list.json`, `kb_patch_request.json`, `kb_put.json`,
   `kb_new_request.json`, `kb_post.json`, `kb_reset.json`, `profile_create_request.json`, `profile.json`,
-  `progress.json`, `manager_summary.json`, `health.json`, `health_llm.json`, `admin_login_request.json`,
+  `progress.json`, `progress_update_request.json`, `manager_summary.json`, `health.json`, `health_llm.json`, `admin_login_request.json`,
   `admin_session.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,
   `error_423.json`, `error_500.json`, `error_401.json`, `error_429.json`.

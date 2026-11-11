@@ -63,6 +63,38 @@ describe("useAppState", () => {
     expect(result.current.progress.doneCount).toBe(2);
   });
 
+  it("ticks, unticks and reset are mirrored on the server for the manager view", async () => {
+    const { result } = renderHook(() => useAppState(), { wrapper });
+    act(() => result.current.setRole("Sales"));
+    await waitFor(() => expect(result.current.planStatus).toBe("ready"));
+    await waitFor(() => expect(result.current.profileId).toBe(profile.profile_id));
+    const fetch = vi.mocked(globalThis.fetch);
+    const puts = () =>
+      fetch.mock.calls
+        .filter(([url, init]) => url === "/api/progress" && init?.method === "PUT")
+        .map(([, init]) => JSON.parse(String(init?.body)) as unknown);
+
+    act(() => {
+      result.current.progress.toggle(IDS[0]!);
+    });
+    act(() => {
+      result.current.progress.toggle(IDS[1]!);
+    });
+    act(() => {
+      result.current.progress.toggle(IDS[0]!);
+    });
+    act(() => result.current.progress.reset());
+    const pid = profile.profile_id;
+    expect(puts()).toEqual([
+      { profile_id: pid, activity_ids: [IDS[0]], completed: true },
+      { profile_id: pid, activity_ids: [IDS[1]], completed: true },
+      { profile_id: pid, activity_ids: [IDS[0]], completed: false },
+      { profile_id: pid, activity_ids: [IDS[1]], completed: false },
+    ]);
+    // A failed save (the stub rejects) leaves the browser copy as it is.
+    expect(result.current.progress.doneCount).toBe(0);
+  });
+
   it("progress, quiz results and scenarios are kept per role", async () => {
     const { result } = renderHook(() => useAppState(), { wrapper });
     act(() => result.current.setRole("Sales"));

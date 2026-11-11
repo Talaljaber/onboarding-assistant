@@ -62,6 +62,7 @@ from app.schemas import (
     Profile,
     ProfileCreate,
     ProgressResponse,
+    ProgressUpdate,
     QuizCheckRequest,
     QuizResponse,
     Role,
@@ -325,6 +326,14 @@ def _timed_kb_write(agent: Agent, fn: Callable[[], Any]) -> tuple[Any, int]:
         lock.release()
 
 
+def _progress_of(request: Request, store: Any, profile_id: str, prof: dict[str, Any]) -> ProgressResponse:
+    role = str(prof["role"]) if prof.get("role") in ROLES else "Sales"
+    completed = [i for i in store.get_progress(profile_id) if isinstance(i, str) and _ACTIVITY_RE.match(i)]
+    summary = _agent(request).features.plan.percent(role, completed)
+    return ProgressResponse(completed_ids=completed, percent=summary.percent, done=summary.done,
+                            total=summary.total)
+
+
 # ======================================================================================= routes
 def build_router() -> APIRouter:
     r = APIRouter(prefix="/api")
@@ -458,11 +467,24 @@ def build_router() -> APIRouter:
         prof = store.get_profile(profile_id)
         if not prof:
             raise ApiError("not_found", 404, "unknown profile")
-        role = prof.get("role") if prof.get("role") in ROLES else "Sales"
-        completed = [i for i in store.get_progress(profile_id) if isinstance(i, str) and _ACTIVITY_RE.match(i)]
-        summary = _agent(request).features.plan.percent(role, completed)
-        return _json(ProgressResponse(completed_ids=completed, percent=summary.percent, done=summary.done,
-                                      total=summary.total))
+        return _json(_progress_of(request, store, profile_id, prof))
+
+    @r.put("/progress")
+    def update_progress(body: ProgressUpdate, request: Request) -> JSONResponse:
+        """Ticks from the Plan and Progress screens, so the manager view sees the same progress."""
+        store = _store(request)
+        prof = store.get_profile(body.profile_id)
+        if not prof:
+            raise ApiError("not_found", 404, "unknown profile")
+        role = str(prof["role"]) if prof.get("role") in ROLES else "Sales"
+        known = {a.id for a in _agent(request).features.plan.activities(role)}
+        unknown = [i for i in body.activity_ids if i not in known]
+        if unknown:
+            raise ApiError("validation_error", 400, f"not an activity of the {role} plan: {unknown[0]}",
+                           "activity_ids")
+        if not store.set_progress(body.profile_id, list(body.activity_ids), body.completed):
+            raise ApiError("internal_error", 500, "progress not saved")
+        return _json(_progress_of(request, store, body.profile_id, prof))
 
     @r.get("/manager/summary", dependencies=ADMIN_ONLY)
     def manager_summary(request: Request) -> JSONResponse:

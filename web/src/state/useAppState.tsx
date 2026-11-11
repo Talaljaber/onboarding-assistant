@@ -11,7 +11,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { createProfile, getPlan } from "@/api/client";
+import { createProfile, getPlan, putProgress } from "@/api/client";
 import type { PlanOut, Role } from "@/api/types";
 import { useToast } from "@/components/ui/Toast";
 import { useLang, useT, type Lang } from "@/i18n";
@@ -92,6 +92,15 @@ export interface AppState {
   storageOk: boolean;
   /** Remove everything stored in this browser and reload. */
   clearBrowserData: () => void;
+}
+
+/**
+ * Mirror Plan/Progress ticks on the server (`PUT /api/progress`) so the manager view counts them.
+ * Fire and forget: the browser copy stays the employee's source of truth, so a failure changes nothing on screen.
+ */
+function sendProgress(profileId: string | null | undefined, ids: string[], completed: boolean): void {
+  if (!profileId || ids.length === 0) return;
+  void putProgress({ profile_id: profileId, activity_ids: ids.slice(0, 40), completed });
 }
 
 const AppStateContext = createContext<AppState | null>(null);
@@ -187,8 +196,14 @@ export function AppStateProvider({ children, initial }: AppStateProviderProps) {
     if (!role || profileId || asked.current.has(role)) return;
     asked.current.add(role);
     void createProfile({ role, alias: null }).then((r) => {
-      if (r.ok) patchRole(role, (d) => ({ ...d, profile_id: r.value.profile_id }));
-      else asked.current.delete(role);
+      if (!r.ok) {
+        asked.current.delete(role);
+        return;
+      }
+      patchRole(role, (d) => ({ ...d, profile_id: r.value.profile_id }));
+      // Ticks made before the profile existed.
+      const early = Object.keys(stateRef.current.perRole[role].progress).filter((id) => planIdsRef.current.includes(id));
+      sendProgress(r.value.profile_id, early, true);
     });
   }, [role, profileId, patchRole]);
 
@@ -213,6 +228,7 @@ export function AppStateProvider({ children, initial }: AppStateProviderProps) {
         if (!role) return 0;
         const next = toggleDone(cur(), id);
         patchRole(role, (d) => ({ ...d, progress: next }));
+        sendProgress(stateRef.current.perRole[role].profile_id, [id], id in next);
         return pctOf(next, planIdsRef.current);
       },
       fromProposal: (ids) => {
@@ -222,7 +238,10 @@ export function AppStateProvider({ children, initial }: AppStateProviderProps) {
         return pctOf(next, planIdsRef.current);
       },
       reset: () => {
-        if (role) patchRole(role, (d) => ({ ...emptyRoleData(), thread: d.thread, profile_id: d.profile_id }));
+        if (!role) return;
+        const ticked = Object.keys(cur()).filter((id) => planIdsRef.current.includes(id));
+        sendProgress(stateRef.current.perRole[role].profile_id, ticked, false);
+        patchRole(role, (d) => ({ ...emptyRoleData(), thread: d.thread, profile_id: d.profile_id }));
       },
     };
   }, [role, doneNow, planIds, patchRole]);

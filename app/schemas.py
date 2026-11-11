@@ -736,6 +736,15 @@ class Profile(_Model):
     role: Role
 
 
+class ProgressUpdate(_Model):
+    """Tick (completed=True) or untick plan activities from the Plan and Progress screens.
+    Ids must be activities of the profile's role plan; the reply is the server's progress."""
+
+    profile_id: ProfileId
+    activity_ids: Annotated[list[ActivityId], Field(min_length=1, max_length=40)]
+    completed: bool = True
+
+
 class ProgressResponse(_Model):
     completed_ids: list[ActivityId]
     percent: Percent
@@ -889,6 +898,7 @@ __all__ = [
     "ProgressConfirm",
     "ProgressIn",
     "ProgressResponse",
+    "ProgressUpdate",
     "ProgressSummary",
     "Proposal",
     "QuizCheckRequest",

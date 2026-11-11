@@ -70,6 +70,7 @@ FIXTURES: dict[str, type[BaseModel]] = {
     "error_401.json": s.ErrorBody,
     "error_429.json": s.ErrorBody,
     "admin_login_request.json": s.AdminLogin,
+    "progress_update_request.json": s.ProgressUpdate,
     "admin_session.json": s.AdminSession,
     "error_500.json": s.ErrorBody,
 }
@@ -88,6 +89,7 @@ ENDPOINT_FIXTURES = {
     "POST /api/kb/reset": "kb_reset.json",
     "POST /api/profiles": "profile.json",
     "GET /api/progress": "progress.json",
+    "PUT /api/progress": "progress.json",
     "GET /api/manager/summary": "manager_summary.json",
     "GET /api/health": "health.json",
     "POST /api/admin/login": "admin_session.json",
@@ -102,6 +104,7 @@ REQUEST_MODELS: dict[type[BaseModel], str] = {
     s.KbNewRow: "kb_new_request.json",
     s.ProfileCreate: "profile_create_request.json",
     s.AdminLogin: "admin_login_request.json",
+    s.ProgressUpdate: "progress_update_request.json",
 }
 
 

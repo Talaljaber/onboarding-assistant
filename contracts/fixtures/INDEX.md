@@ -62,7 +62,8 @@ the not-confirmed / out-of-scope questions are illustrative placeholders until
 | `kb_reset.json` | `POST /api/kb/reset` | `KbResetResponse` |
 | `profile_create_request.json` | `POST /api/profiles` body | `ProfileCreate` |
 | `profile.json` | `POST /api/profiles` (201) | `Profile` |
-| `progress.json` | `GET /api/progress?profile_id=` | `ProgressResponse` |
+| `progress.json` | `GET /api/progress?profile_id=`, `PUT /api/progress` | `ProgressResponse` |
+| `progress_update_request.json` | `PUT /api/progress` body | `ProgressUpdate` |
 | `manager_summary.json` | `GET /api/manager/summary` (admin) | `ManagerSummaryResponse` |
 | `admin_login_request.json` | `POST /api/admin/login` body | `AdminLogin` |
 | `admin_session.json` | `POST /api/admin/login`, `GET /api/admin/session` | `AdminSession` |

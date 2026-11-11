@@ -283,6 +283,39 @@ def test_profiles_progress_and_manager(client: TestClient, store: LocalStore) ->
     assert not any(w in r.text for w in ("correct", "score", "grade"))
 
 
+def test_plan_ticks_reach_the_manager_view(client: TestClient) -> None:
+    """Ticks on the Plan/Progress screens (PUT /api/progress) are what the manager view counts."""
+    p = ok(client.post("/api/profiles", json={"role": "Delivery"}), Profile, 201)
+    pid = p.profile_id
+    plan = client.get("/api/plan?role=Delivery").json()
+    ids = [a["id"] for m in plan["milestones"] for a in m["activities"]]
+    two = ids[:2]
+
+    prog = ok(client.put("/api/progress", json={"profile_id": pid, "activity_ids": two}), ProgressResponse)
+    assert prog.completed_ids == two and prog.done == 2 and prog.total == len(ids)
+    again = ok(client.put("/api/progress", json={"profile_id": pid, "activity_ids": two}), ProgressResponse)
+    assert again.done == 2  # idempotent
+
+    def manager_row() -> Any:
+        rows = ok(client.get("/api/manager/summary"), ManagerSummaryResponse).profiles
+        return next(x for x in rows if x.alias == p.alias)
+
+    assert manager_row().activities_done == 2 and manager_row().percent == prog.percent > 0
+
+    off = {"profile_id": pid, "activity_ids": two[:1], "completed": False}
+    left = ok(client.put("/api/progress", json=off), ProgressResponse)
+    assert left.completed_ids == two[1:] and manager_row().activities_done == 1
+    assert ok(client.get(f"/api/progress?profile_id={pid}"), ProgressResponse).completed_ids == two[1:]
+
+    sales_id = next(a["id"] for m in client.get("/api/plan?role=Sales").json()["milestones"] for a in m["activities"])
+    err(client.put("/api/progress", json={"profile_id": pid, "activity_ids": [sales_id]}),
+        400, "validation_error", "activity_ids")
+    err(client.put("/api/progress", json={"profile_id": pid, "activity_ids": []}), 400, "validation_error")
+    err(client.put("/api/progress", json={"profile_id": "nope", "activity_ids": two}), 400, "validation_error")
+    unknown = "00000000-0000-4000-8000-000000000000"
+    err(client.put("/api/progress", json={"profile_id": unknown, "activity_ids": two}), 404, "not_found")
+
+
 def test_turn_logs_hold_no_text(client: TestClient, store: LocalStore) -> None:
     resp = chat(client, "متى تأسست مجموعة الدادا؟")
     logs = store.table_rows("turn_logs")

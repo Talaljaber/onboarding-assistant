@@ -33,6 +33,7 @@ import {
   type Profile,
   type ProfileCreate,
   type ProgressResponse,
+  type ProgressUpdate,
   type QuizCheckRequest,
   type QuizCheckResponse,
   type QuizResponse,
@@ -202,6 +203,10 @@ export const createProfile = (body: ProfileCreate, signal?: AbortSignal) =>
 
 export const getProgress = (profileId: string, signal?: AbortSignal) =>
   request<ProgressResponse>(`/api/progress?profile_id=${q(profileId)}`, { guard: isProgressResponse, signal });
+
+/** Save Plan/Progress ticks on the server so the manager view counts them. */
+export const putProgress = (body: ProgressUpdate, signal?: AbortSignal) =>
+  request<ProgressResponse>("/api/progress", { method: "PUT", body, guard: isProgressResponse, signal });
 
 export const getManagerSummary = (signal?: AbortSignal) =>
   request<ManagerSummaryResponse>("/api/manager/summary", { guard: isManagerSummaryResponse, signal, admin: true });

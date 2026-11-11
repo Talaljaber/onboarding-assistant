@@ -497,6 +497,13 @@ export interface Profile {
   role: Role;
 }
 
+/** `PUT /api/progress`: tick (completed, the default) or untick plan activities. */
+export interface ProgressUpdate {
+  profile_id: string;
+  activity_ids: string[];
+  completed?: boolean;
+}
+
 export interface ProgressResponse {
   completed_ids: string[];
   percent: number;
