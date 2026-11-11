@@ -587,3 +587,41 @@ describe("English helper translation (P11.1)", () => {
     expect(screen.getByText("Shown for an English question")).toBeInTheDocument();
   });
 });
+
+describe("small talk (P12.2)", () => {
+  const smallTalk = (textAr: string, textEn: string | null, mode: "llm" | "offline") => ({
+    ...text,
+    mode,
+    reply: { ...text.reply, text_ar: textAr, text_en: textEn },
+    trace: { ...text.trace, mode, steps: ["guards:none", "router:greet", "small_talk:how_are_you", "pool", "render"] },
+  });
+  const AR = "أنا بخير، شكراً لسؤالك! كيف بقدر أساعدك؟";
+  const EN = "I'm doing well, thanks for asking! How can I help?";
+
+  it("an English message shows the English reply only, left to right, with no chips", async () => {
+    backend([smallTalk(AR, EN, "offline")]);
+    mount();
+    await ask("how are u");
+    await waitFor(() => expect(screen.getByText(EN)).toBeInTheDocument());
+    const p = screen.getByText(EN);
+    expect(p).toHaveAttribute("dir", "ltr");
+    expect(p).toHaveAttribute("lang", "en");
+    expect(screen.queryByText(AR)).toBeNull();
+    expect(screen.queryByText("Fixed reply")).toBeNull();
+    expect(screen.queryByText("Offline mode")).toBeNull();
+    expect(screen.queryByText(/the Arabic text is the reference/)).toBeNull();
+  });
+
+  it("an Arabic message shows the Arabic reply only, right to left", async () => {
+    backend([smallTalk(AR, null, "llm")]);
+    mount();
+    await ask("كيفك");
+    await waitFor(() => expect(screen.getByText(AR)).toBeInTheDocument());
+    const p = screen.getByText(AR);
+    expect(p).toHaveAttribute("dir", "rtl");
+    expect(p).toHaveAttribute("lang", "ar");
+    expect(screen.queryByText(EN)).toBeNull();
+    expect(screen.queryByText("Fixed reply")).toBeNull();
+    expect(screen.queryByText("Verified, reused")).toBeNull();
+  });
+});

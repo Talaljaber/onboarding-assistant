@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
-from app import tools
+from app import smalltalk, tools
 from app.config import Settings, get_settings
 from app.encoder import get_encoder
 from app.errors import ApiError
@@ -46,7 +46,7 @@ from app.schemas import (
     TraceRouter,
 )
 from app.textnorm import normalize, tokens
-from app.translate import fixed_english, translate_result, wants_translation
+from app.translate import translate_result, wants_translation
 
 TURN_BUDGET_S = 5.0
 #: P8: the answer panel (judges + an escalation call of up to 6 s) gets a 9 s turn; 5 s with the panel off.
@@ -59,6 +59,7 @@ FOLLOWUP_CUE = re.compile(
 )
 DEFAULT_ROLE = tools.DEFAULT_ROLE
 AGENT_RESERVE_S = 2.5  # §2.2: the tool choice gets min(1.5 s, remaining - 2.5 s)
+SMALL_TALK_KEYS_MAX = 4096  # P12.2: per-profile small-talk counters kept in memory (cleared past this)
 RECOVERY_AFTER_S = 60.0  # §C6: one automatic re-probe on the first turn > 60 s after a failed probe
 #: Call failures that mean the LLM is gone for now: flip to offline until the next probe succeeds.
 HARD_FAILURES = frozenset({"unauthorized", "no_credits", "unreachable"})
@@ -150,6 +151,7 @@ class Agent:
                                                               settings.data_ours)
         self.llm_probe = Probe(ok=False, reason=(llm.reason if llm is not None else None) or "not_probed")
         self._recovery_tried = False
+        self._small_talk_turns: dict[str, int] = {}
 
     # ------------------------------------------------------------------ LLM state
     def llm_on(self, force_offline: bool = False) -> bool:
@@ -244,7 +246,6 @@ class Agent:
                 tb.mode = "offline"
             result = self.execute(r, req, budget, tb, use_llm=exec_llm)
 
-        result = fixed_english(result, req.lang, req.message)
         if wants_translation(req.lang, result, req.message):  # English UI or English question → helper translation
             if use_llm:
                 self._note_hard_failure()  # a 401/402 in the answer call must not be retried here
@@ -321,7 +322,8 @@ class Agent:
                   milestones=MILESTONES)
         if tb is not None:
             tb.router = r
-        if not use_llm or self.llm is None or r.guard is not None or state.active_scenario:
+        if not use_llm or self.llm is None or r.guard is not None or state.active_scenario or r.tool == "greet":
+            # P12.2: small talk the router sees skips the tool-choice call (no «?» → knowledge refusal)
             return r, "offline"
 
         deadline = max(0.0, min(self.settings.llm_agent_deadline_s, budget.remaining() - AGENT_RESERVE_S))
@@ -381,7 +383,7 @@ class Agent:
         if tool == "search_knowledge":
             run_tool, args = "answer_from_rows", {"question": args.get("query"), "list_topic": None}
         elif tool == "greet":
-            args = {"kind": r.args.get("kind", "greeting") if r.tool == "greet" else "greeting"}
+            args = {"intent": "greeting"}
         elif tool == "propose_progress":
             args = {"milestone": args["milestone"], "activity_ids": None}
         chosen = Route(run_tool, args, r.confidence, f"llm choice ({'cache' if cached else 'call'})")
@@ -435,12 +437,30 @@ class Agent:
         if r.tool == "start_quiz":
             return tools.start_quiz(role=role or DEFAULT_ROLE, features=self.features, state=state)
         if r.tool == "greet":
-            return tools.greet(r.args.get("kind", "greeting"), role=req.role, state=state)
+            return self._small_talk(str(r.args.get("intent") or "greeting"), req, budget, tb, state, llm)
         # answer_from_rows (and search_knowledge, which is never returned alone); the role is not passed.
         return tools.answer_from_rows(
             req.message, query=self._query(req), retriever=self.retriever, kb=self.kb, state=state, llm=llm,
             budget_s=self._answer_s(budget), previous=self._previous(req), list_topic=r.args.get("list_topic"),
             injection=tb.injection_suspected,
+        )
+
+    def _small_talk(self, intent: str, req: ChatRequest, budget: TurnBudget, tb: TraceBuilder, state: ClientState,
+                    llm: LLM | None) -> tools.ToolResult:
+        """P12.2: a human small-talk reply (model, verified, or the offline pool). The model sees the message
+        only (no role, name, profile, row or history); a message that looks like an injection gets the pool.
+        The pick varies with a per-thread counter so repeated greetings do not repeat the same sentence."""
+        key = req.profile_id or "-"
+        if len(self._small_talk_turns) > SMALL_TALK_KEYS_MAX:
+            self._small_talk_turns.clear()
+        turn = self._small_talk_turns.get(key, 0)
+        self._small_talk_turns[key] = turn + 1
+        use = llm if llm is not None and not tb.injection_suspected else None
+        docs = sorted({row.source_document for row in self.kb.rows()}) if use is not None else []
+        return smalltalk.small_talk(
+            intent, message=req.message, ui_lang=req.lang, first=req.last_user_message is None,
+            seed=smalltalk.seed_of(req.message, turn), state=state, llm=use,
+            deadline_s=max(0.0, budget.remaining() - ANSWER_MARGIN_S), documents=docs,
         )
 
     def _previous(self, req: ChatRequest) -> str | None:

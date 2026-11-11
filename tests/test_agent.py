@@ -122,7 +122,8 @@ def test_plan_quiz_greet(agent: Agent) -> None:
     assert q.reply.kind == "quiz" and q.reply.quiz and len(q.reply.quiz) == 5
     assert "correct_option" not in q.model_dump_json()
     g = ask(agent, "مرحبا", role="Sales")
-    assert g.reply.kind == "text" and "المبيعات" in g.reply.text_ar
+    assert g.reply.kind == "text" and "«تدريب»" in g.reply.text_ar and not g.reply.sources  # P12.2 first greeting
+    assert "small_talk:greeting" in g.trace.steps and "pool" in g.trace.steps
 
 
 def test_followup_rule(agent: Agent) -> None:

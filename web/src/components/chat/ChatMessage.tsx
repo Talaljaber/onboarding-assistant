@@ -120,7 +120,8 @@ export function ChatMessage(p: ChatMessageProps) {
 
   return (
     <AssistantFrame
-      mode={item.mode}
+      // P12.2: small talk (a plain text reply) is calm: no mode, cached or lock chip; the trace still tells
+      mode={kind === "text" ? null : item.mode}
       cached={item.cached}
       fixed={kind === "refusal" || kind === "employment" || kind === "unconfirmed"}
       material={material}

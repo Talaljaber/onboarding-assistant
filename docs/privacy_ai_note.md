@@ -91,6 +91,13 @@ With a key, per message, at most:
   contain; lengths; merges only between neighbours on the same page within 600 characters) before use,
   and a reply is cached only when every value passed. Without the tick nothing about the document leaves
   the laptop;
+- **small talk (a greeting, "how are you", thanks, goodbye, "who are you", "ok", or an unclear message such
+  as a lone «?»):** the message only, with its small-talk type, a style word and whether it is the start of
+  the conversation. No tool-choice call is made for these, and nothing else is sent: not the role, the
+  intern's name, the profile, any knowledge-base row or any earlier message. The reply is checked (no
+  numbers, contacts, links, ids, document or person names, policy words such as leave or salary, right
+  language, short) before it is shown or cached; otherwise a fixed reply is used. A message that looks
+  like a prompt injection gets a fixed reply and is not sent;
 - **status probe:** one tiny fixed test message (`Reply with {"ping":true}`, at most 10 tokens) at
   start, on a throttled status re-check, and once after a failure.
 

@@ -102,26 +102,28 @@ export function AssistantFrame({ mode, cached, fixed, material, hasTrace, traceS
   );
 }
 
-/** A plain assistant message: greeting, small talk, plan answers. `textEn`: the server's fixed English line, shown first. */
+/**
+ * A plain assistant message (small talk, short server notes). P12.2: one language only. `textEn`, when the
+ * server sets it, is the reply itself in English (the person wrote English) and replaces the Arabic; otherwise
+ * the Arabic `text` shows. No "fixed English line" note: that note belongs to knowledge texts.
+ */
 export function AssistantBubble({ text, badge, textEn }: { text: string; badge?: ReactNode; textEn?: string | null }) {
-  const dir = textDir(text);
+  const shown = textEn ? textEn : text;
+  const dir = textEn ? "ltr" : textDir(text);
   return (
     <div
       data-kind="text"
+      data-lang={dir === "rtl" ? "ar" : "en"}
       className="w-fit max-w-full rounded-xl rounded-ss-sm border border-line bg-surface-0 px-4 py-3 shadow-card sm:max-w-[92%] sm:px-5 sm:py-3.5"
     >
       {badge && <div className="mb-2">{badge}</div>}
-      {textEn && (
-        <p data-text-en lang="en" dir="ltr" className="mb-2 whitespace-pre-line text-base leading-7 text-fg-1">
-          {textEn}
-        </p>
-      )}
       <p
+        {...(textEn ? { "data-text-en": "" } : {})}
         lang={dir === "rtl" ? "ar" : "en"}
         dir={dir}
-        className={`whitespace-pre-line leading-[1.8] ${textEn ? "text-sm text-fg-2" : "text-base text-fg-1"}`}
+        className="whitespace-pre-line text-base leading-[1.8] text-fg-1"
       >
-        {text}
+        {shown}
       </p>
     </div>
   );

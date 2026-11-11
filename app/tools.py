@@ -52,15 +52,6 @@ from app.schemas import (
 )
 
 DEFAULT_ROLE = "Sales"
-GREETING_AR = {
-    "Sales": "أهلاً بك في مسار المبيعات. ",
-    "Delivery": "أهلاً بك في مسار التوصيل. ",
-    None: "أهلاً بك. ",
-}
-GREETING_BODY_AR = (
-    "اسألني عن الشركة وقيمها وسياسات التهيئة، أو اكتب «تدريب» لنبدأ موقفاً عملياً. كل إجابة تظهر مع مصدرها."
-)
-THANKS_AR = "على الرحب والسعة. اسألني عن الشركة وقيمها وسياسات التهيئة متى شئت."
 PROGRESS_ALL_DONE_AR = "أنشطة «{m}» مسجّلة كمكتملة من قبل."
 QUIZ_INTRO_AR = "إليك اختباراً تدريبياً قصيراً."
 QUIZ_INTRO_FIVE_AR = "إليك اختباراً تدريبياً قصيراً من خمسة أسئلة."
@@ -558,9 +549,13 @@ def start_quiz(*, role: str, features: Features, state: ClientState) -> ToolResu
     return ToolResult(reply, state, ["render"])
 
 
-def greet(kind: str, *, role: str | None, state: ClientState) -> ToolResult:
-    text = THANKS_AR if kind == "thanks" else GREETING_AR.get(role, GREETING_AR[None]) + GREETING_BODY_AR
-    return ToolResult(_reply("text", text), state, ["render"])
+def greet(intent: str, *, state: ClientState, message: str = "", ui_lang: str = "ar", first: bool = False,
+          seed: int = 0) -> ToolResult:
+    """Offline small-talk reply from the pool (P12.2); the agent calls `app.smalltalk.small_talk` directly
+    so the LLM path can run."""
+    from app.smalltalk import small_talk
+
+    return small_talk(intent, message=message, ui_lang=ui_lang, first=first, seed=seed, state=state)
 
 
 __all__ = [

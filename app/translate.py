@@ -44,29 +44,6 @@ def asked_in_english(message: str) -> bool:
     return latin >= 3 and latin > 2 * arabic
 
 
-#: Fixed English for the fixed small-talk replies (never model output).
-GREETING_BODY_EN = ("Ask me about the company, its values and onboarding policies, or type \"practice\" to start a "
-                    "scenario. Every answer shows its source.")
-GREETING_EN = {"Sales": "Welcome to the Sales track. ", "Delivery": "Welcome to the Delivery track. ", None: "Welcome. "}
-THANKS_EN = "You're welcome. Ask me about the company, its values and onboarding policies any time."
-
-
-def fixed_english(result: tools.ToolResult, lang: str, message: str) -> tools.ToolResult:
-    """Greeting and thanks replies get a fixed English line when the UI or the question is English."""
-    reply = result.reply
-    if reply.kind != "text" or not (lang == "en" or asked_in_english(message)):
-        return result
-    text_en = None
-    if reply.text_ar == tools.THANKS_AR:
-        text_en = THANKS_EN
-    else:
-        for role, head in tools.GREETING_AR.items():
-            if reply.text_ar == head + tools.GREETING_BODY_AR:
-                text_en = GREETING_EN[role] + GREETING_BODY_EN
-                break
-    return result if text_en is None else replace(result, reply=reply.model_copy(update={"text_en": text_en}))
-
-
 def wants_translation(lang: str, result: tools.ToolResult, message: str = "") -> bool:
     """Only an `answer` reply is translated: in the English UI, or when the question was asked in English."""
     return result.reply.kind == "answer" and (lang == "en" or asked_in_english(message))

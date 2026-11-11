@@ -73,6 +73,9 @@ any AI service. The assistant answers only from the competition knowledge-base r
 - a clear miss shows the fixed refusal.
 All five features work offline.
 
+The assistant chats naturally (greetings, "how are you", thanks, "ok", a lone «?»), but every fact
+comes only from the knowledge base, with its source.
+
 **With a key.** Copy `.env.example` to `.env` and set `OPENROUTER_API_KEY`. The header mode chip then
 shows «متصل بالنموذج». The model `deepseek/deepseek-v4.1-flash` (pinned, via OpenRouter, reasoning off)
 chooses the tool and marks the checklist for free-text scenario replies; if its tool choice is invalid
