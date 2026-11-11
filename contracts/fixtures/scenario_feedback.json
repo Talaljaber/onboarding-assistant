@@ -49,6 +49,7 @@
       "cached": false
     },
     "injection_suspected": false,
+    "panel": null,
     "steps": [
       "llm:feedback",
       "verify:ok",

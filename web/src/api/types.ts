@@ -256,6 +256,26 @@ export interface TraceFeedback {
   cached: boolean;
 }
 
+export type PanelRole = "sanitizer" | "answerer" | "citation_judge" | "coverage_judge" | "escalation";
+
+export interface TracePanelVote {
+  role: PanelRole;
+  model: string;
+  ok: boolean;
+  confidence?: number | null;
+  note?: string | null;
+  latency_ms?: number | null;
+  cached?: boolean;
+}
+
+export interface TracePanel {
+  votes: TracePanelVote[];
+  confidence?: number | null;
+  accepted: boolean;
+  escalated_to?: string | null;
+  single_call: boolean;
+}
+
 export interface Trace {
   request_id: string;
   mode: Mode;
@@ -267,6 +287,7 @@ export interface Trace {
   answer: TraceAnswer | null;
   feedback: TraceFeedback | null;
   injection_suspected: boolean;
+  panel?: TracePanel | null;
   steps: string[];
   latency_ms: number;
 }

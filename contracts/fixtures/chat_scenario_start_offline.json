@@ -65,6 +65,7 @@
     "answer": null,
     "feedback": null,
     "injection_suspected": false,
+    "panel": null,
     "steps": [
       "guards:none",
       "router:start_scenario",

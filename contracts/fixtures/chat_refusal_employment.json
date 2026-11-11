@@ -139,6 +139,7 @@
     },
     "feedback": null,
     "injection_suspected": false,
+    "panel": null,
     "steps": [
       "guards:employment",
       "retrieve:18",

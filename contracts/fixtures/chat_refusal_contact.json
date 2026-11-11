@@ -44,6 +44,7 @@
     "answer": null,
     "feedback": null,
     "injection_suspected": false,
+    "panel": null,
     "steps": [
       "guards:contact",
       "render"

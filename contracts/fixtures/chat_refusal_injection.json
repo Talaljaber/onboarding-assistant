@@ -135,6 +135,7 @@
     },
     "feedback": null,
     "injection_suspected": true,
+    "panel": null,
     "steps": [
       "guards:none",
       "agent:answer_from_rows",

@@ -53,6 +53,7 @@
     "answer": null,
     "feedback": null,
     "injection_suspected": false,
+    "panel": null,
     "steps": [
       "confirm:Day 30",
       "validate:2",

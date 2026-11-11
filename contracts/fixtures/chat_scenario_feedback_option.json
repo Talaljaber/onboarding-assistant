@@ -63,6 +63,7 @@
       "cached": false
     },
     "injection_suspected": false,
+    "panel": null,
     "steps": [
       "guards:none",
       "state:active_scenario",

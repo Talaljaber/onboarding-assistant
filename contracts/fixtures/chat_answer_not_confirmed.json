@@ -139,6 +139,7 @@
     },
     "feedback": null,
     "injection_suspected": false,
+    "panel": null,
     "steps": [
       "guards:none",
       "router:answer_from_rows",

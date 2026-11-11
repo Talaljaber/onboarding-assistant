@@ -423,6 +423,28 @@ class TraceFeedback(_Model):
     cached: bool = False
 
 
+class TracePanelVote(_Model):
+    """One panel member's verdict (contract addition P8, D-P8-contract)."""
+
+    role: Literal["sanitizer", "answerer", "citation_judge", "coverage_judge", "escalation"]
+    model: str
+    ok: bool
+    confidence: Annotated[float, Field(ge=0.0, le=1.0)] | None = None
+    note: Annotated[str, Field(max_length=200)] | None = None
+    latency_ms: NonNeg | None = None
+    cached: bool = False
+
+
+class TracePanel(_Model):
+    """The LLM panel for one answer: votes, the agreed confidence and whether it escalated."""
+
+    votes: list[TracePanelVote] = []
+    confidence: Annotated[float, Field(ge=0.0, le=1.0)] | None = None
+    accepted: bool = False
+    escalated_to: str | None = None
+    single_call: bool = False
+
+
 class Trace(_Model):
     request_id: str
     mode: Mode
@@ -434,6 +456,7 @@ class Trace(_Model):
     answer: TraceAnswer | None = None
     feedback: TraceFeedback | None = None
     injection_suspected: bool = False
+    panel: TracePanel | None = None
     steps: Annotated[list[str], Field(min_length=1)]
     latency_ms: NonNeg
 
