@@ -67,6 +67,7 @@ from app.schemas import (
 from app.store import alias_problem, store_status
 
 KB_LOCK_WAIT_S = 2.0
+PROBE_MIN_INTERVAL_S = 10.0  # `/api/health?probe=1` re-probes the LLM at most this often
 _ACTIVITY_RE = re.compile(r"^[A-Z]{1,2}-[A-Za-z0-9-]{1,32}$")
 _BODY_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 # The web client is fully bundled (scripts, styles, fonts under /assets) and talks to its own origin only.
@@ -445,8 +446,9 @@ def build_router() -> APIRouter:
     def health(request: Request, probe: bool = False) -> JSONResponse:
         st = request.app.state
         agent = _agent(request)
-        if probe:
-            agent.probe_llm()
+        last = getattr(agent.llm, "probed_at", None)
+        if probe and (last is None or time.monotonic() - last >= PROBE_MIN_INTERVAL_S):
+            agent.probe_llm()  # throttled: each probe is a (tiny) paid call
         llm = agent.llm
         mode = "llm" if agent.llm_on() else "offline"
         chats = [c for c in (getattr(llm, "chat", None), getattr(llm, "escalation", None)) if c is not None]

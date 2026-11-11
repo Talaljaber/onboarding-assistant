@@ -368,3 +368,11 @@ def test_key_never_in_responses_or_log_file(llm_app: Callable[..., TestClient]) 
     for line in logged.splitlines():
         event = json.loads(line)
         assert "prompt" not in event and "messages" not in event and "message_text" not in event
+
+
+def test_health_probe_is_throttled(llm_app: Callable[..., TestClient]) -> None:
+    c = llm_app(None)
+    calls = len(c.script.requests)  # type: ignore[attr-defined]
+    for _ in range(5):
+        assert c.get("/api/health?probe=1").status_code == 200
+    assert len(c.script.requests) == calls  # type: ignore[attr-defined]  # within 10 s of the startup probe
