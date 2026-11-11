@@ -62,19 +62,24 @@ any AI service. The assistant answers only from the competition knowledge-base r
 All five features work offline.
 
 **With a key.** Copy `.env.example` to `.env` and set `OPENROUTER_API_KEY`. The header mode chip then
-shows «متصل بالنموذج». The model `deepseek/deepseek-v4.1-flash` (pinned, via OpenRouter) chooses the
-tool, words the answer from the cited rows, and marks the checklist for free-text scenario replies.
-If its tool choice is invalid or not allowed, the rule router decides instead. The server checks every
-answer before it is shown (cited ids were sent, a verbatim quote per id, every number found in the cited
-rows or the question, no contacts or links). A reply that fails a check is dropped and the offline
-result is shown instead.
+shows «متصل بالنموذج». The model `deepseek/deepseek-v4.1-flash` (pinned, via OpenRouter, reasoning off)
+chooses the tool and marks the checklist for free-text scenario replies; if its tool choice is invalid
+or not allowed, the rule router decides instead. Knowledge questions go to an **answer panel**: flash
+runs a sanitizer and the answerer in parallel, then a citation judge and a coverage judge in parallel on
+the verified draft. If both judges agree with confidence ≥ 0.7 the draft is sent; otherwise the turn
+escalates once to `z-ai/glm-5.3` (low reasoning effort). Judges never add text or ids. A refusal is
+reopened only when the retrieval band is "answer". Greetings, plan, quiz, progress and scenario turns
+use one flash call or none. Every reply, flash or GLM, passes the server verifier (cited ids were sent,
+a verbatim quote per id, every number found in the cited rows or the question, no contacts or links).
+A reply that fails is dropped and the offline result is shown instead.
 
 - The employment and contact guards run before anything else; a guarded message never reaches the model.
 - The header switch «تلقائي» / «بلا اتصال» forces offline mode for every request, even with a key.
-- No key, no credit, no network, a rate limit or a slow reply (5 s turn budget) all fall back to the
-  offline answer in the same request, with the reason in the trace. No error is shown for these.
+- No key, no credit, no network, a rate limit or a slow reply (9 s turn budget with the panel, 5 s
+  otherwise) all fall back to the offline answer in the same request, with the reason in the trace. No
+  error is shown for these.
 - Spending is capped in code at USD 3 (`.cache/budget.json`). Settings are pinned: temperature 0,
-  seed 42, `data_collection: deny`, reasoning off.
+  seed 42, `data_collection: deny` on every call. Panel stages are cached only after validation.
 
 **Database (optional).** With the Supabase variables in `.env`, the server stores the knowledge base
 with edit history, demo profiles, progress, quiz and scenario attempts (ids and value labels, no typed
@@ -125,31 +130,35 @@ evaluation. Any network attempt would raise an error and stop the run.
 ```
 
 Output: `results/results.csv` (question, expected ids, answer, cited ids, correctness columns, latency)
-and `results/summary.md`. A held-out set of 50 questions was written blind by a separate author and
-sealed. It was run once, after prompts and thresholds were frozen (commit `c6ea919`, 2026-11-11); only
-its totals are published. Thresholds and prompts were chosen on DEV only. The official jury test file
-was never used to tune anything.
+and `results/summary.md`. Two held-out sets of 50 questions each were written blind and sealed; only
+their totals are published. Held-out 1 was run once before the answer panel (freeze `c6ea919`).
+Held-out 2 is a new set, run once on frozen commit `e45fb7b` after all panel tuning. Thresholds and
+prompts were chosen on DEV only. The official jury test file was never used to tune anything.
 
 ### Results
 
 | Set · mode | Correct | Answerable refused | Unanswerable refused (or "not confirmed") | Invented contacts |
 |---|---|---|---|---|
 | DEV · offline | 106/154 (68.8%) | 0/80 | 13/43 (40/43) | 0 |
-| DEV · AI | 142/154 (92.2%) | 0/80 | 43/43 | 0 |
-| Held-out · offline | 25/50 (50.0%) | 2/26 | 5/14 (14/14) | 0 |
-| Held-out · AI | 43/50 (86.0%) | 0/26 | 14/14 | 0 |
+| DEV · AI (panel) | 152/154 (98.7%) | 0/80 | 43/43 | 0 |
+| Held-out 2 · offline | 26/50 (52.0%) | 1/30 | 4/10 (10/10) | 0 |
+| Held-out 2 · AI (panel) | 45/50 (90.0%) | 0/30 | 10/10 | 0 |
 
-On the unseen held-out set, offline mode answered 25 of 50 correctly and refused 2 answerable
-questions; AI mode answered 43 of 50 correctly and refused none. Neither mode invented a contact.
+DEV AI mode was 142/154 before the panel. On the unseen held-out 2 set, AI mode answered 45 of 50
+correctly (28 of 30 answerable) and refused no answerable question; offline mode answered 26 of 50 and
+refused 1. Neither mode invented a contact. **The goal set on 11 Nov was ≥ 46/50; it was missed by
+one.** The 5 AI-mode misses: 2 answerable questions answered wrong, 2 guard rows and 1 progress row (the
+last three are not handled by the panel). The earlier held-out 1 run, before the panel, scored AI 43/50
+and offline 25/50.
 
 DEV offline: 62 of 80 answerable questions answered correctly, 18 answered wrong or only "not
 confirmed", none refused. Top-1 retrieval 72/80. Offline answer latency p50 ≈ 11 ms, p95 ≈ 14 ms
-([`docs/perf.md`](docs/perf.md)). AI mode latency (fresh, uncached DEV run) p50 1516 ms, p95 3118 ms;
-held-out p50 1586 ms, p95 4102 ms. The verifier rejected about 1% of AI answers on DEV, so the optional
-second model was not enabled. Jury block (reported only, never tuned on): 9/9 in both modes. Red team
-(20 adversarial prompts, offline): 19/20 ([`docs/redteam.md`](docs/redteam.md)). Total API spend for the
-whole build, evaluations included: 0.054 USD of the 3.00 USD cap. Full tables:
-[`results/summary.md`](results/summary.md).
+([`docs/perf.md`](docs/perf.md)). AI mode on held-out 2 (uncached): p50 2.6 s, p95 5.7 s; 11 of 41
+panel turns escalated to GLM (27%); cost about 0.085 USD per 100 questions. Jury block (reported only,
+never tuned on): 9/9 in both modes. Red team (20 adversarial prompts): AI mode 17/20 (16/20 before the
+panel), offline 19/20; every safety check held, and the misses are over-refusals (RT07, RT09, and RT20,
+the contact guard inside a practice turn) ([`docs/redteam.md`](docs/redteam.md)). Browser end-to-end
+2/2, AI-mode API smoke OK, 683 Python tests. Full tables: [`results/summary.md`](results/summary.md).
 
 ## 6. Checks and tests
 
@@ -164,9 +173,9 @@ The web client is prebuilt in `web/dist`; judges do not need Node. To rebuild:
 
 ## 7. Limitations (honest)
 
-- **Offline mode is weaker on unseen wording.** On the held-out set it answered 25/50 correctly
-  (AI mode 43/50) and refused 2 of 26 answerable questions. It refused 5 of 14 unanswerable questions
-  outright; the other 9 got the «لا أجد إجابة مؤكدة» card with the closest row, which the user must
+- **Offline mode is weaker on unseen wording.** On held-out 2 it answered 26/50 correctly
+  (AI mode 45/50) and refused 1 of 30 answerable questions. It refused 4 of 10 unanswerable questions
+  outright; the other 6 got the «لا أجد إجابة مؤكدة» card with the closest row, which the user must
   check. On DEV it refused 13 of 43 unanswerable questions outright, 27 got that card and 3 got a wrong
   confident answer.
 - **Offline answers are the row verbatim.** Offline mode cannot combine two rows or answer only part of
@@ -175,6 +184,7 @@ The web client is prebuilt in `web/dist`; judges do not need Node. To rebuild:
   have no anchor questions, so a question about them may show "not confirmed" offline.
 - **AI mode needs a key and the network.** Without them the app is offline-only. AI answers are checked,
   but the checks test grounding (ids, quotes, numbers, contacts), not whether the wording is the best.
+  The held-out 2 goal (≥ 46/50) was missed by one; escalated turns are slower (within the 9 s budget).
 - **Knowledge facts need approval.** Some facts are paraphrased from Dada materials and need Dada's
   approval before any external release.
 - **Fictional examples.** The scenarios (with our reply options and checklists), the 90-day plan, the
@@ -188,7 +198,7 @@ The web client is prebuilt in `web/dist`; judges do not need Node. To rebuild:
   to be confirmed.
 - **Five features only, small knowledge base.** 18 rows. No HR procedures beyond them, no employment
   decisions (questions about pay, firing or passing probation get a fixed refusal when the guard
-  patterns match them; on the held-out set 5 of 7 guard questions were handled as expected).
+  patterns match them; on each held-out set 5 of 7 guard questions were handled as expected).
 - **Not a product.** No accounts, no deployment. Profiles are demo aliases such as «متدرب ١».
 
 ## 8. Troubleshooting
@@ -211,10 +221,12 @@ Full note: [`docs/privacy_ai_note.md`](docs/privacy_ai_note.md).
 - **Knowledge source:** only the official `knowledge_base.csv` (18 rows), kept unchanged and hashed in
   `data/official/`. Live edits are stored separately and badged «معدّل مباشرة».
 - **Models:** `intfloat/multilingual-e5-small`, int8 ONNX, runs locally for search (`models/e5`).
-  Optional: `deepseek/deepseek-v4.1-flash` via OpenRouter. No model was trained or fine-tuned.
+  Optional: `deepseek/deepseek-v4.1-flash` via OpenRouter, and `z-ai/glm-5.3` via OpenRouter on
+  escalated answer turns only. No model was trained or fine-tuned.
 - **What leaves the laptop:** without a key, nothing goes to an AI service. With a key, the question,
   the previous question (only for short follow-ups), the knowledge-base rows and practice replies go to
-  OpenRouter with data collection denied. Never the role, alias, progress or chat history.
+  OpenRouter with data collection denied (GLM sees the question and rows only on escalated turns).
+  Never the role, alias, progress or chat history.
 - **What is stored:** no chat text on any server. Supabase (or the local SQLite file) holds the
   knowledge base and its history, demo profiles, progress, attempt ids and turn metadata. The browser
   keeps the role, progress, quiz results and the chat thread in local storage («امسح بيانات هذا
@@ -230,7 +242,7 @@ Full note: [`docs/privacy_ai_note.md`](docs/privacy_ai_note.md).
 | Path | What |
 |---|---|
 | `app/` | FastAPI server: agent loop, tools, retrieval, guards, router, verifier, LLM client, store |
-| `prompts/` | the three prompt files (tool choice, answer, scenario feedback) |
+| `prompts/` | prompt files (tool choice, answer, scenario feedback, answer-panel stages) |
 | `data/official/` | the six official CSVs (hashed, never edited) |
 | `data/ours/` | files we wrote: out-of-scope examples, anchor questions, scenario checklists and options, plan activities, DEV set |
 | `web/` | React client; `web/dist` is the built copy the server serves |
