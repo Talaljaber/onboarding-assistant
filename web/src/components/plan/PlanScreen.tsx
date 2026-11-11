@@ -1,65 +1,151 @@
 // #/plan: suggested (not official) 90-day plan: banner, four-milestone timeline with the role's
 // checklist, the Day 30 note (not the K14 review), and the printable Day 90 summary.
 import { useState } from "react";
-import type { MilestoneKey } from "@/api/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { cn } from "@/components/ui/cn";
+import { Icon } from "@/components/ui/Icon";
 import { Loadable } from "@/components/ui/Loadable";
-import { useT, type DictKey } from "@/i18n";
+import { Notice } from "@/components/ui/Notice";
+import { Page, PageHeader } from "@/components/ui/Page";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import { surface } from "@/components/ui/recipes";
+import { useT } from "@/i18n";
 import { useAppState } from "@/state/useAppState";
 import { ActivityChecklist } from "./ActivityChecklist";
 import { Day90Summary } from "./Day90Summary";
-
-const TITLE: Record<MilestoneKey, DictKey> = {
-  "Days 1-7": "plan.days1to7",
-  "Day 30": "plan.day30",
-  "Day 60": "plan.day60",
-  "Day 90": "plan.day90",
-};
+import { currentMilestone, MILESTONE_TITLE } from "./shared";
 
 export default function PlanScreen() {
   const t = useT();
-  const { plan, planStatus, reloadPlan } = useAppState();
+  const { plan, planStatus, reloadPlan, progress } = useAppState();
   const [summary, setSummary] = useState(false);
   const state = planStatus === "ready" && plan ? "ready" : planStatus === "error" ? "error" : "loading";
+  const current = plan ? currentMilestone(plan.milestones, progress.isDone) : -1;
 
   return (
-    <section data-screen="plan" className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
-      <div className={summary ? "flex flex-col gap-4 print:hidden" : "flex flex-col gap-4"}>
-        <h1 className="text-2xl font-semibold text-fg-1">{t("plan.title")}</h1>
-        <div role="note" className="min-w-0 break-words rounded-lg border border-warn bg-surface-1 p-3 text-fg-1">
-          <p className="font-medium" title={plan?.status} dir="auto">{t("plan.banner")}</p>
-          
+    <section data-screen="plan">
+      <Page>
+        <div className={cn("flex flex-col gap-4", summary && "print:hidden")}>
+          <PageHeader
+            icon="calendar"
+            title={t("plan.title")}
+            badges={
+              <Badge tone="warn" icon="sparkle">
+                {t("uiLearning.suggested")}
+              </Badge>
+            }
+          />
+          <Notice tone="suggest" role="note" className="min-w-0 break-words">
+            <p className="m-0 font-medium" title={plan?.status} dir="auto">
+              {t("plan.banner")}
+            </p>
+          </Notice>
         </div>
-      </div>
-      <Loadable state={state} onRetry={reloadPlan} lines={8}>
-        {plan && (
-          <>
-            <ol className={`m-0 flex list-none flex-col gap-4 border-s-2 border-line ps-4 ${summary ? "print:hidden" : ""}`}>
-              {plan.milestones.map((m) => (
-                <li key={m.name} data-milestone={m.name}>
-                  <Card title={t(TITLE[m.name])}>
-                    <p lang="ar" dir="rtl" className="mb-2 text-start text-fg-1">{m.learning_goal_ar}</p>
-                    {m.name === "Day 30" && <p role="note" className="mb-2 text-sm text-fg-2">{t("plan.quizNote")}</p>}
-                    {m.name === "Day 90" && (
-                      <div className="mb-2 flex flex-wrap items-center gap-3">
-                        <Badge tone="info" icon={null}>{t("plan.day90Note")}</Badge>
-                        <Button variant="secondary" size="sm" onClick={() => setSummary(true)}>
-                          {t("plan.viewSummary")}
-                        </Button>
+        <Loadable state={state} onRetry={reloadPlan} lines={8}>
+          {plan && (
+            <>
+              {summary && <Day90Summary onClose={() => setSummary(false)} />}
+              <div className={cn(surface.card, "flex flex-col gap-2 p-4 sm:p-5", summary && "print:hidden")}>
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                  <h2 className="text-base font-bold text-fg-1">{t("uiLearning.planProgress")}</h2>
+                  <span className="text-sm text-fg-2">
+                    {t("progress.ofTotal", { done: progress.doneCount, total: progress.total })}
+                  </span>
+                </div>
+                <ProgressBar value={progress.percent} label={t("uiLearning.planProgress")} />
+              </div>
+              <ol className={cn("m-0 flex list-none flex-col p-0", summary && "print:hidden")}>
+                {plan.milestones.map((m, i) => {
+                  const total = m.activities.length;
+                  const doneN = m.activities.filter((a) => progress.isDone(a.id)).length;
+                  const complete = total > 0 && doneN === total;
+                  const isCurrent = i === current;
+                  const last = i === plan.milestones.length - 1;
+                  return (
+                    <li key={m.name} data-milestone={m.name} className="relative flex gap-3 sm:gap-5">
+                      {/* timeline rail: a marker per milestone and a line down to the next one */}
+                      <div aria-hidden="true" className="relative hidden w-10 shrink-0 flex-col items-center sm:flex">
+                        <span
+                          className={cn(
+                            "z-10 mt-5 grid size-10 place-items-center rounded-full border-2 text-sm font-bold",
+                            complete
+                              ? "border-brand bg-brand text-on-accent"
+                              : isCurrent
+                                ? "border-brand bg-surface-0 text-accent shadow-[0_0_0_4px_var(--da-accent-soft)]"
+                                : "border-line-strong/40 bg-surface-0 text-fg-3",
+                          )}
+                        >
+                          {complete ? <Icon name="check" size={18} strokeWidth={3} /> : <span dir="ltr">{i + 1}</span>}
+                        </span>
+                        {!last && (
+                          <span className={cn("-mb-4 w-0.5 flex-1", complete ? "bg-brand" : "bg-line")} />
+                        )}
                       </div>
-                    )}
-                    <h4 className="sr-only">{t("plan.activities")}</h4>
-                    <ActivityChecklist milestone={m} onOpenSummary={() => setSummary(true)} />
-                  </Card>
-                </li>
-              ))}
-            </ol>
-            {summary && <Day90Summary onClose={() => setSummary(false)} />}
-          </>
-        )}
-      </Loadable>
+                      <article
+                        aria-labelledby={`ms-${i}`}
+                        className={cn(
+                          surface.card,
+                          "mb-4 min-w-0 flex-1 p-3.5 sm:p-6",
+                          isCurrent && "border-accent-line shadow-[inset_0_0_0_1px_var(--da-accent-line)]",
+                        )}
+                      >
+                        <header className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "grid size-7 place-items-center rounded-full border-2 text-xs font-bold sm:hidden",
+                                complete ? "border-brand bg-brand text-on-accent" : isCurrent ? "border-brand text-accent" : "border-line text-fg-3",
+                              )}
+                            >
+                              {complete ? <Icon name="check" size={14} strokeWidth={3} /> : <span dir="ltr">{i + 1}</span>}
+                            </span>
+                            <h2 id={`ms-${i}`} className="text-lg font-bold leading-snug text-fg-1">
+                              {t(MILESTONE_TITLE[m.name])}
+                            </h2>
+                            {isCurrent && (
+                              <Badge tone="info" icon="target" size="sm">
+                                {t("uiLearning.current")}
+                              </Badge>
+                            )}
+                            {complete && (
+                              <Badge tone="ok" size="sm">
+                                {t("uiLearning.milestoneDone")}
+                              </Badge>
+                            )}
+                          </div>
+                          <span className="text-sm text-fg-3">{t("progress.ofTotal", { done: doneN, total })}</span>
+                        </header>
+                        <p lang="ar" dir="rtl" className="mb-4 text-start text-base leading-relaxed text-fg-2">
+                          {m.learning_goal_ar}
+                        </p>
+                        {m.name === "Day 30" && (
+                          <Notice tone="neutral" role="note" className="mb-4">
+                            {t("plan.quizNote")}
+                          </Notice>
+                        )}
+                        {m.name === "Day 90" && (
+                          <Notice tone="neutral" icon="shield" className="mb-4">
+                            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <p className="m-0">{t("plan.day90Note")}</p>
+                              <Button variant="secondary" icon="print" className="shrink-0" onClick={() => setSummary(true)}>
+                                {t("plan.viewSummary")}
+                              </Button>
+                            </div>
+                          </Notice>
+                        )}
+                        <h3 className="sr-only">{t("plan.activities")}</h3>
+                        <ActivityChecklist milestone={m} onOpenSummary={() => setSummary(true)} />
+                      </article>
+                    </li>
+                  );
+                })}
+              </ol>
+            </>
+          )}
+        </Loadable>
+      </Page>
     </section>
   );
 }

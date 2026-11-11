@@ -7,11 +7,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { getQuiz, postQuizCheck } from "@/api/client";
 import type { QuizCheckResponse, QuizItem, QuizOptionKey } from "@/api/types";
+import { linkButton } from "@/components/plan/shared";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { ChipGroup } from "@/components/ui/Chip";
+import { cn } from "@/components/ui/cn";
+import { Icon } from "@/components/ui/Icon";
 import { Loadable } from "@/components/ui/Loadable";
+import { Notice } from "@/components/ui/Notice";
+import { Page, PageHeader } from "@/components/ui/Page";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import { surface } from "@/components/ui/recipes";
 import { useToast } from "@/components/ui/Toast";
 import { useT } from "@/i18n";
 import { pct } from "@/lib/format";
@@ -98,87 +104,116 @@ export default function QuizScreen() {
   };
 
   const ask = (q: QuizItem) => (
-    <a
-      href={`#/chat?ask=${encodeURIComponent(q.question_ar)}`}
-      className="inline-flex min-h-11 items-center self-start rounded-md border border-accent px-4 text-sm font-semibold text-accent hover:bg-surface-1"
-    >
+    <a href={`#/chat?ask=${encodeURIComponent(q.question_ar)}`} className={cn(linkButton("secondary"), "self-start")}>
+      <Icon name="chat" size={18} className="shrink-0" />
       {t("quiz.askAssistant")}
     </a>
   );
 
+  // Phones: the actions stick above the bottom bar so a toast or the keyboard never hides them.
+  const actionBar =
+    "sticky bottom-(--da-bottom-nav) z-10 -mx-4 -mb-4 flex flex-wrap items-center gap-2 rounded-b-lg border-t border-line bg-surface-0/95 px-4 py-3 backdrop-blur-sm md:static md:mx-0 md:mb-0 md:rounded-none md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none";
+
   return (
-    <section data-screen="quiz" className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold text-fg-1">{t("quiz.title")}</h1>
-        <Badge tone="info" icon={null}>{t("quiz.notEval")}</Badge>
-      </div>
-      <p className="text-sm text-fg-2">{t("quiz.order")}</p>
-      <Loadable state={status} onRetry={() => setTick((n) => n + 1)} lines={5}>
-        {finished ? (
-          <Card title={t("quiz.finished", { total })}>
-            <div className="flex flex-col gap-3" data-quiz="end">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-lg font-semibold text-fg-1">{t("quiz.result", { correct, total })}</p>
-                <Badge tone="neutral" icon={null}>{t("extra.practiceBadge")}</Badge>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={retry}>{t("quiz.retry")}</Button>
+    <section data-screen="quiz">
+      <Page width="narrow">
+        <PageHeader
+          icon="help"
+          title={t("quiz.title")}
+          badges={
+            <>
+              <Badge tone="info" icon="sparkle">{t("quiz.notEval")}</Badge>
+              <Badge tone="neutral" icon="list">{t("quiz.order")}</Badge>
+            </>
+          }
+          description={t("uiLearning.quizIntro")}
+        />
+        <Loadable state={status} onRetry={() => setTick((n) => n + 1)} lines={5}>
+          {finished ? (
+            <div data-quiz="end" className={cn(surface.card, "da-rise-in flex flex-col gap-5 p-5 sm:p-8")}>
+              <div className="flex flex-col items-center gap-3 text-center">
+                <span aria-hidden="true" className="grid size-16 place-items-center rounded-full bg-amber-soft text-amber-ink">
+                  <Icon name="graduation" size={32} strokeWidth={1.75} />
+                </span>
+                <h2 className="text-xl font-bold text-fg-1">{t("quiz.finished", { total })}</h2>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <p className="m-0 text-lg font-semibold text-fg-1">{t("quiz.result", { correct, total })}</p>
+                  <Badge tone="neutral" icon={null}>{t("extra.practiceBadge")}</Badge>
+                </div>
+                <Button icon="refresh" size="lg" onClick={retry}>{t("quiz.retry")}</Button>
               </div>
               {wrong.length > 0 && (
-                <ul className="m-0 flex list-none flex-col gap-3 p-0">
+                <ul className="m-0 flex list-none flex-col gap-3 border-t border-line p-0 pt-5">
                   {wrong.map((q) => (
-                    <li key={q.id} className="flex flex-col gap-1">
-                      <span lang="ar" dir="rtl" className="text-start text-fg-1">{q.question_ar}</span>
+                    <li key={q.id} className={cn(surface.panel, "flex flex-col gap-3 p-4")}>
+                      <span lang="ar" dir="rtl" className="text-start font-medium text-fg-1">{q.question_ar}</span>
                       {ask(q)}
                     </li>
                   ))}
                 </ul>
               )}
             </div>
-          </Card>
-        ) : item ? (
-          <Card title={t("quiz.question", { n: index + 1, total })}>
-            <div className="flex flex-col gap-4" data-quiz="question" data-question-id={item.id}>
-              <p lang="ar" dir="rtl" className="text-start text-lg leading-relaxed text-fg-1">{item.question_ar}</p>
-              <ChipGroup
-                label={t("quiz.title")}
-                value={picked}
-                onChange={(id) => {
-                  if (!result) setPicked(id as QuizOptionKey);
-                }}
-                items={KEYS.map((k) => ({
-                  id: k,
-                  label: item.options[k],
-                  lang: "ar",
-                  dir: "rtl" as const,
-                  disabled: result !== null && result.correct_option !== k && picked !== k,
-                  tone: result ? (result.correct_option === k ? "ok" : picked === k ? "danger" : "neutral") : "neutral",
-                }))}
-              />
-              {!result && (
-                <div>
-                  <Button onClick={() => void check()} disabled={!picked} loading={checking}>
+          ) : item ? (
+            <div
+              data-quiz="question"
+              data-question-id={item.id}
+              key={item.id}
+              className={cn(surface.card, "da-fade-in flex flex-col gap-5 p-4 sm:p-6")}
+            >
+              <div className="flex flex-col gap-2">
+                <p className="m-0 text-sm font-semibold text-accent">{t("quiz.question", { n: index + 1, total })}</p>
+                <ProgressBar value={total ? ((index + 1) / total) * 100 : 0} label={t("uiLearning.quizProgress")} showValue={false} />
+              </div>
+              <h2 lang="ar" dir="rtl" className="text-start text-xl font-bold leading-relaxed text-fg-1">{item.question_ar}</h2>
+              <div className="flex flex-col gap-2">
+                <p className="m-0 text-sm text-fg-3" aria-hidden="true">{t("uiLearning.quizPick")}</p>
+                <ChipGroup
+                  label={t("quiz.title")}
+                  value={picked}
+                  className="flex-col sm:flex-row"
+                  onChange={(id) => {
+                    if (!result) setPicked(id as QuizOptionKey);
+                  }}
+                  items={KEYS.map((k) => ({
+                    id: k,
+                    label: item.options[k],
+                    lang: "ar",
+                    dir: "rtl" as const,
+                    disabled: result !== null && result.correct_option !== k && picked !== k,
+                    tone: result ? (result.correct_option === k ? "ok" : picked === k ? "danger" : "neutral") : "neutral",
+                  }))}
+                />
+              </div>
+              {checkFailed && (
+                <Notice tone="danger" role="alert">
+                  {t("common.loadFailed")}
+                </Notice>
+              )}
+              {result && (
+                <div className="da-fade-in flex flex-col gap-4">
+                  <Notice role="status" tone={result.correct ? "ok" : "warn"} title={t(result.correct ? "quiz.correct" : "quiz.incorrect")} />
+                  <QuizExplanation source={result.explanation} />
+                </div>
+              )}
+              <div className={actionBar}>
+                {!result ? (
+                  <Button className="flex-1 sm:flex-none" onClick={() => void check()} disabled={!picked} loading={checking}>
                     {t("quiz.check")}
                   </Button>
-                </div>
-              )}
-              {checkFailed && <p role="alert" className="text-fg-1">{t("common.loadFailed")}</p>}
-              {result && (
-                <div className="flex flex-col gap-3">
-                  <div role="status">
-                    <Badge tone={result.correct ? "ok" : "danger"}>{t(result.correct ? "quiz.correct" : "quiz.incorrect")}</Badge>
-                  </div>
-                  <QuizExplanation source={result.explanation} />
-                  {!result.correct && ask(item)}
-                  <div>
-                    <Button onClick={next}>{t("common.next")}</Button>
-                  </div>
-                </div>
-              )}
+                ) : (
+                  <>
+                    <Button className="flex-1 sm:flex-none" onClick={next}>
+                      {t("common.next")}
+                      <Icon name="arrow-end" size={18} className="shrink-0" />
+                    </Button>
+                    {!result.correct && ask(item)}
+                  </>
+                )}
+              </div>
             </div>
-          </Card>
-        ) : null}
-      </Loadable>
+          ) : null}
+        </Loadable>
+      </Page>
     </section>
   );
 }
