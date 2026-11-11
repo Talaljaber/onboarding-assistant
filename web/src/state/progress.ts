@@ -46,6 +46,24 @@ export function fromProposal(done: DoneMap, ids: readonly string[], now: string 
   return next;
 }
 
+/**
+ * The one definition of "practised scenarios" (scenarios screen, progress, Day 90 summary): every
+ * scenario recorded as practised, plus every scenario referenced by a ticked plan scenario
+ * activity. Returns scenario id -> ISO date (the practice date when known, else the tick date).
+ */
+export function practisedScenarios(
+  practised: Readonly<Record<string, string>>,
+  plan: PlanOut | null | undefined,
+  done: DoneMap,
+): Record<string, string> {
+  const out: Record<string, string> = { ...practised };
+  for (const a of plan?.milestones.flatMap((m) => m.activities) ?? []) {
+    if (a.kind !== "scenario" || !(a.id in done)) continue;
+    for (const id of a.refs) if (!(id in out)) out[id] = done[a.id]!;
+  }
+  return out;
+}
+
 /** Percentage a proposal would reach, computed locally (the server also sends `proposed_percent`). */
 export function wouldBe(done: DoneMap, ids: readonly string[], planIds: readonly string[]): number {
   return percent(fromProposal(done, ids), planIds);

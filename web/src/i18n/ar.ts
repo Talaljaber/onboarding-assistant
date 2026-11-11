@@ -24,7 +24,7 @@ export const ar = {
     quiz: "الاختبار",
     progress: "التقدم",
     kb: "قاعدة المعرفة",
-    about: "حول والخصوصية",
+    about: "حول التطبيق والخصوصية",
     more: "المزيد",
     label: "التنقل الرئيسي",
   },
@@ -258,7 +258,7 @@ export const ar = {
     quizNone: "لم تُجرَ محاولة بعد",
     updated: "تم تحديث التقدم: {pct}%",
     reset: "إعادة ضبط التقدم",
-    resetConfirm: "سيُحذف تقدم {role} من هذا المتصفح. متابعة؟",
+    resetConfirm: "سيُحذف من هذا المتصفح تقدم {role} والمواقف التي تدربت عليها ومحاولات الاختبار التدريبي. متابعة؟",
     proposal: "هل أسجّل «{label}» كمكتمل؟",
     wouldBe: "التقدم الحالي {from}% ← سيصبح {to}%",
     done: "تم. التقدم الآن {to}% (كان {from}%).",
@@ -439,7 +439,7 @@ export const ar = {
     openPlan: "افتح الخطة",
     milestonesTitle: "المراحل",
     manage: "إدارة بيانات التقدم",
-    resetHint: "يحذف تقدم هذا المسار من هذا المتصفح فقط.",
+    resetHint: "يحذف تقدم هذا المسار ومواقفه ومحاولات اختباره من هذا المتصفح فقط.",
   },
   uiAdmin: {
     // Worker D (kb, manager, about) appends here.
@@ -476,6 +476,19 @@ export const ar = {
     roleShortDelivery: "التوصيل",
     mgrNoProgress: "لم يُسجَّل تقدم بعد لهذه الملفات التجريبية.",
     traceTechnical: "تفاصيل تقنية",
+  },
+  uiQa: {
+    // P9.7 QA fixes.
+    fromMaterial: "من المادة التدريبية",
+    quizCorrectOption: "الإجابة الصحيحة",
+    quizYourPick: "إجابتك",
+    aboutStart: "ابدأ — اختر مسارك",
+    kbLength: "يجب أن يكون الطول بين {min} و{max} حرفاً.",
+    kbMax: "الحد الأقصى {max} حرفاً.",
+    kbPageRange: "الصفحة رقم صحيح من {min} إلى {max}.",
+    kbCounter: "{n} من {max}",
+    kbInvalidField: "تعذّر الحفظ: قيمة حقل «{field}» غير مقبولة.",
+    kbInvalid: "تعذّر الحفظ: بعض القيم غير مقبولة. راجع الحقول وحاول مرة أخرى.",
   },
 };
 

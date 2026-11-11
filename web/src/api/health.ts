@@ -1,5 +1,5 @@
 // Health polling hook: feeds ServiceBanner (ok / waking / down), the mode chip and the About screen.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { getHealth } from "./client";
 import type { Health } from "./types";
 
@@ -65,4 +65,15 @@ export function useHealth(enabled = true): HealthApi {
   }, [enabled]);
 
   return { health, state: serviceState(health, failures), refresh };
+}
+
+/**
+ * The latest health reply, shared by the shell (which polls) with screens that only read it, so
+ * they never start a second poll. `null` while unknown or outside the shell.
+ */
+export const HealthContext = createContext<Health | null>(null);
+
+/** The shell's latest health reply (`null` while unknown). */
+export function useHealthInfo(): Health | null {
+  return useContext(HealthContext);
 }

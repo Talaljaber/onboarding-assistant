@@ -8,16 +8,26 @@ export interface ChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>,
   selected?: boolean;
   onSelect?: () => void;
   tone?: Tone;
+  /**
+   * After an answer is revealed: `correct` marks the right option (check icon) and `wrong` the
+   * user's wrong pick (cross icon), whether or not the chip is selected. Pair it with
+   * `verdictLabel` so the meaning is in text too, never colour alone.
+   */
+  verdict?: "correct" | "wrong";
+  /** Short visible text for the verdict ("correct answer", "your answer"). */
+  verdictLabel?: string;
   children: ReactNode;
 }
 
 /** A single-choice option rendered as `role="radio"`. Selected state shows a check, not only colour. */
 export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
-  { selected = false, onSelect, tone = "neutral", className, children, onClick, ...rest },
+  { selected = false, onSelect, tone = "neutral", verdict, verdictLabel, className, children, onClick, ...rest },
   ref,
 ) {
   // A neutral chip shows its selection in the accent teal, so "selected" never reads as disabled grey.
   const shown = selected && tone === "neutral" ? "var(--da-accent)" : toneColor(tone);
+  const marked = selected || verdict !== undefined;
+  const icon = verdict === "wrong" ? "close" : verdict === "correct" || selected ? "check" : null;
   return (
     <button
       ref={ref}
@@ -33,15 +43,20 @@ export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
         "inline-flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-sm font-medium leading-snug text-fg-1",
         "transition-[background-color,border-color,box-shadow] duration-(--da-motion-fast) ease-da",
         "disabled:cursor-not-allowed disabled:opacity-55",
-        selected
+        marked
           ? cn("border-(--tone) font-semibold shadow-[inset_0_0_0_1px_var(--tone)]", tintClass(16))
           : "border-line-strong/50 bg-surface-0 hover:border-accent hover:bg-accent-soft",
         className,
       )}
       {...rest}
     >
-      {selected && <Icon name="check" size={14} className="shrink-0 text-(--tone)" />}
+      {icon && <Icon name={icon} size={14} className="shrink-0 text-(--tone)" />}
       {children}
+      {verdict && verdictLabel && (
+        <span data-verdict={verdict} className="shrink-0 text-xs font-semibold text-fg-2">
+          ({verdictLabel})
+        </span>
+      )}
     </button>
   );
 });
@@ -50,7 +65,16 @@ export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
 export interface ChipGroupProps {
   /** Accessible name of the group (required: a radiogroup needs one). */
   label: string;
-  items: { id: string; label: string; tone?: Tone; disabled?: boolean; lang?: string; dir?: "ltr" | "rtl" }[];
+  items: {
+    id: string;
+    label: string;
+    tone?: Tone;
+    disabled?: boolean;
+    lang?: string;
+    dir?: "ltr" | "rtl";
+    verdict?: "correct" | "wrong";
+    verdictLabel?: string;
+  }[];
   /** Selected id, or `null` for none. */
   value: string | null;
   onChange: (id: string) => void;
@@ -91,6 +115,8 @@ export function ChipGroup({ label, items, value, onChange, className }: ChipGrou
           key={it.id}
           data-chip-id={it.id}
           tone={it.tone}
+          verdict={it.verdict}
+          verdictLabel={it.verdictLabel}
           disabled={it.disabled}
           selected={it.id === value}
           tabIndex={it.id === tabStop ? 0 : -1}

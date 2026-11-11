@@ -13,6 +13,11 @@ export interface AssistantFrameProps {
   cached?: boolean;
   /** A fixed server text (refusal, employment disclaimer, no confirmed answer): a neutral "fixed reply" chip, never the model chip. */
   fixed?: boolean;
+  /**
+   * Feedback computed on the server from the official scenario checklist (a picked option) while
+   * the app is in model mode: a neutral "from the training material" chip instead of "offline".
+   */
+  material?: boolean;
   /** Show the "How I answered" button (only when the item still has its trace). */
   hasTrace?: boolean;
   traceShown?: boolean;
@@ -33,7 +38,7 @@ export function AssistantAvatar() {
  * The header row every assistant item shares (avatar, label, mode chip and, at the end, the
  * "How I answered" button) with the body underneath at full width, so cards keep the whole line on phones.
  */
-export function AssistantFrame({ mode, cached, fixed, hasTrace, traceShown, onToggleTrace, children }: AssistantFrameProps) {
+export function AssistantFrame({ mode, cached, fixed, material, hasTrace, traceShown, onToggleTrace, children }: AssistantFrameProps) {
   const t = useT();
   return (
     <div className="da-rise-in flex w-full min-w-0 flex-col gap-2">
@@ -47,7 +52,14 @@ export function AssistantFrame({ mode, cached, fixed, hasTrace, traceShown, onTo
             </Badge>
           </span>
         )}
-        {mode && !fixed && (
+        {mode && !fixed && material && (
+          <span data-badge="material" className="inline-flex">
+            <Badge size="sm" tone="neutral" icon="book">
+              {t("uiQa.fromMaterial")}
+            </Badge>
+          </span>
+        )}
+        {mode && !fixed && !material && (
           <Badge size="sm" tone={mode === "llm" ? "info" : "neutral"} icon={mode === "llm" ? "sparkle" : null}>
             {mode === "llm" ? t("chat.modeLlm") : t("chat.modeOffline")}
           </Badge>

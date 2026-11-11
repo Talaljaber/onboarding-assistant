@@ -99,12 +99,10 @@ export function ProgressCard({ proposal, label, resolved, busy, currentPercent, 
                     disabled={busy}
                     onChange={() => toggle(id)}
                   />
-                  <span lang="ar" dir="rtl" className="min-w-0 flex-1 text-base leading-7 text-fg-1">
+                  {/* The activity id is for code only (data-activity-id); people read the title. */}
+                  <span lang="ar" dir="rtl" data-activity-id={id} className="min-w-0 flex-1 text-base leading-7 text-fg-1">
                     {proposal.titles_ar[i] ?? id}
                   </span>
-                  <bdi dir="ltr" className="font-id hidden shrink-0 text-xs text-fg-3 sm:inline">
-                    {id}
-                  </bdi>
                 </label>
               </li>
             );

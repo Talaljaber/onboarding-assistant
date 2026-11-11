@@ -4,7 +4,7 @@
 //
 // Hand-off to the chat: "ask about a wrong question" links to `#/chat?ask=<encoded question>`;
 // ChatScreen may read the `ask` query param from the hash and prefill the composer with it.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getQuiz, postQuizCheck } from "@/api/client";
 import type { QuizCheckResponse, QuizItem, QuizOptionKey } from "@/api/types";
 import { linkButton } from "@/components/plan/shared";
@@ -19,6 +19,7 @@ import { Page, PageHeader } from "@/components/ui/Page";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { surface } from "@/components/ui/recipes";
 import { useToast } from "@/components/ui/Toast";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useT } from "@/i18n";
 import { pct } from "@/lib/format";
 import { useAppState } from "@/state/useAppState";
@@ -42,6 +43,9 @@ export default function QuizScreen() {
   const [correct, setCorrect] = useState(0);
   const [wrong, setWrong] = useState<QuizItem[]>([]);
   const [finished, setFinished] = useState(false);
+  const verdictRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 
   useEffect(() => {
     if (!role) return;
@@ -59,6 +63,24 @@ export default function QuizScreen() {
 
   const item = items[index];
   const total = items.length;
+
+  // After "check", bring the verdict and its explanation into the band between the sticky header and
+  // the sticky action bar (phones), so the bar never hides it. Instant when motion is reduced.
+  useEffect(() => {
+    const el = verdictRef.current;
+    if (!result || !el || typeof window.scrollBy !== "function") return;
+    const bar = barRef.current;
+    const barSticky = bar ? getComputedStyle(bar).position === "sticky" : false;
+    const main = document.getElementById("main");
+    const navH = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
+    const top = (document.querySelector("header")?.getBoundingClientRect().bottom ?? 0) + 12;
+    const bottom = window.innerHeight - navH - (barSticky && bar ? bar.offsetHeight : 0) - 12;
+    const r = el.getBoundingClientRect();
+    if (r.bottom <= bottom && r.top >= top) return;
+    // Show the whole block when it fits, else its start (the verdict line).
+    const delta = r.height <= bottom - top ? r.bottom - bottom : r.top - top;
+    window.scrollBy({ top: delta, behavior: reducedMotion ? "auto" : "smooth" });
+  }, [result, reducedMotion]);
 
   const check = useCallback(async () => {
     if (!item || !picked) return;
@@ -136,10 +158,7 @@ export default function QuizScreen() {
                   <Icon name="graduation" size={32} strokeWidth={1.75} />
                 </span>
                 <h2 className="text-xl font-bold text-fg-1">{t("quiz.finished", { total })}</h2>
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <p className="m-0 text-lg font-semibold text-fg-1">{t("quiz.result", { correct, total })}</p>
-                  <Badge tone="neutral" icon={null}>{t("extra.practiceBadge")}</Badge>
-                </div>
+                <p className="m-0 text-lg font-semibold text-fg-1">{t("quiz.result", { correct, total })}</p>
                 <Button icon="refresh" size="lg" onClick={retry}>{t("quiz.retry")}</Button>
               </div>
               {wrong.length > 0 && (
@@ -181,6 +200,11 @@ export default function QuizScreen() {
                     dir: "rtl" as const,
                     disabled: result !== null && result.correct_option !== k && picked !== k,
                     tone: result ? (result.correct_option === k ? "ok" : picked === k ? "danger" : "neutral") : "neutral",
+                    ...(result && result.correct_option === k
+                      ? { verdict: "correct" as const, verdictLabel: t("uiQa.quizCorrectOption") }
+                      : result && picked === k
+                        ? { verdict: "wrong" as const, verdictLabel: t("uiQa.quizYourPick") }
+                        : {}),
                   }))}
                 />
               </div>
@@ -190,12 +214,12 @@ export default function QuizScreen() {
                 </Notice>
               )}
               {result && (
-                <div className="da-fade-in flex flex-col gap-4">
+                <div ref={verdictRef} data-quiz-verdict className="da-fade-in flex flex-col gap-4">
                   <Notice role="status" tone={result.correct ? "ok" : "warn"} title={t(result.correct ? "quiz.correct" : "quiz.incorrect")} />
                   <QuizExplanation source={result.explanation} />
                 </div>
               )}
-              <div className={actionBar}>
+              <div ref={barRef} className={actionBar}>
                 {!result ? (
                   <Button className="flex-1 sm:flex-none" onClick={() => void check()} disabled={!picked} loading={checking}>
                     {t("quiz.check")}

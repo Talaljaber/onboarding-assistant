@@ -248,7 +248,7 @@ export const en: Dict = {
     quizNone: "No attempt yet",
     updated: "Progress updated: {pct}%",
     reset: "Reset progress",
-    resetConfirm: "This will delete the {role} progress from this browser. Continue?",
+    resetConfirm: "This will delete the {role} progress, practised scenarios and practice quiz attempts from this browser. Continue?",
     proposal: "Mark \"{label}\" as complete?",
     wouldBe: "Current {from}% → would become {to}%",
     done: "Done. Progress is now {to}% (was {from}%).",
@@ -429,7 +429,7 @@ export const en: Dict = {
     openPlan: "Open the plan",
     milestonesTitle: "Stages",
     manage: "Manage progress data",
-    resetHint: "Deletes this track's progress from this browser only.",
+    resetHint: "Deletes this track's progress, scenarios and quiz attempts from this browser only.",
   },
   uiAdmin: {
     // Worker D (kb, manager, about) appends here.
@@ -466,5 +466,18 @@ export const en: Dict = {
     roleShortDelivery: "Delivery",
     mgrNoProgress: "No progress has been recorded for these demo profiles yet.",
     traceTechnical: "Technical details",
+  },
+  uiQa: {
+    // P9.7 QA fixes.
+    fromMaterial: "From the training material",
+    quizCorrectOption: "correct answer",
+    quizYourPick: "your answer",
+    aboutStart: "Start — choose your track",
+    kbLength: "Must be {min}–{max} characters long.",
+    kbMax: "At most {max} characters.",
+    kbPageRange: "Page must be a whole number from {min} to {max}.",
+    kbCounter: "{n} / {max}",
+    kbInvalidField: "Could not save: the “{field}” value was not accepted.",
+    kbInvalid: "Could not save: some values were not accepted. Check the fields and try again.",
   },
 };

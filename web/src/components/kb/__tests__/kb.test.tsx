@@ -183,6 +183,61 @@ describe("edit", () => {
     expect(calls.some((c) => c.method === "PUT")).toBe(false);
   });
 
+  it("checks the answer length with a counter, and a new attempt clears the old message", async () => {
+    const calls = backend();
+    mount();
+    await loaded();
+    await userEvent.click(within(rowOf("K13")).getByRole("button", { name: /Edit K13/ }));
+    const dlg = await screen.findByRole("dialog");
+    await userEvent.click(within(dlg).getByRole("button", { name: "Save" }));
+    expect(await within(dlg).findByText("Nothing changed.")).toBeInTheDocument();
+    const area = within(dlg).getByLabelText("Text (Arabic)");
+    expect(area).toHaveAttribute("maxLength", "600");
+    await userEvent.clear(area);
+    await userEvent.type(area, "abc");
+    expect(dlg.querySelector("[data-counter]")).toHaveTextContent("3 / 600");
+    await userEvent.click(within(dlg).getByRole("button", { name: "Save" }));
+    expect(await within(dlg).findByText("Must be 5–600 characters long.")).toBeInTheDocument();
+    // the stale "nothing changed" from the first attempt is gone, focus is on the invalid field
+    expect(within(dlg).queryByText("Nothing changed.")).toBeNull();
+    expect(area).toHaveFocus();
+    await userEvent.clear(area);
+    await userEvent.click(within(dlg).getByRole("button", { name: "Save" }));
+    expect(await within(dlg).findByText("This field is required.")).toBeInTheDocument();
+    expect(within(dlg).queryByText("Must be 5–600 characters long.")).toBeNull();
+    expect(calls.some((c) => c.method === "PUT")).toBe(false);
+  });
+
+  it("shows a server validation error in the UI language, keeps focus in the dialog and Escape still closes", async () => {
+    backend({
+      "PUT /api/kb/K13": () =>
+        json(
+          {
+            error: {
+              code: "validation_error",
+              message: "Value should have at least 5 items after validation",
+              request_id: "r",
+              field: "answer_ar",
+            },
+          },
+          400,
+        ),
+    });
+    mount();
+    await loaded();
+    await userEvent.click(within(rowOf("K13")).getByRole("button", { name: /Edit K13/ }));
+    const dlg = await screen.findByRole("dialog");
+    await userEvent.type(within(dlg).getByLabelText("Keyword (English)"), "x");
+    await userEvent.click(within(dlg).getByRole("button", { name: "Save" }));
+    expect(await within(dlg).findByText("Could not save: the “Text (Arabic)” value was not accepted.")).toBeInTheDocument();
+    expect(within(dlg).queryByText(/Value should/)).toBeNull();
+    await waitFor(() => expect(within(dlg).getByRole("button", { name: "Save" })).toHaveFocus());
+    // even with focus outside the panel, Escape closes the dialog
+    (document.activeElement as HTMLElement).blur();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
   it("explains a 423 that survived the client retry", async () => {
     backend({
       "PUT /api/kb/K13": () => json({ error: { code: "kb_locked", message: "m", request_id: "r", field: null } }, 423),

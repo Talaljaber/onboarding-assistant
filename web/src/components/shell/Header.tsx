@@ -1,4 +1,4 @@
-﻿import { useState, type ReactNode } from "react";
+﻿import { useEffect, useState, type ReactNode } from "react";
 import type { Health } from "@/api/types";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
@@ -7,17 +7,21 @@ import { Icon } from "@/components/ui/Icon";
 import { LanguageSwitch } from "@/components/ui/LanguageSwitch";
 import { segmented } from "@/components/ui/recipes";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { useT } from "@/i18n";
+import { useLang, useT } from "@/i18n";
 import { useAppState } from "@/state/useAppState";
 import { BrandMark } from "./BrandMark";
 import { RoleDialog } from "./RoleDialog";
 
 /**
  * Below this width the header keeps only the brand, the role chip and a settings button; the mode
- * switch, trace toggle, status badges and language live in the settings sheet. From 1280px they are
- * inline (they need about 1100px).
+ * switch, trace toggle, status badges and language live in the settings sheet. Inline they need
+ * about 1150px in Arabic and about 1360px in English (longer labels), so English switches later.
  */
-const COMPACT = "(max-width: 1279px)";
+const COMPACT = { ar: "(max-width: 1279px)", en: "(max-width: 1439px)" } as const;
+
+/** Header segmented buttons: 40px on a desktop pointer, 44px in the settings sheet. */
+const SEG_DESKTOP = "min-h-10";
+const SEG_SHEET = "min-h-11 px-5";
 
 const pill =
   "inline-flex min-h-10 items-center gap-2 rounded-full border text-sm font-semibold transition-[background-color,border-color,color] duration-(--da-motion-fast) ease-da";
@@ -39,8 +43,14 @@ export function Header({ health }: { health: Health | null }) {
   const [roleOpen, setRoleOpen] = useState(false);
   const llmOn = !forceOffline && health?.llm_available === true;
   const roleName = role ? t(role === "Sales" ? "role.sales" : "role.delivery") : "";
-  const compact = useMediaQuery(COMPACT);
+  const { lang } = useLang();
+  const compact = useMediaQuery(COMPACT[lang]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The sheet exists only in the compact header: forget it when the window grows, so it does not
+  // reopen by itself when the window shrinks again.
+  useEffect(() => {
+    if (!compact) setSettingsOpen(false);
+  }, [compact]);
 
   const roleChip = role && (
     <button
@@ -73,7 +83,7 @@ export function Header({ health }: { health: Health | null }) {
           type="button"
           aria-pressed={mode === m}
           onClick={() => setMode(m)}
-          className={cn(segmented.item, compact && "min-h-11 px-5", mode === m ? segmented.on : segmented.off)}
+          className={cn(segmented.item, compact ? SEG_SHEET : SEG_DESKTOP, mode === m ? segmented.on : segmented.off)}
         >
           {t(m === "auto" ? "mode.auto" : "mode.offline")}
         </button>
@@ -81,7 +91,7 @@ export function Header({ health }: { health: Health | null }) {
     </div>
   );
   const llmBadge = role && (
-    <Badge tone={llmOn ? "info" : "neutral"}>
+    <Badge tone={llmOn ? "info" : "neutral"} className="whitespace-nowrap">
       {t(forceOffline ? "mode.forcedOffline" : llmOn ? "mode.llmOn" : "mode.llmOff")}
     </Badge>
   );
@@ -93,7 +103,7 @@ export function Header({ health }: { health: Health | null }) {
       onClick={() => setTrace(!trace)}
       className={cn(
         pill,
-        "px-3",
+        "px-3 whitespace-nowrap",
         compact && "min-h-11",
         trace ? "border-accent bg-accent-soft text-accent" : "border-line bg-surface-0 text-fg-2 hover:border-accent-line hover:text-fg-1",
       )}
@@ -117,7 +127,7 @@ export function Header({ health }: { health: Health | null }) {
     </button>
   );
   const storeBadge = health && (
-    <Badge tone="neutral" icon={null}>
+    <Badge tone="neutral" icon={null} className="whitespace-nowrap">
       {t(health.store === "supabase" ? "extra.storeSupabase" : "extra.storeLocal")}
     </Badge>
   );
@@ -137,7 +147,8 @@ export function Header({ health }: { health: Health | null }) {
               <BrandMark size={compact ? 34 : 38} />
             </a>
             <div className="flex flex-col items-start gap-0.5 leading-tight sm:flex-row sm:items-center sm:gap-2.5">
-              <a href="#/" className="rounded-sm text-sm font-bold whitespace-nowrap text-fg-1 sm:text-lg">
+              {/* Padding grows the tap target to 44px without moving the layout. */}
+              <a href="#/" className="-my-3 rounded-sm py-3 text-sm font-bold whitespace-nowrap text-fg-1 sm:-my-2 sm:py-2 sm:text-lg">
                 {t("app.name")}
               </a>
               <Badge tone="value" icon={null} size="sm" className="sm:px-2.5 sm:py-0.5 sm:text-xs">
@@ -167,7 +178,7 @@ export function Header({ health }: { health: Health | null }) {
               {(llmBadge || storeBadge) && <span aria-hidden="true" className="mx-1 h-6 w-px bg-line" />}
               {llmBadge}
               {storeBadge}
-              <LanguageSwitch />
+              <LanguageSwitch itemClassName={SEG_DESKTOP} />
             </div>
           )}
         </div>
@@ -177,7 +188,7 @@ export function Header({ health }: { health: Health | null }) {
           {role && <SettingRow label={t("mode.label")}>{modeSwitch}</SettingRow>}
           {role && <SettingRow label={t("uiShell.display")}>{traceToggle}</SettingRow>}
           <SettingRow label={t("lang.label")}>
-            <LanguageSwitch />
+            <LanguageSwitch itemClassName={SEG_SHEET} />
           </SettingRow>
           {(llmBadge || storeBadge) && (
             <SettingRow label={t("uiShell.status")}>

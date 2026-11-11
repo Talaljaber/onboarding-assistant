@@ -19,6 +19,7 @@ import { StatTile } from "@/components/ui/StatTile";
 import { ValueLabel } from "@/components/ui/ValueLabel";
 import { useT } from "@/i18n";
 import { isoDay } from "@/lib/format";
+import { practisedScenarios } from "@/state/progress";
 import { useAppState } from "@/state/useAppState";
 import { ProgressRing } from "./ProgressRing";
 
@@ -79,7 +80,7 @@ export default function ProgressScreen() {
   const [summary, setSummary] = useState(false);
   const roleName = role ? t(role === "Sales" ? "role.sales" : "role.delivery") : "";
   const state = planStatus === "ready" && plan ? "ready" : planStatus === "error" ? "error" : "loading";
-  const practised = Object.entries(scenarios.practised).sort(([a], [b]) => a.localeCompare(b));
+  const practised = Object.entries(practisedScenarios(scenarios.practised, plan, progress.done)).sort(([a], [b]) => a.localeCompare(b));
   const milestones = plan?.milestones ?? [];
   const current = currentMilestone(milestones, progress.isDone);
   const nextActivity = current >= 0 ? milestones[current]?.activities.find((a) => !progress.isDone(a.id)) : undefined;

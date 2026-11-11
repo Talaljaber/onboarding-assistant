@@ -266,6 +266,9 @@ export function AppStateProvider({ children, initial }: AppStateProviderProps) {
   const clearBrowserData = useCallback(() => {
     saver.current.cancel();
     clearAll();
+    // Start the reloaded page at its top: the browser would restore the old scroll position.
+    if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
+    if (typeof window.scrollTo === "function") window.scrollTo(0, 0);
     window.location.reload();
   }, []);
 

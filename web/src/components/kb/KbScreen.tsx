@@ -22,6 +22,15 @@ import { errorInfo, useKb } from "./useKb";
 
 const ID_BASE = "kb";
 
+/** Server field name (last dotted part) -> the dialog's field label key. */
+const FIELD_LABEL = {
+  topic: "kb.fields.topic",
+  answer_ar: "kb.fields.answer",
+  keyword_en: "kb.fields.keyword",
+  source_document: "kb.fields.document",
+  source_page: "kb.fields.page",
+} as const;
+
 type Editing = { kind: "edit"; row: KbRow } | { kind: "add" } | null;
 type Filter = "all" | "changed";
 
@@ -73,7 +82,12 @@ export default function KbScreen() {
     const { status, code } = errorInfo(r.error);
     if (status === 423 || code === "kb_locked") return t("extra.kbLocked");
     if (status === 409 || code === "kb_conflict") return t("extra.kbConflict");
-    if (r.error.kind === "http" && status === 400 && typeof r.error.detail === "object") return r.error.detail.message;
+    // Validation text from the server is English developer text: show our own wording instead.
+    if (status === 400 || code === "validation_error") {
+      const last = (r.error.kind === "http" && typeof r.error.detail === "object" ? r.error.detail.field : null)?.split(".").pop();
+      const label = last && last in FIELD_LABEL ? FIELD_LABEL[last as keyof typeof FIELD_LABEL] : null;
+      return label ? t("uiQa.kbInvalidField", { field: t(label) }) : t("uiQa.kbInvalid");
+    }
     return t("extra.kbSaveFailed");
   };
 
@@ -135,11 +149,13 @@ export default function KbScreen() {
           <Tabs items={tabs} value={tab} onChange={setTab} label={t("extra.kbTabsLabel")} idBase={ID_BASE} />
 
           <TabPanel idBase={ID_BASE} id="rows" value={tab}>
-            <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:gap-6 2xl:grid-cols-[minmax(0,1fr)_24rem] 2xl:items-start">
-              <div className="min-w-0 2xl:sticky 2xl:top-[calc(var(--da-header-h)+1.5rem)] 2xl:col-start-2 2xl:row-start-1">
+            {/* One column on every width: the page is at most 72rem, so a side "try" panel would
+                squeeze the table below the width it needs and hide its Edit column. */}
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:gap-6">
+              <div className="min-w-0">
                 <TryPanel />
               </div>
-              <div className="flex min-w-0 flex-col gap-4 2xl:col-start-1 2xl:row-start-1">
+              <div className="flex min-w-0 flex-col gap-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                   <div className="grid grid-cols-1 gap-2 min-[400px]:flex min-[400px]:flex-wrap min-[400px]:items-center">
                     <Button variant="accent" icon="plus" onClick={() => setEditing({ kind: "add" })} disabled={kb.status !== "ready"}>

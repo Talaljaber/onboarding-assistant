@@ -2,7 +2,7 @@
 // trace panel (side column at >= 1024 px with the trace toggle on, inline below), error states.
 // `#/chat?scenario=<id>` starts practice mode for that scenario (hand-off from the scenarios screen).
 import { useEffect, useRef, useState } from "react";
-import { replace } from "@/router";
+import { currentPath, replace } from "@/router";
 import { useT } from "@/i18n";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { LIMITS } from "@/api/types";
@@ -51,29 +51,26 @@ function ChatInner() {
   const endRef = useRef<HTMLDivElement>(null);
   const role = app.role;
 
-  // ---- hand-off from the scenarios screen
-  const handled = useRef(false);
+  // ---- hand-offs: `?scenario=<id>` (scenarios screen) starts practice; `?ask=<question>` (quiz
+  // screen) prefills the composer, never auto-sends. Read on mount and on every later hash change,
+  // so editing the hash while already on the chat works too. The param is cleared first, which
+  // makes the handler idempotent (the clearing `replace` fires a hashchange with no param).
   const { startScenario } = chat;
-  useEffect(() => {
-    if (handled.current) return;
-    const id = scenarioParam();
-    if (!id) return;
-    handled.current = true;
-    replace("/chat");
-    void startScenario(id);
-  }, [startScenario]);
-
-  // ---- hand-off from the quiz screen: prefill the composer, never auto-send
   const [prefill, setPrefill] = useState<string | null>(null);
-  const askHandled = useRef(false);
   useEffect(() => {
-    if (askHandled.current) return;
-    const q = askParam();
-    if (!q) return;
-    askHandled.current = true;
-    setPrefill(q);
-    replace("/chat");
-  }, []);
+    const handle = () => {
+      if (currentPath() !== "/chat") return;
+      const id = scenarioParam();
+      const q = askParam();
+      if (!id && !q) return;
+      replace("/chat");
+      if (id) void startScenario(id);
+      if (q) setPrefill(q);
+    };
+    handle();
+    window.addEventListener("hashchange", handle);
+    return () => window.removeEventListener("hashchange", handle);
+  }, [startScenario]);
 
   // ---- lock the header role chip while practice mode is on
   const { setPracticeActive } = app;

@@ -47,6 +47,20 @@ describe("QuizScreen", () => {
     expect(await screen.findByText("السؤال 2 من 5")).toBeInTheDocument();
   });
 
+  it("after a wrong answer marks the correct option and the wrong pick with an icon and text", async () => {
+    stubApi({ "/api/quiz/check": () => json({ ...quizCheck, correct: false, correct_option: "B" }) });
+    renderScreen(<QuizScreen />);
+    await userEvent.click(await screen.findByRole("radio", { name: first.options.A }));
+    await userEvent.click(screen.getByRole("button", { name: "تحقق" }));
+    expect(await screen.findByText("إجابة غير صحيحة")).toBeInTheDocument();
+    const radio = (k: "A" | "B" | "C") => screen.getAllByRole("radio").find((r) => r.textContent?.includes(first.options[k]))!;
+    expect(radio("B").querySelector('[data-verdict="correct"]')).toHaveTextContent("الإجابة الصحيحة");
+    expect(radio("B").querySelector("svg")).not.toBeNull();
+    expect(radio("A").querySelector('[data-verdict="wrong"]')).toHaveTextContent("إجابتك");
+    expect(radio("A")).toHaveAttribute("aria-checked", "true");
+    expect(radio("C").querySelector("[data-verdict]")).toBeNull();
+  });
+
   it("finishing records a practice attempt (counts only) and completes the Day 30 quiz activity", async () => {
     const wrongAnswer = { ...quizCheck, correct: false, correct_option: "B" };
     let n = 0;
@@ -66,6 +80,8 @@ describe("QuizScreen", () => {
     }
     expect(await screen.findByText("أنهيت 5 أسئلة")).toBeInTheDocument();
     expect(screen.getByText("4 من 5 صحيحة (تدريب)")).toBeInTheDocument();
+    // the line already says "practice": no second, separate practice badge
+    expect(screen.queryByText("تدريب", { exact: true })).toBeNull();
     expect(screen.getByRole("button", { name: "أعد المحاولة" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "اسأل المساعد عن هذا السؤال" })).toBeInTheDocument();
     expect(await screen.findByText("تم تحديث التقدم: 12%")).toBeInTheDocument();

@@ -34,6 +34,22 @@ export const ROUTES: readonly RouteDef[] = [
   { path: "/about", Screen: AboutScreen, needsRole: false },
 ];
 
+/**
+ * After a route change, move focus to the new screen's heading (else `main`) so keyboard and
+ * screen-reader users start on the new page instead of <body>. Programmatic focus shows no ring
+ * (index.css). A screen that already placed focus inside `main` (the chat composer opened from a
+ * starter or a hand-off) keeps it.
+ */
+function focusScreen() {
+  const main = document.getElementById("main");
+  if (!main) return;
+  const active = document.activeElement;
+  if (active && active !== document.body && active !== main && main.contains(active)) return;
+  const h1 = main.querySelector<HTMLElement>("h1");
+  if (h1 && !h1.hasAttribute("tabindex")) h1.tabIndex = -1;
+  (h1 ?? main).focus({ preventScroll: true });
+}
+
 /** Resolves the hash path to a screen, redirecting where the guard says so. */
 function Routes() {
   const path = usePath();
@@ -56,6 +72,7 @@ function Routes() {
     if (path !== "/chat" && typeof window.scrollTo === "function" && window.scrollY > 0) {
       window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     }
+    focusScreen();
   }, [path, dismissTransient]);
   if (!route || redirect) return null;
   const { Screen } = route;
