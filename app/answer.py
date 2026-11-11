@@ -7,14 +7,21 @@ otherwise band `answer` → the top row verbatim, `not_confirmed` → the fixed 
 top row, `refuse` → the fixed refusal. `render_sources` returns the cited live rows verbatim.
 
 What it must never do: take the user's role (no function here has a role parameter), word a fact that
-is not in a cited row, or show a row for a refusal. The LLM path (`answer_llm`) is added by W3-B.
+is not in a cited row, or show a row for a refusal.
+
+`answer_llm` is the LLM path: all live rows + retrieval ranks → `answer_v1.md` → server verifier →
+`AnswerResult` (cached only after verification, see `app.llm.paths`). It returns None on any failure so
+the caller falls back to `answer_offline`; it never receives the role, the user's name or the history.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import time
+from dataclasses import dataclass, field, replace
+from typing import Any
 
 from app.kb import KnowledgeBase, Row
+from app.llm.paths import ANSWER_MARGIN_S, llm_answer, should_escalate
 from app.retrieve import Bands, Hit, MarginResult, is_list_question, load_bands, named_values
 from app.schemas import VALUES_AR, Source
 
@@ -38,6 +45,8 @@ VALUE_SUFFIX = "من القيم المشتركة للمجموعة."
 LIST_PREFIX_AR = "القيم المشتركة للمجموعة"
 #: Rows that may be shown under the employment refusal when retrieval is confident (port guide §1.1).
 EMPLOYMENT_ATTACH_IDS = frozenset({"K14", "K15", "K16"})
+#: Paragraph break between the answer, the server list and the partial note (contract fixture shape).
+PARAGRAPH = "\n\n"
 
 
 @dataclass(frozen=True)
@@ -52,6 +61,23 @@ class AnswerResult:
     band: str | None = None
     partial_note: bool = False
     topic_expanded: str | None = None
+    # LLM trace fields (set by `answer_llm`; same names as `schemas.TraceAnswer`)
+    llm_status: str | None = None
+    verifier: dict[str, Any] | None = None
+    cached: bool = False
+    latency_ms: int | None = None
+    escalated: bool = False
+
+    def trace_fields(self) -> dict[str, Any]:
+        """Keyword arguments for `schemas.TraceAnswer` (plus `band`)."""
+        return {
+            "llm_status": self.llm_status,
+            "verifier": self.verifier,
+            "escalated": self.escalated,
+            "band": self.band,
+            "latency_ms": self.latency_ms,
+            "cached": self.cached,
+        }
 
     @property
     def refused(self) -> bool:
@@ -148,6 +174,123 @@ def render_sources(ids: list[str], kb: KnowledgeBase) -> list[Source]:
     return out
 
 
+# --------------------------------------------------------------------------------------
+# LLM path
+# --------------------------------------------------------------------------------------
+
+
+def _row_dict(row: Row) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "topic": row.topic,
+        "answer_ar": row.answer_ar,
+        "source_document": row.source_document,
+        "source_page": row.source_page,
+    }
+
+
+def _llm_ready(llm: Any) -> bool:
+    return llm is not None and getattr(llm, "mode", None) == "llm" and getattr(llm, "chat", None) is not None
+
+
+def mark_budget_exhausted(llm: Any, reason: str | None) -> None:
+    """§C6: an exhausted USD budget flips the process to offline mode (shown in /api/health)."""
+    if reason == "budget_exhausted" and llm is not None:
+        llm.mode = "offline"
+        llm.reason = "budget_exhausted"
+
+
+def answer_llm(
+    question: str,
+    kb_rows: list[Row],
+    hits: list[Hit],
+    llm: Any,
+    budget_s: float,
+    *,
+    previous: str | None = None,
+    list_topic: str | None = None,
+    info: dict[str, Any] | None = None,
+) -> AnswerResult | None:
+    """The LLM-worded, server-verified answer, or None (the caller then uses `answer_offline`).
+
+    `kb_rows` are all live rows (D1), `hits` give their ranks, `llm` is the `app.llm.LLM` from
+    `build_llm`, `budget_s` the seconds left in the turn (the call gets `budget_s - 0.3`).
+    - `answered` → the model's text with its cited rows; `partial` → the text + `PARTIAL_NOTE_AR`;
+      `unsupported` → `REFUSAL_AR` with no sources (the model's text is discarded).
+    - `list_topic` naming a KB topic with rows (e.g. `"Values"`): the server-built list is always the
+      first paragraph (§4.3); a verified model sentence may follow it.
+    - A rejection with a fixable reason escalates once to `llm.escalation` (set only when
+      `LLM_ESCALATION_MODEL` is configured) when at least 2.0 s remain.
+    `info` (optional) receives the `schemas.TraceAnswer` fields for both success and failure, so the
+    trace can show why the offline answer was used. Never raises.
+    """
+    started = time.perf_counter()
+    trace: dict[str, Any] = {"llm_status": None, "verifier": None, "escalated": False, "latency_ms": None,
+                             "cached": False}
+
+    def done(result: AnswerResult | None) -> AnswerResult | None:
+        trace["latency_ms"] = int((time.perf_counter() - started) * 1000)
+        if info is not None:
+            info.update(trace)
+        if result is None:
+            return None
+        return replace(result, **trace)
+
+    try:
+        if not _llm_ready(llm):
+            return done(None)
+        rows = [_row_dict(r) for r in kb_rows]
+        ranks = {h.id: h.rank for h in hits}
+        topic_rows = [r for r in kb_rows if list_topic and r.topic == list_topic]
+        call_info: dict[str, Any] = {}
+        reply, reason = llm_answer(question, rows, ranks, llm.chat, max(0.0, budget_s - ANSWER_MARGIN_S),
+                                   previous=previous, list_topic=list_topic, info=call_info)
+        remaining = budget_s - (time.perf_counter() - started)
+        if reply is None and should_escalate(reason, remaining, getattr(llm, "escalation", None)):
+            trace["escalated"] = True
+            call_info = {}
+            reply, reason = llm_answer(question, rows, ranks, llm.escalation, max(0.0, remaining - ANSWER_MARGIN_S),
+                                       previous=previous, list_topic=list_topic, info=call_info)
+        trace["cached"] = bool(call_info.get("cached"))
+        if reply is None:
+            trace["verifier"] = {"ok": False, "reason": reason}
+            mark_budget_exhausted(llm, reason)
+            return done(None)
+        trace["verifier"] = {"ok": True, "reason": None}
+        trace["llm_status"] = reply["status"]
+        return done(_compose(reply, topic_rows, list_topic))
+    except Exception:  # noqa: BLE001 - the LLM path must never fail a request
+        trace["verifier"] = {"ok": False, "reason": "internal_error"}
+        return done(None)
+
+
+def _compose(reply: dict[str, Any], topic_rows: list[Row], list_topic: str | None) -> AnswerResult:
+    status: str = reply["status"]
+    text: str = reply["answer_ar"]
+    ids: list[str] = list(reply["ids"])
+    quotes: dict[str, str] = dict(reply["quotes"])
+    partial = status == "partial"
+    if topic_rows:  # §4.3: the server list is always the first paragraph
+        server = build_list_answer(topic_rows)
+        extra = text if status in ("answered", "partial") and text else ""
+        parts = [server.text_ar] + ([extra] if extra else []) + ([PARTIAL_NOTE_AR] if partial and extra else [])
+        all_ids = server.ids + [i for i in ids if i not in server.ids] if extra else list(server.ids)
+        return AnswerResult(
+            status="partial" if partial and extra else "answered",
+            text_ar=PARAGRAPH.join(parts),
+            ids=all_ids,
+            quotes={**server.quotes, **{k: v for k, v in quotes.items() if k in all_ids}},
+            mode="llm",
+            partial_note=partial and bool(extra),
+            topic_expanded=list_topic,
+        )
+    if status == "unsupported":
+        return AnswerResult(status="unsupported", text_ar=REFUSAL_AR, ids=[], mode="llm")
+    if partial:
+        return AnswerResult(status="partial", text_ar=PARAGRAPH.join([text, PARTIAL_NOTE_AR]), ids=ids,
+                            quotes=quotes, mode="llm", partial_note=True)
+    return AnswerResult(status="answered", text_ar=text, ids=ids, quotes=quotes, mode="llm")
+
 __all__ = [
     "CONTACT_REFUSAL_AR",
     "EMPLOYMENT_AR",
@@ -157,6 +300,7 @@ __all__ = [
     "REFUSAL_AR",
     "SCENARIO_LABEL_AR",
     "AnswerResult",
+    "answer_llm",
     "answer_offline",
     "build_list_answer",
     "employment_attachment",
