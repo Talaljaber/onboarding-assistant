@@ -318,6 +318,21 @@ export const ar = {
   extra: {
     // Screen agents append new keys here, in both files, in the same commit.
     storageUnavailable: "التخزين غير متاح؛ سيُفقد التقدم عند الإغلاق.",
+    traceSteps: "الخطوات",
+    traceGuard: "حارس فعّل: {pattern}",
+    traceAgent: "الأداة: {tool}",
+    traceFallbackReason: "تم تجاهل اختيار الأداة: {reason}",
+    tracePass: "نجح",
+    traceFail: "فشل",
+    traceHide: "إخفاء التتبع",
+    traceSelect: "اختر «كيف أجبت؟» على رسالة لعرض تتبعها هنا.",
+    traceNoRetrieval: "لم يجرِ استرجاع لهذه الرسالة.",
+    progressCancelled: "لم يُسجَّل.",
+    progressActivities: "الأنشطة المراد تسجيلها",
+    practiceEnded: "انتهى التدريب.",
+    quizCount: "{n} أسئلة تدريبية",
+    copyRow: "نسخ الصف {id}",
+    scenarioNotFound: "هذا الموقف غير متاح لهذا المسار.",
   },
 };
 

@@ -308,5 +308,20 @@ export const en: Dict = {
   extra: {
     // Screen agents append new keys here, in both files, in the same commit.
     storageUnavailable: "Storage is unavailable; progress will be lost when you close the page.",
+    traceSteps: "Steps",
+    traceGuard: "Guard fired: {pattern}",
+    traceAgent: "Tool: {tool}",
+    traceFallbackReason: "Tool choice discarded: {reason}",
+    tracePass: "Passed",
+    traceFail: "Failed",
+    traceHide: "Hide trace",
+    traceSelect: "Choose “How I answered” on a message to see its trace here.",
+    traceNoRetrieval: "No retrieval ran for this message.",
+    progressCancelled: "Not recorded.",
+    progressActivities: "Activities to record",
+    practiceEnded: "Practice ended.",
+    quizCount: "{n} practice questions",
+    copyRow: "Copy row {id}",
+    scenarioNotFound: "That scenario is not available for this track.",
   },
 };
