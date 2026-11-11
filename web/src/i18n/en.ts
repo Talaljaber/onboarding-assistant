@@ -408,5 +408,18 @@ export const en: Dict = {
   },
   uiAdmin: {
     // Worker D (kb, manager, about) appends here.
+    staffMode: "Staff mode: no sign-in",
+    filterLabel: "Show rows",
+    filterAll: "All ({n})",
+    filterChanged: "Changed live ({n})",
+    changedEmpty: "No row has been edited or added live yet. Edit a row and it shows here with an \"edited live\" badge.",
+    colSource: "Source",
+    rowsLabel: "Knowledge-base rows",
+    tryLead: "Check an edit right away",
+    mgrStatProfiles: "Demo profiles",
+    mgrStatHint: "Total across all profiles",
+    aboutGroupHow: "How it works",
+    aboutGroupPrivacy: "Privacy and your data",
+    aboutGroupService: "About the service",
   },
 };

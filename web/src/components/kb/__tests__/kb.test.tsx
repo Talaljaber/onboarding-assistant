@@ -108,6 +108,38 @@ describe("rows table", () => {
   });
 });
 
+describe("narrow layout and filter", () => {
+  it("shows row cards below 1280 px with the same edit action and status hooks", async () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({
+      matches: q.includes("max-width"),
+      media: q,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    backend();
+    mount();
+    await loaded();
+    expect(document.querySelector("table")).toBeNull();
+    const card = document.querySelector('[data-row-id="K13"]') as HTMLElement;
+    expect(within(card).getByText("Edited live")).toBeInTheDocument();
+    expect(card.querySelector('[data-status="edited"]')).not.toBeNull();
+    expect(card.querySelector('[dir="auto"][lang="ar"]')).not.toBeNull();
+    await userEvent.click(within(card).getByRole("button", { name: /Edit K13/ }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("filters to the rows changed live", async () => {
+    backend();
+    mount();
+    await loaded();
+    await userEvent.click(screen.getByRole("button", { name: /Changed live/ }));
+    const ids = [...document.querySelectorAll("tbody tr")].map((tr) => tr.querySelector(".font-id")?.textContent);
+    const changed = kbList.rows.filter((r) => r.status !== "official").map((r) => r.id);
+    expect(ids).toEqual(changed);
+    expect(screen.getByRole("button", { name: /Changed live/ })).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
 describe("edit", () => {
   it("sends only the changed field, toasts the reindex time and shows the oos note", async () => {
     const calls = backend({ "PUT /api/kb/K13": () => json({ ...kbPut, oos_disabled: ["OOS12"] }) });
