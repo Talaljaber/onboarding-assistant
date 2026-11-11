@@ -82,7 +82,7 @@ the not-confirmed / out-of-scope questions are illustrative placeholders until
 |---|---|---|
 | `import_capabilities.json` | `GET /api/admin/kb/import/capabilities` (no pypdf, offline) | `ImportCapabilities` |
 | `import_create_request.json` | `POST /api/admin/kb/imports` body (a tiny `.md` as base64) | `ImportCreate` |
-| `import_detail.json` | `POST /api/admin/kb/imports` (201; `organize` set) and `GET /api/admin/kb/imports/{id}` (`organize: null`) | `ImportDetail` |
+| `import_detail.json` | `POST /api/admin/kb/imports` (201; `organize` set, with `organize.titles` since P13.4: a `.docx` with headings, so `reason: "structured"`) and `GET /api/admin/kb/imports/{id}` (`organize: null`) | `ImportDetail` |
 | `imports_list.json` | `GET /api/admin/kb/imports` (newest first, counts per status) | `ImportListResponse` |
 | `draft_patch_request.json` | `PATCH /api/admin/kb/drafts/{id}` body | `DraftPatch` |
 | `draft.json` | `PATCH /api/admin/kb/drafts/{id}` | `KbDraft` |

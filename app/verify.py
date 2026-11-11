@@ -543,6 +543,59 @@ def verify_organize(reply: object, passages: Sequence[Mapping[str, Any]]) -> Org
     return OrganizeVerdict(True, None, fields, accepted_order, kept_merges, rejected)
 
 
+# -- the document-import title-detection verifier (P13.4) -----------------------------------------------
+TITLE_MAX_CHARS = 80
+#: A chosen line longer than this that ends like a sentence is body text, not a title.
+TITLE_SENTENCE_MAX = 40
+_TITLE_SENTENCE_END = re.compile(r"[.!?؟۔:؛;]\s*$")
+_ANY_LETTER = re.compile(r"[^\W\d_]")
+
+
+@dataclass(frozen=True)
+class TitlesVerdict:
+    """`lines` are the accepted title line numbers (ascending); `rejected` counts every dropped number."""
+
+    ok: bool
+    reason: str | None = None
+    lines: list[int] = field(default_factory=list)
+    rejected: int = 0
+
+
+def title_line_ok(text: str, n: int, last_n: int) -> bool:
+    """The per-line rule: ≤ 80 characters, at least one letter, not the document's last line, and not a
+    line over 40 characters that ends with sentence punctuation (. ! ? ؟ ۔ : ؛ ;)."""
+    line = text.strip()
+    if not line or len(line) > TITLE_MAX_CHARS or not _ANY_LETTER.search(line) or n == last_n:
+        return False
+    return not (len(line) > TITLE_SENTENCE_MAX and _TITLE_SENTENCE_END.search(line))
+
+
+def verify_titles(reply: object, lines: Sequence[Mapping[str, Any]], last_n: int) -> TitlesVerdict:
+    """Checks on a parsed title reply `{"title_lines": [int, ...]}` for one batch of `lines` (`{n, text}`,
+    numbered across the whole document; `last_n` is the document's last line number).
+
+    The whole reply is rejected when it is not an object with exactly the key `title_lines` holding a list of
+    integers. Each number is then checked on its own: it must name a line of this batch, appear once and pass
+    `title_line_ok`; a failing number is dropped and counted in `rejected`. The model never supplies text.
+    """
+    if not isinstance(reply, Mapping):
+        return TitlesVerdict(False, INVALID_JSON)
+    picked = reply.get("title_lines")
+    if set(reply) != {"title_lines"} or not isinstance(picked, list):
+        return TitlesVerdict(False, BAD_SHAPE)
+    if any(not isinstance(x, int) or isinstance(x, bool) for x in picked):
+        return TitlesVerdict(False, BAD_SHAPE)
+    texts = {int(ln["n"]): str(ln.get("text") or "") for ln in lines}
+    accepted: set[int] = set()
+    rejected = 0
+    for n in picked:
+        if n not in texts or n in accepted or not title_line_ok(texts[n], n, last_n):
+            rejected += 1
+            continue
+        accepted.add(n)
+    return TitlesVerdict(True, None, sorted(accepted), rejected)
+
+
 # -- the small-talk reply verifier (P12.2) -------------------------------------------------------------------
 INJECTION_ECHO = "injection_echo"
 WRONG_LANGUAGE = "wrong_language"

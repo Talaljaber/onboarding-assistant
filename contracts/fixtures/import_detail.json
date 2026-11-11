@@ -64,6 +64,11 @@
     "fallback": 0,
     "merged": 0,
     "skipped": 1,
-    "reason": null
+    "reason": null,
+    "titles": {
+      "used": false,
+      "count": 0,
+      "reason": "structured"
+    }
   }
 }

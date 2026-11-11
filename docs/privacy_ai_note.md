@@ -91,6 +91,14 @@ With a key, per message, at most:
   contain; lengths; merges only between neighbours on the same page within 600 characters) before use,
   and a reply is cached only when every value passed. Without the tick nothing about the document leaves
   the laptop;
+- **document import title detection (P13.4; same tick, same warning, only in AI mode, only for `.pdf` and
+  `.txt` files and a `.docx` without any Word heading):** before the passages are made, the document's text
+  lines, each with a line number and its page, at most 200 lines per call (a line longer than 160 characters
+  is cut short). Not the file, its name, the document name or any id. The model returns only line numbers
+  (`{"title_lines": [...]}`), never text; each number is checked (a line of that call, once, at most 80
+  characters, has a letter, not the last line, not a sentence over 40 characters) and the chosen lines become
+  section titles with their text unchanged. A reply is cached only when every number passed; on a failure the
+  rule-based titles are kept;
 - **small talk (a greeting, "how are you", thanks, goodbye, "who are you", "ok", or an unclear message such
   as a lone «?»):** the message only, with its small-talk type, a style word and whether it is the start of
   the conversation. No tool-choice call is made for these, and nothing else is sent: not the role, the
@@ -201,6 +209,8 @@ invented a contact. The earlier held-out 1 run, before the panel, gave offline 2
 - One shared admin password for the knowledge editor and the interns screens; no per-person accounts.
   Interns sign in without a password (demo only).
 - Document import is rule based (headings, pages, sentence ends); scanned PDFs without text give nothing.
+  With «organize» ticked in AI mode the model may pick the section titles of a PDF or text file; a title
+  line over 40 characters that the PDF rules already joined to the next line cannot be picked.
   The suggested question is for review only and never becomes part of a row.
 - The verifier checks grounding, not style. A grounded but clumsy sentence can pass.
 - The English helper translation is checked for invented numbers, contacts, ids and names, not for

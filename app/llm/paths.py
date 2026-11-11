@@ -1,4 +1,4 @@
-"""The LLM answer, feedback, translation (P11.1), small-talk (P12.2), import-organizer (P12.1) and tool-choice paths as pure functions over a `CachedChat`.
+"""The LLM answer, feedback, translation (P11.1), small-talk (P12.2), import-organizer (P12.1), import title (P13.4) and tool-choice paths as pure functions over a `CachedChat`.
 
 `answer.py`, `scenarios.py` and `agent.py` call these. Each one renders its prompt file, serves a cache
 hit (re-verified) or makes one call, verifies the reply, and stores it in the cache **only after** it
@@ -29,9 +29,11 @@ from app.verify import (
     parse_json_object,
     verify_answer,
     OrganizeVerdict,
+    TitlesVerdict,
     verify_feedback,
     verify_organize,
     verify_small_talk,
+    verify_titles,
     verify_translation,
 )
 
@@ -41,6 +43,7 @@ AGENT_PROMPT = "agent_v1"
 TRANSLATE_PROMPT = "translate_v1"
 ORGANIZE_PROMPT = "organize_v1"
 SMALL_TALK_PROMPT = "smalltalk_v1"
+TITLES_PROMPT = "titles_v1"
 ANSWER_MAX_TOKENS = 500
 FEEDBACK_MAX_TOKENS = 200
 AGENT_MAX_TOKENS = 120
@@ -48,6 +51,10 @@ TRANSLATE_MAX_TOKENS = 600
 #: P12.1 document import: at most this many passages per organize call, and its output budget.
 ORGANIZE_BATCH = 20
 ORGANIZE_MAX_TOKENS = 2400
+#: P13.4 title detection: at most this many document lines per call, each cut to this length in the prompt.
+TITLES_BATCH = 200
+TITLES_LINE_CHARS = 160
+TITLES_MAX_TOKENS = 600
 SMALL_TALK_MAX_TOKENS = 200
 #: P12.2: a small-talk reply waits at most this long for the model; then the offline pool answers.
 SMALL_TALK_MAX_S = 2.0
@@ -431,6 +438,71 @@ def llm_organize(
         return verdict, None
     except Exception as exc:  # noqa: BLE001 - organizing must never fail the import
         log_event("llm_path_error", prompt=ORGANIZE_PROMPT, error=type(exc).__name__)
+        return None, "internal_error"
+
+
+# -- document-import title detection (P13.4) --------------------------------------------------------------------
+def _prompt_line(text: str) -> str:
+    line = " ".join(text.split())
+    return line if len(line) <= TITLES_LINE_CHARS else line[: TITLES_LINE_CHARS - 1].rstrip() + "…"
+
+
+def render_titles_prompt(lines: Sequence[Mapping[str, Any]]) -> str:
+    """The rendered `titles_v1` prompt: the document lines with their global number and page only (a line
+    longer than `TITLES_LINE_CHARS` is cut short with «…»). No file name, document name or import id."""
+    return _render(TITLES_PROMPT, lines=[{"n": int(ln["n"]), "page": int(ln.get("page") or 1),
+                                          "text": _prompt_line(str(ln.get("text") or ""))} for ln in lines])
+
+
+def llm_titles(
+    lines: Sequence[Mapping[str, Any]],
+    last_n: int,
+    chat: CachedChat | None,
+    deadline_s: float,
+    *,
+    info: dict[str, Any] | None = None,
+) -> tuple[TitlesVerdict | None, str | None]:
+    """The verified title line numbers for one batch of document lines (`{n, page, text}`, ≤ TITLES_BATCH,
+    numbered across the document; `last_n` = the document's last line number), or `(None, reason)`. Never
+    raises. A cache hit is re-verified; a fresh reply is stored only when **no** number was rejected (a
+    partly rejected reply is used for the numbers that passed, never cached)."""
+    _fill(info, model=getattr(chat, "model_id", None), prompt=TITLES_PROMPT, cached=False, latency_ms=0, calls=0,
+          rejected=0)
+    try:
+        if chat is None:
+            return None, "no_llm"
+        if not lines or len(lines) > TITLES_BATCH:
+            return None, BAD_SHAPE
+        rendered = render_titles_prompt(lines)
+        ex = _Exchange(chat, TITLES_PROMPT, rendered, TITLES_MAX_TOKENS)
+        hit = ex.cached()
+        if hit is not None:
+            verdict = verify_titles(parse_json_object(hit), lines, last_n)
+            if verdict.ok and verdict.rejected == 0:
+                _fill(info, cached=True)
+                return verdict, None
+            log_event("llm_cache_stale", prompt=TITLES_PROMPT, key=ex.key[:12], reason=verdict.reason or "rejected")
+        if deadline_s < MIN_CALL_S:
+            return None, "no_time"
+        content, latency_ms, failure = ex.fresh(deadline_s)
+        _fill(info, latency_ms=latency_ms, calls=1)
+        if content is None:
+            return None, failure
+        parsed = parse_json_object(content)
+        verdict = verify_titles(parsed, lines, last_n) if parsed is not None else TitlesVerdict(False, INVALID_JSON)
+        if not verdict.ok:
+            log_event("verifier_rejection", prompt=TITLES_PROMPT, key=ex.key[:12], reason=verdict.reason,
+                      model=chat.model_id)
+            return None, verdict.reason
+        _fill(info, rejected=verdict.rejected)
+        if verdict.rejected == 0:
+            ex.store(content)
+        else:
+            log_event("verifier_rejection", prompt=TITLES_PROMPT, key=ex.key[:12], reason="lines_rejected",
+                      model=chat.model_id, count=verdict.rejected)
+        return verdict, None
+    except Exception as exc:  # noqa: BLE001 - title detection must never fail the import
+        log_event("llm_path_error", prompt=TITLES_PROMPT, error=type(exc).__name__)
         return None, "internal_error"
 
 

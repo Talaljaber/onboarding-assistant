@@ -2,7 +2,7 @@
 // check type / size / emptiness against the server's capabilities, default document name, and map the
 // server's error to our own wording (its messages are English developer text).
 import type { ApiError } from "@/api/client";
-import type { ImportCapabilities } from "@/api/types";
+import type { ImportCapabilities, OrganizeSummary } from "@/api/types";
 import type { DictKey } from "@/i18n";
 
 export const ACCEPT = ".txt,.md,.markdown,.csv,.docx,.pdf";
@@ -72,7 +72,7 @@ export function uploadProblem(e: ApiError, caps: ImportCapabilities | null): Fil
 }
 
 /** The organize summary of the last upload, shown once on its review screen (GET does not repeat it). */
-const summaries = new Map<string, { organized: number; fallback: number; used: boolean }>();
-export const rememberSummary = (id: string, s: { organized: number; fallback: number; used: boolean }) =>
-  summaries.set(id, s);
+type UploadSummary = Pick<OrganizeSummary, "organized" | "fallback" | "used" | "titles">;
+const summaries = new Map<string, UploadSummary>();
+export const rememberSummary = (id: string, s: UploadSummary) => summaries.set(id, s);
 export const takeSummary = (id: string) => summaries.get(id) ?? null;

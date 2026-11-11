@@ -400,7 +400,17 @@ organize: OrganizeSummary}`; passages the model marked as boilerplate start as `
 `KbImport` = `{id, filename, document_name, file_type, pages, passages, organized, status, created_at,
 approved, pending, discarded}`; `KbDraft` = `{id, import_id, ord, page, text_ar, topic, keyword_en,
 question_ar, status, row_id, created_at, updated_at}`; `OrganizeSummary` = `{requested, used, organized,
-fallback, merged, skipped, reason}` (`reason` e.g. `llm_off`, `timeout`, `invalid_json`).
+fallback, merged, skipped, reason, titles}` (`reason` e.g. `llm_off`, `timeout`, `invalid_json`).
+**Title detection (P13.4, additive).** With the same `organize` tick in LLM mode, a `.pdf` or `.txt` file (and a
+`.docx` in which Word marked no heading) first has its extracted lines sent, numbered across the document with
+their page, at most 200 per call (`prompts/titles_v1.md`); the model returns only `{"title_lines": [n, ...]}`.
+Each number must name a line of that call, once, of at most 80 characters, with a letter, not the document's
+last line and not a line over 40 characters that ends with sentence punctuation; a bad shape rejects the
+reply, a bad number is dropped, and a reply is cached only when no number was dropped. The chosen lines become
+headings (text unchanged); a failed call keeps the rule-based headings for its lines. `titles` =
+`TitlesSummary` `{used, count, reason}` (`count` = title lines the model chose; `reason` `not_requested`,
+`structured` (`.md`/`.csv`/a `.docx` with headings), `llm_off`, `no_lines`, a call failure such as `timeout`, or
+null). The field is optional (older clients ignore it); the server always sets it on upload.
 Errors: 400 `validation_error` with `field` `filename` (unsupported type, or PDF without pypdf),
 `content_b64` (not base64, not UTF-8, unreadable file, no text) or `passages` (more than 200 passages);
 413 file too large; 503 `imports_unavailable`.
