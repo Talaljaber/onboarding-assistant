@@ -1,4 +1,4 @@
-// `#/kb`: the content owner's mock screen. Rows tab = table + edit / add / reset + "try it now";
+﻿// `#/kb`: the content owner's mock screen. Rows tab = table + edit / add / reset + "try it now";
 // manager tab = demo-profile counts. No sign-in (plan D1.8).
 import { useMemo, useState } from "react";
 import type { Result } from "@/api/client";
@@ -77,7 +77,7 @@ export default function KbScreen() {
   ];
 
   return (
-    <div className="flex flex-col gap-4" data-screen="kb">
+    <div className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-4 p-4" data-screen="kb">
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold text-accent">{t("kb.title")}</h1>
@@ -94,7 +94,7 @@ export default function KbScreen() {
       <Tabs items={tabs} value={tab} onChange={setTab} label={t("extra.kbTabsLabel")} idBase={ID_BASE} />
 
       <TabPanel idBase={ID_BASE} id="rows" value={tab}>
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
           <div className="flex min-w-0 flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="accent" onClick={() => setEditing({ kind: "add" })} disabled={kb.status !== "ready"}>

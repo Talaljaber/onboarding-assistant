@@ -133,10 +133,7 @@ def storyboard(r: Run) -> None:
     r.no_overflow("03")
     r.shot("03_answer_k01", card)
 
-    # 3. T02 via the starter chip. Known defect (finding F1): straight after step 2 the follow-up rule
-    # merges the 4-token question with the previous one and the UI answers K01 only, so the
-    # conversation is reset first ("محادثة جديدة") to keep the storyboard testable.
-    page.get_by_text("محادثة جديدة").first.click()
+    # 3. T02 via the starter chip
     expect(page.locator('[data-kind="starters"] button')).to_have_count(5)
     n_before = r.cards("answer").count()
     page.locator('[data-kind="starters"] button', has_text=Q_VALUES).click()
@@ -167,7 +164,8 @@ def storyboard(r: Run) -> None:
     assert not re.search(r"\d\s*%|درجة", card.inner_text())
     r.no_overflow("07")
     r.shot("07_scenario_feedback", card)
-    card.get_by_role("button", name=END_PRACTICE).click()
+    expect(card.get_by_role("button", name=END_PRACTICE)).to_have_count(0)  # only the practice bar has it
+    page.get_by_role("button", name=END_PRACTICE).click()
     expect(page.get_by_test_id("role-chip")).to_be_enabled()
 
     # 6. T08 progress proposal, confirm, dashboard
@@ -235,7 +233,6 @@ def storyboard(r: Run) -> None:
 
     # 15. the edited answer in the chat
     r.go("/chat")
-    page.get_by_text("محادثة جديدة").first.click()  # F1: see step 3
     n_before = r.cards("answer").count()
     r.send(Q_EXHIBITS)
     expect(r.cards("answer")).to_have_count(n_before + 1)
@@ -257,9 +254,9 @@ def storyboard(r: Run) -> None:
 
     # 17. trace open
     r.go("/chat")
-    page.get_by_text("محادثة جديدة").first.click()  # F1: see step 3
+    n_before = r.cards("answer").count()
     r.send(Q_FOUNDED)
-    expect(r.cards("answer")).to_have_count(1)
+    expect(r.cards("answer")).to_have_count(n_before + 1)
     page.get_by_role("button", name="كيف أجبت؟").last.click()
     trace = page.locator("[data-trace]").first
     expect(trace).to_be_visible()
@@ -283,8 +280,12 @@ def storyboard(r: Run) -> None:
     page.get_by_role("button", name=END_PRACTICE).first.click()
 
     # 20. offline mode: K01 again with the offline chip
-    page.get_by_role("button", name="بلا اتصال", exact=True).click()
-    page.get_by_text("محادثة جديدة").first.click()  # F1: see step 3
+    if r.vp == "360":
+        page.get_by_test_id("header-more").click()
+        page.get_by_role("button", name="بلا اتصال", exact=True).click()
+        page.keyboard.press("Escape")
+    else:
+        page.get_by_role("button", name="بلا اتصال", exact=True).click()
     n_before = r.cards("answer").count()
     r.send(Q_FOUNDED)
     expect(r.cards("answer")).to_have_count(n_before + 1)

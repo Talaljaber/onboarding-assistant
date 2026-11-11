@@ -3,6 +3,7 @@ import type { Feedback, Option, ScenarioOut } from "@/api/types";
 import { useT } from "@/i18n";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
+import { ValueLabel } from "../ui/ValueLabel";
 
 export interface ScenarioStartCardProps {
   scenario: ScenarioOut;
@@ -67,7 +68,8 @@ export interface ScenarioFeedbackCardProps {
   feedback: Feedback;
   live: boolean;
   onTryAgain: () => void;
-  onEnd: () => void;
+  /** Kept for callers; the practice bar owns the "end practice" button. */
+  onEnd?: () => void;
 }
 
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
@@ -79,7 +81,7 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-export function ScenarioFeedbackCard({ feedback, live, onTryAgain, onEnd }: ScenarioFeedbackCardProps) {
+export function ScenarioFeedbackCard({ feedback, live, onTryAgain }: ScenarioFeedbackCardProps) {
   const t = useT();
   const judged = feedback.strengths_ar.length > 0 || feedback.improve_ar !== null;
   return (
@@ -108,7 +110,7 @@ export function ScenarioFeedbackCard({ feedback, live, onTryAgain, onEnd }: Scen
       )}
       <Block title={t("scenario.value")}>
         <Badge tone="value">
-          <span lang="ar">{feedback.value_ar}</span>
+          <ValueLabel ar={feedback.value_ar} />
         </Badge>
       </Block>
       {feedback.tip_ar && (
@@ -133,9 +135,6 @@ export function ScenarioFeedbackCard({ feedback, live, onTryAgain, onEnd }: Scen
           <span className="ms-auto flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" onClick={onTryAgain}>
               {t("scenario.again")}
-            </Button>
-            <Button variant="secondary" size="sm" onClick={onEnd}>
-              {t("scenario.end")}
             </Button>
           </span>
         )}

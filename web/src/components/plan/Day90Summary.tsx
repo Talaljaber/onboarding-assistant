@@ -4,6 +4,7 @@
 // hidden by `[data-shell]` in index.css.
 import { useRef, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
+import { ValueLabel } from "@/components/ui/ValueLabel";
 import { useScenarioList } from "@/components/scenarios/useScenarioList";
 import { useT } from "@/i18n";
 import { isoDay } from "@/lib/format";
@@ -47,7 +48,7 @@ export function Day90Summary({ onClose }: { onClose: () => void }) {
           {done.map(({ a, date }) => (
             <li key={a.id}>
               <span lang="ar" dir="rtl">{a.title_ar}</span>{" "}
-              <span className="text-fg-2" dir="ltr">({isoDay(date)})</span>
+              <bdi className="whitespace-nowrap text-fg-2" dir="ltr">({isoDay(date)})</bdi>
             </li>
           ))}
         </ul>
@@ -66,11 +67,10 @@ export function Day90Summary({ onClose }: { onClose: () => void }) {
                 {s && (
                   <>
                     {" — "}
-                    <span lang="ar" dir="rtl">{s.value_ar}</span>{" "}
-                    <span dir="ltr">({s.company_value})</span>
+                    <ValueLabel ar={s.value_ar} en={s.company_value} />
                   </>
                 )}{" "}
-                <span className="text-fg-2" dir="ltr">({isoDay(date)})</span>
+                <bdi className="whitespace-nowrap text-fg-2" dir="ltr">({isoDay(date)})</bdi>
               </li>
             );
           })}

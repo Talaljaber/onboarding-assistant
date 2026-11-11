@@ -1,6 +1,7 @@
 import type { Role, ScenarioOut } from "@/api/types";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
+import { ValueLabel } from "@/components/ui/ValueLabel";
 import { useT } from "@/i18n";
 
 export interface ScenarioCardProps {
@@ -34,8 +35,7 @@ export function ScenarioCard({ scenario, done, otherRole }: ScenarioCardProps) {
           </p>
           <div className="flex flex-wrap gap-2">
             <Badge tone="value" className="text-start">
-              <span lang="ar" dir="rtl">{scenario.value_ar}</span>
-              <span dir="ltr">({scenario.company_value})</span>
+              <ValueLabel ar={scenario.value_ar} en={scenario.company_value} />
             </Badge>
             <Badge tone="neutral" icon={null}>
               {t("scenario.synthetic")}

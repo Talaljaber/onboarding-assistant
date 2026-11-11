@@ -336,6 +336,7 @@ export const ar = {
     traceSteps: "الخطوات",
     traceGuard: "حارس فعّل: {pattern}",
     traceAgent: "الأداة: {tool}",
+    traceTool: "الأداة",
     traceFallbackReason: "تم تجاهل اختيار الأداة: {reason}",
     tracePass: "نجح",
     traceFail: "فشل",
@@ -379,6 +380,7 @@ export const ar = {
     mgrColScenarios: "مواقف تدريبية",
     mgrColQuiz: "تدريبات الاختبار",
     mgrEmpty: "لا توجد ملفات تجريبية بعد.",
+    settings: "الإعدادات",
     roleLocked: "المسار مقفل أثناء التدريب. أنهِ التدريب أولاً.",
   },
 };

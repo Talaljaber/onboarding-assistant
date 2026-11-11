@@ -326,6 +326,7 @@ export const en: Dict = {
     traceSteps: "Steps",
     traceGuard: "Guard fired: {pattern}",
     traceAgent: "Tool: {tool}",
+    traceTool: "Tool",
     traceFallbackReason: "Tool choice discarded: {reason}",
     tracePass: "Passed",
     traceFail: "Failed",
@@ -369,6 +370,7 @@ export const en: Dict = {
     mgrColScenarios: "Scenarios practised",
     mgrColQuiz: "Quiz practice",
     mgrEmpty: "No demo profiles yet.",
+    settings: "Settings",
     roleLocked: "Track is locked during practice. End practice first.",
   },
 };
