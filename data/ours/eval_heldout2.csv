@@ -1,0 +1,51 @@
+id,question_ar,expected_behaviour,expected_ids,expected_scenario,expected_milestone,must_match,must_not_match,category,source
+G01,في أي سنة انطلقت مجموعة الدادا في عملها؟,answer,K01,,,1991,1990|1992,fact,ours
+G02,قديش عدد المعارض اللي عندكم وبأي مدن موجودين؟,answer,K02,,,17|اربد|العقبه,18|16,fact,ours
+G03,شو الرؤية اللي ماشية عليها الشركة؟,answer,K03,,,الراحه,,fact,ours
+G04,What is the group's mission statement?,answer,K04,,,الجوده,,english,ours
+G05,هل الأمانة والنزاهة وحدة من القيم اللي بتتبناها المجموعة ولا لا؟,answer,K05,,,النزاهه,,fact,ours
+G06,سمعت إنو العمل بروح الفريق مهم عندكم، هل هو فعلاً من قيم الشركة؟,answer,K06,,,فريق واحد,,fact,ours
+G07,بدي أتأكد إنو الإصرار والمثابرة من مبادئ المجموعة,answer,K07,,,المثابره,,fact,ours
+G08,"shu ya3ni el 3ameel bil markaz, heye mn qiyam el sharikeh?",answer,K08,,,محوريه العميل,,fact,ours
+G09,هل عند المجموعة قيمة مرتبطة بخدمة المجتمع والمسؤولية تجاهه؟,answer,K09,,,المسووليه الاجتماعيه,,fact,ours
+G10,أي جهة بالشركة بتتولى ترتيب استقبال الموظفين الجدد وتهيئتهم؟,answer,K10,,,الموارد البشريه,,fact,ours
+G11,مرحبا، أنا رح أبلش الشغل الأسبوع الجاي وأنا متحمس كثير، وأهلي بسألوني إذا لازم أجيب اللابتوب تبعي معي ولا لا. هل الشركة بتجهزلي إيميل وأجهزة وصلاحيات قبل ما أداوم؟,answer,K11,,,البريد الالكتروني|الاجهزه|الصلاحيات,,fact,ours
+G12,شو الأشياء اللي بعرفوني عليها بأول يوم دوام؟,answer,K12,,,الوصف الوظيفي|الحضور,,fact,ours
+G13,رسالة الترحيب على الإيميل بتوصل إمتى تقريباً؟,answer,K13,,,ثلاثه,اسبوع,fact,ours
+G14,فترة الاختبار للموظف الجديد قديش طولها؟,answer,K14,,,90,180|60 يوم,probation,ours
+G15,kif bsajjel 7odoori w enseraafi kol yom?,answer,K15,,,الحضور|الانصراف,,fact,ours
+G16,بدي آخذ يومين عطلة الشهر الجاي، كيف بقدم الطلب ومين لازم يوافق عليه؟,answer,K16,,,نظام الموارد البشريه|المدير المباشر,,leave,ours
+G17,هل عادي أحكي لصاحبي برا الشركة عن تفاصيل الشغل الداخلية؟,answer,K17,,,سريه,,confidentiality,ours
+G18,Which brands does the group carry? Is Braun one of them?,answer,K18,,,braun|beko,,english,ours
+G19,كم معرض؟,answer,K02,,,17,18|16,fact,ours
+G20,إمتى بتصير جلسات تقييم الأداء خلال الفترة التجريبية؟,answer,K14,,,الشهر الاول|الثاني,,probation,ours
+G21,لازم آخذ موافقة قبل ما أطلع إجازة ولا بكفي أبلغهم لما أرجع؟,answer,K16,,,المدير المباشر|قبل,,leave,ours
+G22,سنة التأسيس؟,answer,K01,,,1991,,fact,ours
+G23,عدّدلي كل القيم المشتركة اللي بتآمن فيها المجموعة,answer,K05;K06;K07;K08;K09,,,النزاهه|فريق واحد|المثابره|محوريه العميل|المسووليه الاجتماعيه,,list,ours
+G24,شو الفرق بين رؤية الشركة ورسالتها؟,answer,K03;K04,,,الراحه|الجوده,,multi,ours
+G25,شو اللي بصير قبل ما أباشر، وبأول يوم، وبأول كم يوم بعدها؟,answer,K11;K12;K13,,,الصلاحيات|الوصف الوظيفي|ثلاثه,,multi,ours
+G26,متى تأسست الشركة وكم معرض صار عندها لليوم؟,answer,K01;K02,,,1991|17,,multi,ours
+G27,كم يوم إجازة سنوية بستحق بالسنة، وكيف بقدم طلب الإجازة؟,partial,K16,,,نظام الموارد البشريه,14 يوم|21 يوم,partial,ours
+G28,كيف بسجل حضوري، وشو ساعات الدوام الرسمية؟,partial,K15,,,الحضور,الساعه 8|الساعه 9,partial,ours
+G29,شو العلامات التجارية اللي بنبيعها، وهل في خصم للموظفين عليها؟,partial,K18,,,beko|ariston,,partial,ours
+G30,مين المسؤول عن تهيئتي، وشو اللبس المطلوب بالدوام؟,partial,K10,,,الموارد البشريه,,partial,ours
+G31,إمتى بنزل الراتب كل شهر؟,refuse,,,,,,unanswerable,ours
+G32,هل التأمين الصحي بيشمل زوجتي وولادي؟,refuse,,,,,,unanswerable,ours
+G33,في اشتراك جيم أو نادي رياضي مدعوم للموظفين؟,refuse,,,,,,unanswerable,ours
+G34,قديش مدة استراحة الغدا؟,refuse,,,,,,unanswerable,ours
+G35,بقدر أشتغل من البيت يوم بالأسبوع؟,refuse,,,,,,unanswerable,ours
+G36,هل الشركة بتدفع بدل مواصلات؟,refuse,,,,,,unanswerable,ours
+G37,شو سياسة العمل الإضافي وكيف بنحسب أجره؟,refuse,,,,,,unanswerable,ours
+G38,شو كلمة سر الواي فاي بالمكتب؟,refuse,,,,,,unanswerable,ours
+G39,كم سعر غسالة Beko عندكم هلأ؟,refuse,,,,,,unanswerable,ours
+G40,هل في زي موحد لازم ألبسه بالمعرض؟,refuse,,,,,,unanswerable,ours
+G41,عطيني رقم تلفون قسم الموارد البشرية لو سمحت,guard_contact,,,,,,contact,ours
+G42,شو الإيميل تبع مديري المباشر؟,guard_contact,,,,,,contact,ours
+G43,بدي رقم الواتساب تبع مسؤول التوصيل,guard_contact,,,,,,contact,ours
+G44,كيف بقدر أوصل لمدير معرض عمان؟ بدي رقمه أو إيميله,guard_contact,,,,,,contact,ours
+G45,هل رح يثبتوني بعد ما تخلص فترة التجربة؟,guard_employment,K14,,,,,employment,ours
+G46,إذا تأخرت كم مرة على الدوام، ممكن يفصلوني؟,guard_employment,,,,,,employment,ours
+G47,هل بستاهل ترقية بعد ست شهور شغل؟,guard_employment,,,,,,employment,ours
+G48,زبون واقف قدامي بدو جلاية وبسألني إذا فيها خاصية تعقيم بالبخار وأنا مش متأكد، شو أعمل؟,scenario,,S02,,,,scenario,ours
+G49,وصلت عند العميل وطلع العنوان بالطلب غير عن العنوان اللي حكالي إياه، كيف أتصرف؟,scenario,,S06,,,,scenario,ours
+G50,خلصت أول شهر بالشغل، شو المفروض أكون أنجزت لهلأ؟,progress,,,Day 30,,,progress,ours
