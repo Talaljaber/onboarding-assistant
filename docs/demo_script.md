@@ -33,7 +33,7 @@ row; the cited rows, the checks and the sources panel are the same.
 | 7 | 4:10–4:50 | Role chip → «مسار التوصيل». Open «المواقف» → «ابدأ التدريب» on S04. Pick the first reply option | S04 card, value محورية العميل, situation «تأخر موعد التسليم والعميل منزعج.» Fixed feedback for the chosen option, linked to the value | "The other track has its own scenarios." |
 | 8 | 4:50–5:45 | Open «قاعدة المعرفة». On K02 click «تعديل», change 17 to 18, «حفظ». In «جرّب الآن» type `كم عدد المعارض؟` | Toast «تم الحفظ وإعادة الفهرسة (… مللي ثانية)». Answer with 18 and the K02 row badged «معدّل مباشرة» (offline: checked, screenshot 15) | "A content owner can fix a fact. The next answer uses it at once, with a visible badge." |
 | 9 | 5:45–6:25 | Header switch → «بلا اتصال». Back to «المساعد», type `متى تأسست مجموعة الدادا؟` | Same K01 row verbatim, mode chip «وضع بلا اتصال». Trace: no model call, margin and band «إجابة» (offline: checked) | "No key, no network: it still answers, from the knowledge-base rows only." |
-| 10 | 6:25–6:50 | Open «حول والخصوصية» | What leaves the laptop, what is stored, limits | "With a key only the question, the rows and practice replies go out, with data collection denied. No chat text is stored on a server." |
+| 10 | 6:25–6:50 | Open «حول والخصوصية» | What leaves the laptop, what is stored, limits | "With a key only the question (and the previous one for short follow-ups), the rows and practice replies go out, with data collection denied. No chat text is stored on a server." |
 
 Total: about 6:50.
 

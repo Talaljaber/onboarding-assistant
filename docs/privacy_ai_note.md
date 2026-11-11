@@ -74,7 +74,8 @@ that do not collect or store prompts. The key stays in `.env` (git-ignored) and 
 never logged, never sent to the browser, and the built web client is checked for it.
 
 Network tripwire: `scripts\no_network.py scripts\run_eval.py --set dev --mode offline` runs the whole
-DEV evaluation with every socket connection and name lookup disabled.
+DEV evaluation with every socket connection and name lookup that would leave the machine disabled
+(loopback stays allowed).
 
 ## 4. What is stored, and where
 
@@ -89,7 +90,7 @@ policies for anonymous or signed-in clients.
 | `progress` | profile id, activity id, time |
 | `quiz_attempts` | profile id, question id, option chosen, correct or not |
 | `scenario_attempts` | profile id, scenario id, mode, option id, checklist ids met and missing, value label. **No free text** |
-| `turn_logs` | request id, time, tool, mode, status, band, cited ids, verifier result and reason, latency, cached, model. **No message text, no answer text** |
+| `turn_logs` | request id, profile id (if any), time, tool, mode, status, band, cited ids, verifier result and reason, latency, cached, model. **No message text, no answer text** |
 
 The store code refuses any turn log with a message, answer, text, prompt or reply field.
 
@@ -118,7 +119,8 @@ chat thread. «امسح بيانات هذا المتصفح» on the «حول و�
   server listens on `127.0.0.1` only and refuses write requests that come from another website
   (cross-origin), but anyone using this laptop's browser can edit rows.
 - The assistant does not make or predict employment decisions (probation outcome, pay, firing,
-  promotion). Those questions get a fixed reply that points to HR.
+  promotion). Those questions get a fixed reply that points to HR when the guard patterns match them
+  (held-out set: 5 of 7 guard questions handled as expected).
 
 ## 6. Offline mode: what it can and cannot do
 

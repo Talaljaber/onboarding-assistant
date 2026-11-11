@@ -3,7 +3,7 @@
 ## 1. Problem and approach
 
 New employees need answers they can trust. Every answer cites knowledge-base rows verbatim;
-unsupported questions get a fixed refusal; generated text may not add contacts, links or numbers;
+unsupported questions get a fixed refusal or "not confirmed"; generated text may not add contacts, links or numbers;
 scenario feedback is never a score; the plan is "suggested".
 
 Design rule: **the server decides, the model words.** Guards, a hybrid retriever and validated tools

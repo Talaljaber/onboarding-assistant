@@ -10,8 +10,8 @@ Five slides. One `---` line separates slides. Speaker notes follow each slide.
 - A wrong answer about policy, a number or a contact does real harm.
 - So trust is the test:
   - every answer cites its source row, shown verbatim (id · document · page);
-  - unsupported questions get a clear refusal, never a guess;
-  - no invented names, phones, emails, links or numbers;
+  - unsupported questions get a clear refusal (offline, often "not confirmed" with the closest row);
+  - no phones, emails, links or numbers that are not in the cited rows or the question;
   - practice feedback is never a score; the plan is suggested, not official.
 
 Notes: The prototype is Arabic first and right-to-left. It runs on one laptop with `start.bat`, with or
@@ -45,7 +45,7 @@ message -> guards (employment, contact) -> tool choice (LLM checked against fixe
 ```
 
 - Retrieval: multilingual e5 (local ONNX) + BM25, fused by rank.
-- Verifier: ids must be rows sent, a verbatim quote per id, every number found in the rows, no contacts
+- Verifier: ids must be rows sent, a verbatim quote per id, every number found in the rows or the question, no contacts
   or links. A failed reply is dropped and the offline answer is shown.
 - Offline: the matching row verbatim, "not confirmed" with the closest row, or a refusal.
 - Model (optional): `deepseek/deepseek-v4.1-flash` via OpenRouter, pinned, temperature 0, seed 42,
@@ -81,8 +81,8 @@ after the freeze. The jury file was never used for tuning.
 
 - Demo: role → two sourced answers → a refusal → a scenario → progress → the other track's scenario →
   live knowledge edit → offline switch.
-- Without a key, nothing goes to any AI service; a socket tripwire proves offline mode makes no
-  network calls.
+- Without a key, nothing goes to any AI service; a socket tripwire proves the offline DEV evaluation
+  makes no network calls.
 - With a key: only the question, the previous question for short follow-ups, the rows and practice replies
   go to OpenRouter, with data collection denied. Never the role, alias or progress.
 - No chat text is stored on a server. Supabase (region to be confirmed) holds the knowledge base,

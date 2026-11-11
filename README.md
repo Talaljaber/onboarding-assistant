@@ -9,8 +9,9 @@ It covers the five required features:
    fictional training tracks. Scenarios, the plan and the quiz order follow the track.
 2. **Question-answer assistant.** Answers come only from the 18 rows of the official knowledge base.
    Every answer shows its source row: id · document · page, with the row text verbatim. When the rows do
-   not support a question, the assistant says so with a fixed refusal. It never invents a policy,
-   contact, number or name.
+   not support a question, the assistant says so with a fixed refusal (offline, often a "not confirmed"
+   card with the closest row instead). Offline answers are rows verbatim; an AI reply with a number,
+   contact or link not found in the cited rows or the question is dropped.
 3. **Practical scenarios.** The six official scenarios (three per track). You reply in your own words
    or (offline) pick one of three replies. Feedback is linked to one of the five company values. It is
    learning feedback, never a score.
@@ -111,7 +112,8 @@ Full timed script with expected screens: [`docs/demo_script.md`](docs/demo_scrip
 .venv\Scripts\python.exe scripts\no_network.py scripts\run_eval.py --set dev --mode offline
 ```
 
-`no_network.py` disables every socket connection and name lookup in the process, then runs the
+`no_network.py` disables every socket connection and name lookup that would leave the machine
+(loopback stays allowed), then runs the
 evaluation. Any network attempt would raise an error and stop the run.
 
 ## 5. Run the evaluation
@@ -185,7 +187,8 @@ The web client is prebuilt in `web/dist`; judges do not need Node. To rebuild:
 - **Supabase region to be confirmed.** The database is a Supabase-hosted project; its region is still
   to be confirmed.
 - **Five features only, small knowledge base.** 18 rows. No HR procedures beyond them, no employment
-  decisions (questions about pay, firing or passing probation get a fixed refusal).
+  decisions (questions about pay, firing or passing probation get a fixed refusal when the guard
+  patterns match them; on the held-out set 5 of 7 guard questions were handled as expected).
 - **Not a product.** No accounts, no deployment. Profiles are demo aliases such as «متدرب ١».
 
 ## 8. Troubleshooting
