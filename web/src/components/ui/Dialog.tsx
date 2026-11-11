@@ -65,6 +65,8 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
 
   return (
     <div
+      data-shell
+      data-dialog-overlay
       className="fixed inset-0 z-40 grid place-items-center bg-(--da-overlay) p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();

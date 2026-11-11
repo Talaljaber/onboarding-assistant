@@ -85,6 +85,9 @@ export interface AppState {
   scenarios: { practised: Record<string, string>; mark: (scenarioId: string) => void };
   /** The current role's saved chat items (<= 40, traces stripped). The chat screen owns their shape. */
   thread: { items: unknown[]; set: (items: unknown[]) => void };
+  /** True while chat practice mode is on (not persisted); the header locks the role chip. */
+  practiceActive: boolean;
+  setPracticeActive: (on: boolean) => void;
   /** False after a failed write: state is in memory only. */
   storageOk: boolean;
   /** Remove everything stored in this browser and reload. */
@@ -115,6 +118,7 @@ export function AppStateProvider({ children, initial }: AppStateProviderProps) {
   const [plan, setPlan] = useState<PlanOut | null>(null);
   const [planStatus, setPlanStatus] = useState<PlanStatus>("idle");
   const [planTick, setPlanTick] = useState(0);
+  const [practiceActive, setPracticeActive] = useState(false);
 
   // ---- persistence (debounced 200 ms, flushed when the page is hidden or the provider unmounts)
   const toastRef = useRef(toast);
@@ -286,13 +290,15 @@ export function AppStateProvider({ children, initial }: AppStateProviderProps) {
       quiz,
       scenarios,
       thread,
+      practiceActive,
+      setPracticeActive,
       storageOk,
       clearBrowserData,
     }),
     [
       role, setRole, lang, setLang, state.mode, setMode, state.trace, setTrace, state.demoBannerSeen,
       setDemoBannerSeen, profileId, plan, planStatus, reloadPlan, progress, quiz, scenarios, thread,
-      storageOk, clearBrowserData,
+      practiceActive, storageOk, clearBrowserData,
     ],
   );
 

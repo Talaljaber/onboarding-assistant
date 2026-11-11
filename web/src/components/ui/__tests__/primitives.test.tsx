@@ -101,6 +101,17 @@ describe("ChipGroup", () => {
   });
 });
 
+describe("ChipGroup per-option lang/dir", () => {
+  it("wraps labelled options in a span with lang and dir", () => {
+    render(<ChipGroup label="Pick" value={null} onChange={() => {}} items={[{ id: "a", label: "نعم", lang: "ar", dir: "rtl" }, { id: "b", label: "Plain" }]} />);
+    const span = screen.getByText("نعم");
+    expect(span.tagName).toBe("SPAN");
+    expect(span).toHaveAttribute("lang", "ar");
+    expect(span).toHaveAttribute("dir", "rtl");
+    expect(screen.getByRole("radio", { name: "Plain" }).querySelector("span")).toBeNull();
+  });
+});
+
 describe("Tabs", () => {
   function Harness() {
     const [v, setV] = useState("one");

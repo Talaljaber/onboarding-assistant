@@ -15,6 +15,15 @@ body {
   background: var(--da-page);
   line-height: 1.7;
 }
+/* Height of the fixed BottomNav (min-h-14 + 1px top border); 0 from md up where the bar is hidden. */
+:root {
+  --da-bottom-nav: calc(3.5rem + 1px);
+}
+@media (min-width: 48rem) {
+  :root {
+    --da-bottom-nav: 0px;
+  }
+}
 html[lang="en"] body {
   line-height: 1.55;
 }
@@ -56,7 +65,7 @@ h1, h2, h3, h4 {
 
 /* Print: hide the shell, black on white (Day 90 summary). */
 @media print {
-  [data-shell], [data-toast-region], [data-composer] {
+  [data-shell], [data-toast-region], [data-composer], [role="dialog"], [data-dialog-overlay] {
     display: none !important;
   }
   html, body {

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { replace } from "@/router";
 import { useT } from "@/i18n";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { LIMITS } from "@/api/types";
 import { useAppState } from "@/state/useAppState";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
@@ -26,6 +27,14 @@ function scenarioParam(): string | null {
   if (!q) return null;
   const id = new URLSearchParams(q).get("scenario");
   return id && /^S0[1-6]$/.test(id) ? id : null;
+}
+
+/** `?ask=<question>` from the hash (hand-off from the quiz screen), if any. */
+function askParam(): string | null {
+  const q = window.location.hash.split("?")[1];
+  if (!q) return null;
+  const v = new URLSearchParams(q).get("ask");
+  return v && v.trim() ? v.slice(0, LIMITS.messageMax) : null;
 }
 
 const ANSWER_KINDS = new Set(["answer", "partial", "unconfirmed", "refusal", "employment"]);
@@ -51,6 +60,26 @@ function ChatInner() {
     replace("/chat");
     void startScenario(id);
   }, [startScenario]);
+
+  // ---- hand-off from the quiz screen: prefill the composer, never auto-send
+  const [prefill, setPrefill] = useState<string | null>(null);
+  const askHandled = useRef(false);
+  useEffect(() => {
+    if (askHandled.current) return;
+    const q = askParam();
+    if (!q) return;
+    askHandled.current = true;
+    setPrefill(q);
+    replace("/chat");
+  }, []);
+
+  // ---- lock the header role chip while practice mode is on
+  const { setPracticeActive } = app;
+  const practiceOn = active !== null;
+  useEffect(() => {
+    setPracticeActive(practiceOn);
+    return () => setPracticeActive(false);
+  }, [practiceOn, setPracticeActive]);
 
   // ---- keep the newest item in view
   useEffect(() => {
@@ -162,7 +191,7 @@ function ChatInner() {
           {lastIsReply && !busy ? t("a11y.newMessage") : ""}
         </div>
 
-        <div className="sticky bottom-0 z-10 -mx-4 bg-page px-4 pb-3 pt-2 max-lg:bottom-16">
+        <div className="sticky bottom-(--da-bottom-nav) z-10 -mx-4 bg-page px-4 pb-3 pt-2">
           {active && (
             <div
               data-practice-banner
@@ -179,6 +208,7 @@ function ChatInner() {
           <Composer
             ref={composerRef}
             busy={busy}
+            prefill={prefill}
             onSubmit={chat.send}
             placeholder={active ? t("chat.placeholderScenario") : t("chat.placeholder")}
             onEscapeEmpty={active ? chat.endPractice : undefined}

@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useEffect,
   useImperativeHandle,
   useLayoutEffect,
   useRef,
@@ -25,6 +26,8 @@ export interface ComposerProps {
   placeholder?: string;
   /** Character limit shown in the counter; defaults to the contract's `LIMITS.messageMax`. */
   maxLength?: number;
+  /** Fill the box with this text (not sent); focuses it. */
+  prefill?: string | null;
   /** Escape pressed while the box is empty (leaves practice mode). */
   onEscapeEmpty?: () => void;
 }
@@ -36,13 +39,19 @@ export interface ComposerProps {
  * only after it was handed to `onSubmit`. Direction follows what is typed (`dir="auto"`).
  */
 export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function Composer(
-  { onSubmit, busy, placeholder, maxLength = LIMITS.messageMax, onEscapeEmpty },
+  { onSubmit, busy, placeholder, maxLength = LIMITS.messageMax, onEscapeEmpty, prefill },
   ref,
 ) {
   const t = useT();
   const [text, setText] = useState("");
   const areaRef = useRef<HTMLTextAreaElement>(null);
   useImperativeHandle(ref, () => areaRef.current as HTMLTextAreaElement);
+  useEffect(() => {
+    if (prefill) {
+      setText(prefill);
+      areaRef.current?.focus();
+    }
+  }, [prefill]);
   const empty = text.trim() === "";
   const tooLong = text.length > maxLength;
 

@@ -47,7 +47,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
         </div>
       )}
-      <main id="main" tabIndex={-1} className={`outline-none ${role ? "pb-16 md:pb-0" : ""}`}>
+      <main id="main" tabIndex={-1} className={`outline-none ${role ? "pb-(--da-bottom-nav)" : ""}`}>
         {children}
       </main>
       <footer data-shell className="hidden border-t border-line px-4 py-3 text-center text-sm text-fg-2 md:block">
