@@ -408,7 +408,7 @@ def test_no_network_blocks_connections(tmp_path: Path) -> None:
     probe.write_text(
         "import socket, sys\n"
         "try:\n"
-        "    socket.create_connection(('127.0.0.1', 9), timeout=1)\n"
+        "    socket.create_connection(('10.255.255.1', 9), timeout=1)\n"
         "except OSError as e:\n"
         "    print(e)\n"
         "    sys.exit(7)\n",
