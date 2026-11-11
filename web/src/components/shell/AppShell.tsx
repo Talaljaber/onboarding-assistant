@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useHealth } from "@/api/health";
+import { HealthContext, useHealth } from "@/api/health";
 import { Icon } from "@/components/ui/Icon";
 import { ServiceBanner } from "@/components/ui/ServiceBanner";
 import { useT } from "@/i18n";
@@ -58,7 +58,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           )}
           <main id="main" tabIndex={-1} className={`flex-1 outline-none ${role ? "pb-(--da-bottom-nav)" : ""}`}>
-            {children}
+            <HealthContext.Provider value={health}>{children}</HealthContext.Provider>
           </main>
           <footer data-shell className="hidden border-t border-line px-6 py-4 text-center text-xs text-fg-3 md:block">
             {t("app.disclaimer")}

@@ -1,4 +1,5 @@
 // One assistant item: the shared header row plus the card its reply maps to (plan A6.1 / A6.30).
+import { useHealthInfo } from "@/api/health";
 import type { AnswerReply, PlanReply, ProgressProposalReply, QuizReply, RefusalReply } from "@/api/types";
 import { planActivityIds, wouldBe } from "@/state/progress";
 import { useAppState } from "@/state/useAppState";
@@ -29,6 +30,7 @@ const NO_PROPOSAL = { milestone: "Day 30", activity_ids: [], titles_ar: [], curr
 export function ChatMessage(p: ChatMessageProps) {
   const { item } = p;
   const app = useAppState();
+  const health = useHealthInfo();
   const kind = cardKind(item);
   const r = item.reply;
 
@@ -100,11 +102,21 @@ export function ChatMessage(p: ChatMessageProps) {
       card = <AssistantBubble text={r.text_ar} />;
   }
 
+  // A picked option's feedback comes from the official checklist, not from "offline mode": label it so
+  // unless the whole app really is offline (switched off, or the server has no model).
+  const material =
+    kind === "scenario_feedback" &&
+    Boolean(r.feedback?.option_id) &&
+    item.mode === "offline" &&
+    !app.forceOffline &&
+    health?.llm_available !== false;
+
   return (
     <AssistantFrame
       mode={item.mode}
       cached={item.cached}
       fixed={kind === "refusal" || kind === "employment" || kind === "unconfirmed"}
+      material={material}
       hasTrace={Boolean(item.trace)}
       traceShown={p.traceShown}
       onToggleTrace={p.onToggleTrace}

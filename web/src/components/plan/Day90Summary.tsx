@@ -12,6 +12,7 @@ import { ValueLabel } from "@/components/ui/ValueLabel";
 import { useScenarioList } from "@/components/scenarios/useScenarioList";
 import { useT } from "@/i18n";
 import { isoDay } from "@/lib/format";
+import { practisedScenarios } from "@/state/progress";
 import { useAppState } from "@/state/useAppState";
 
 const listCls = "m-0 flex list-none flex-col divide-y divide-line p-0";
@@ -46,7 +47,9 @@ export function Day90Summary({ onClose }: { onClose: () => void }) {
     .flatMap((m) => m.activities)
     .filter((a) => progress.isDone(a.id))
     .map((a) => ({ a, date: progress.done[a.id] ?? "" }));
-  const practised = Object.entries(scenarios.practised).sort(([x], [y]) => x.localeCompare(y));
+  const practised = Object.entries(practisedScenarios(scenarios.practised, plan, progress.done)).sort(([x], [y]) =>
+    x.localeCompare(y),
+  );
   const valueOf = (id: string) => list.scenarios.find((s) => s.id === id);
   const none = <p className="py-2 text-sm text-fg-3">{t("extra.summaryNone")}</p>;
 

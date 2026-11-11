@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PlanOut } from "@/api/types";
 import planFixture from "@fixtures/plan.json";
-import { countDone, fromProposal, percent, planActivityIds, pyRound, toggle, wouldBe } from "../progress";
+import { countDone, fromProposal, percent, planActivityIds, practisedScenarios, pyRound, toggle, wouldBe } from "../progress";
 
 const IDS = ["SA-1", "SA-2", "SA-3", "SA-4", "SA-5", "SA-6", "SA-7", "SA-8"];
 const NOW = "2026-11-12T10:00:00.000Z";
@@ -61,5 +61,24 @@ describe("per-role isolation and the plan fixture", () => {
     expect(ids.length).toBeGreaterThan(0);
     expect(ids.every((i) => /^SA-/.test(i))).toBe(true);
     expect(planActivityIds(null)).toEqual([]);
+  });
+});
+
+describe("practisedScenarios (one definition for scenarios, progress and the Day 90 summary)", () => {
+  const plan = planFixture as unknown as PlanOut;
+
+  it("is the practised set plus every scenario of a ticked plan scenario activity", () => {
+    const practised = { S01: "2026-11-01T00:00:00.000Z" };
+    const done = { "SA-D60-s02": NOW, "SA-D1-read-company": NOW, "SA-D30-quiz": NOW };
+    expect(practisedScenarios(practised, plan, done)).toEqual({ S01: "2026-11-01T00:00:00.000Z", S02: NOW });
+  });
+
+  it("keeps the practice date when the activity is also ticked, and ignores reading and quiz refs", () => {
+    const out = practisedScenarios({ S01: "2026-11-01T00:00:00.000Z" }, plan, { "SA-D30-s01": NOW, "SA-D1-read-values": NOW });
+    expect(out).toEqual({ S01: "2026-11-01T00:00:00.000Z" });
+  });
+
+  it("is just the practised set without a plan", () => {
+    expect(practisedScenarios({ S03: NOW }, null, { "SA-D60-s02": NOW })).toEqual({ S03: NOW });
   });
 });

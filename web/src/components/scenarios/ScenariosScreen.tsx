@@ -10,6 +10,7 @@ import { Loadable } from "@/components/ui/Loadable";
 import { Page, PageHeader } from "@/components/ui/Page";
 import { TabPanel, Tabs } from "@/components/ui/Tabs";
 import { useT } from "@/i18n";
+import { practisedScenarios } from "@/state/progress";
 import { useAppState } from "@/state/useAppState";
 import { ScenarioCard } from "./ScenarioCard";
 import { useScenarioList } from "./useScenarioList";
@@ -25,15 +26,10 @@ export default function ScenariosScreen() {
   const list = useScenarioList(shown);
   const shortName = (r: Role) => t(r === "Sales" ? "uiUat.roleShortSales" : "uiUat.roleShortDelivery");
 
-  // A scenario counts as done when the plan activity that references it is complete
-  // (the plan is the current role's; the other track has no activities to match).
-  const activityFor = (scenarioId: string) =>
-    plan?.milestones.flatMap((m) => m.activities).find((a) => a.kind === "scenario" && a.refs.includes(scenarioId));
-  const isDone = (scenarioId: string) => {
-    if (view !== "mine") return false;
-    const a = activityFor(scenarioId);
-    return (a ? progress.isDone(a.id) : false) || scenarioId in practised.practised;
-  };
+  // One shared definition of "practised" (also used by progress and the Day 90 summary). The plan is
+  // the current role's; the other track has nothing to match.
+  const done = practisedScenarios(practised.practised, plan, progress.done);
+  const isDone = (scenarioId: string) => view === "mine" && scenarioId in done;
 
   const doneCount = view === "mine" ? list.scenarios.filter((s) => isDone(s.id)).length : 0;
 
