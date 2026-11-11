@@ -12,13 +12,13 @@ export interface SkeletonProps {
 export function Skeleton({ lines = 3, className }: SkeletonProps) {
   const t = useT();
   return (
-    <div role="status" aria-busy="true" className={cn("flex flex-col gap-2", className)}>
+    <div role="status" aria-busy="true" className={cn("flex flex-col gap-3 py-1", className)}>
       <span className="sr-only">{t("ui.skeleton.label")}</span>
       {Array.from({ length: lines }, (_, i) => (
         <div
           key={i}
           aria-hidden="true"
-          className={cn("h-4 rounded-sm bg-surface-2 motion-safe:animate-pulse", i === lines - 1 && lines > 1 ? "w-2/3" : "w-full")}
+          className={cn("h-3.5 rounded-full bg-surface-2 motion-safe:animate-pulse", i === lines - 1 && lines > 1 ? "w-2/3" : "w-full")}
         />
       ))}
     </div>

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { useT } from "@/i18n";
+import { cn } from "./cn";
 import { Icon } from "./Icon";
 
 /** Props for {@link Dialog}. */
@@ -9,17 +10,19 @@ export interface DialogProps {
   /** Visible heading; also the dialog's accessible name. */
   title: string;
   children: ReactNode;
+  /** Panel width from `sm` up: `md` (32rem, default) or `lg` (42rem, forms and tables). Phones always get a bottom sheet. */
+  size?: "md" | "lg";
 }
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
- * Modal dialog (`role="dialog" aria-modal`). Moves focus inside on open, traps Tab,
+ * Modal dialog (`role="dialog" aria-modal`): a bottom sheet on phones, a centred panel from `sm` up. Moves focus inside on open, traps Tab,
  * closes on Escape or backdrop click, locks page scroll, and restores focus to the
  * opener on close.
  */
-export function Dialog({ open, onClose, title, children }: DialogProps) {
+export function Dialog({ open, onClose, title, children, size = "md" }: DialogProps) {
   const t = useT();
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
@@ -67,7 +70,7 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
     <div
       data-shell
       data-dialog-overlay
-      className="fixed inset-0 z-40 grid place-items-center bg-(--da-overlay) p-4"
+      className="da-fade-in fixed inset-0 z-40 flex items-end justify-center bg-(--da-overlay) sm:items-center sm:p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -79,22 +82,27 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-lg border border-line border-t-4 border-t-amber bg-surface-0 p-5 shadow-2"
+        className={cn(
+          "da-sheet-in relative max-h-[92dvh] w-full overflow-y-auto overscroll-contain bg-surface-0 shadow-2 outline-none",
+          "rounded-t-xl pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:rounded-xl sm:pb-6",
+          size === "lg" ? "sm:max-w-2xl" : "sm:max-w-lg",
+        )}
       >
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <h2 id={titleId} className="text-xl font-bold text-accent">
+        <div aria-hidden="true" className="mx-auto mt-2 h-1 w-10 rounded-full bg-surface-2 sm:hidden" />
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface-0 px-5 py-3 sm:px-6 sm:py-4">
+          <h2 id={titleId} className="text-lg font-bold text-fg-1">
             {title}
           </h2>
           <button
             type="button"
             aria-label={t("ui.dialog.closeLabel")}
             onClick={onClose}
-            className="grid size-9 shrink-0 place-items-center rounded-sm text-fg-2 hover:bg-surface-2"
+            className="-me-2 grid size-11 shrink-0 place-items-center rounded-full text-fg-2 transition-colors duration-(--da-motion-fast) hover:bg-surface-2 hover:text-fg-1"
           >
-            <Icon name="close" size={18} />
+            <Icon name="close" size={20} />
           </button>
         </div>
-        <div className="text-fg-2">{children}</div>
+        <div className="px-5 pt-4 text-fg-2 sm:px-6">{children}</div>
       </div>
     </div>
   );

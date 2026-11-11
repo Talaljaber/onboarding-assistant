@@ -16,28 +16,31 @@ export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
   { selected = false, onSelect, tone = "neutral", className, children, onClick, ...rest },
   ref,
 ) {
+  // A neutral chip shows its selection in the accent teal, so "selected" never reads as disabled grey.
+  const shown = selected && tone === "neutral" ? "var(--da-accent)" : toneColor(tone);
   return (
     <button
       ref={ref}
       type="button"
       role="radio"
       aria-checked={selected}
-      style={{ "--tone": toneColor(tone) } as CSSProperties}
+      style={{ "--tone": shown } as CSSProperties}
       onClick={(e) => {
         onClick?.(e);
         if (!e.defaultPrevented) onSelect?.();
       }}
       className={cn(
-        "inline-flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-sm font-medium text-fg-1",
-        "transition-colors duration-(--da-motion-fast) disabled:cursor-not-allowed disabled:opacity-55",
+        "inline-flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-sm font-medium leading-snug text-fg-1",
+        "transition-[background-color,border-color,box-shadow] duration-(--da-motion-fast) ease-da",
+        "disabled:cursor-not-allowed disabled:opacity-55",
         selected
-          ? cn("border-(--tone) border-2", tintClass(28))
-          : "border-line-strong bg-surface-0 hover:border-accent hover:bg-surface-1",
+          ? cn("border-(--tone) font-semibold shadow-[inset_0_0_0_1px_var(--tone)]", tintClass(16))
+          : "border-line-strong/50 bg-surface-0 hover:border-accent hover:bg-accent-soft",
         className,
       )}
       {...rest}
     >
-      {selected && <Icon name="check" size={14} className="text-(--tone)" />}
+      {selected && <Icon name="check" size={14} className="shrink-0 text-(--tone)" />}
       {children}
     </button>
   );

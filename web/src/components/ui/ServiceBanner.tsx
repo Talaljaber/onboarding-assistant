@@ -21,11 +21,17 @@ export function ServiceBanner({ state, className }: ServiceBannerProps) {
       {state !== "ok" && (
         <p
           className={cn(
-            "flex items-center gap-2 border-b-2 px-4 py-2 text-sm text-fg-1",
-            state === "waking" ? "border-warn bg-surface-1" : "border-danger bg-surface-1",
+            "flex items-center justify-center gap-2 border-b px-4 py-2.5 text-sm font-medium text-fg-1",
+            state === "waking"
+              ? "border-[color-mix(in_srgb,var(--da-amber)_60%,transparent)] bg-amber-soft"
+              : "border-[color-mix(in_srgb,var(--da-danger)_40%,transparent)] bg-[color-mix(in_srgb,var(--da-danger)_8%,var(--da-surface-0))]",
           )}
         >
-          <Icon name={state === "waking" ? "spinner" : "alert"} size={16} className={state === "waking" ? "text-warn" : "text-danger"} />
+          <Icon
+            name={state === "waking" ? "spinner" : "alert"}
+            size={16}
+            className={cn("shrink-0", state === "waking" ? "text-warn motion-safe:animate-spin" : "text-danger")}
+          />
           {t(state === "waking" ? "service.waking" : "service.down")}
         </p>
       )}

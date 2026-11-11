@@ -31,17 +31,20 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: (id: numbe
       onBlur={() => setPaused(false)}
       style={{ "--tone": toneColor(item.tone) } as CSSProperties}
       className={cn(
-        "pointer-events-auto flex items-start gap-3 rounded-md border border-line border-s-[6px] border-s-(--tone) p-3 text-sm font-medium text-fg-1 shadow-2",
-        tintClass(16),
+        "da-rise-in pointer-events-auto flex items-center gap-3 rounded-lg border border-line bg-surface-0 p-2 ps-3 text-sm font-medium text-fg-1 shadow-2",
       )}
     >
-      {TOAST_ICON[item.tone] && <Icon name={TOAST_ICON[item.tone]!} size={18} className="mt-0.5 shrink-0 text-(--tone)" />}
+      {TOAST_ICON[item.tone] && (
+        <span aria-hidden="true" className={cn("grid size-8 shrink-0 place-items-center rounded-full text-(--tone)", tintClass(16))}>
+          <Icon name={TOAST_ICON[item.tone]!} size={16} />
+        </span>
+      )}
       <p className="min-w-0 flex-1 break-words">{item.msg}</p>
       <button
         type="button"
         aria-label={t("common.dismiss")}
         onClick={() => onDismiss(item.id)}
-        className="grid size-8 shrink-0 place-items-center rounded-sm text-fg-2 hover:bg-surface-2"
+        className="grid size-11 shrink-0 place-items-center rounded-full text-fg-2 hover:bg-surface-2 hover:text-fg-1"
       >
         <Icon name="close" />
       </button>

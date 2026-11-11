@@ -1,10 +1,14 @@
 import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from "react";
 import { cn } from "./cn";
 
-const CONTROL =
-  "w-full rounded-md border border-line-strong bg-input px-3 text-base text-fg-1 placeholder:text-fg-3 " +
-  "transition-colors duration-(--da-motion-fast) hover:border-accent focus-visible:border-accent " +
-  "disabled:cursor-not-allowed disabled:opacity-55";
+/** Shared look of every text control (inputs, textareas, selects). Exported for screen-local controls. */
+export const CONTROL =
+  "w-full rounded-md border border-line-strong bg-input px-3.5 text-base text-fg-1 placeholder:text-fg-3 " +
+  "transition-[border-color,box-shadow] duration-(--da-motion-fast) ease-da hover:border-accent focus-visible:border-accent " +
+  "disabled:cursor-not-allowed disabled:bg-surface-1 disabled:opacity-60";
+
+/** Shared label look. */
+export const LABEL = "text-sm font-semibold text-fg-1";
 
 interface FieldShellProps {
   label: string;
@@ -30,10 +34,10 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   const descId = description ? `${inputId}-desc` : undefined;
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <label htmlFor={inputId} className="text-sm font-bold text-accent">
+      <label htmlFor={inputId} className={LABEL}>
         {label}
       </label>
-      <input ref={ref} id={inputId} aria-describedby={descId} className={cn(CONTROL, "min-h-11")} {...rest} />
+      <input ref={ref} id={inputId} aria-describedby={descId} className={cn(CONTROL, "min-h-12")} {...rest} />
       {description && (
         <p id={descId} className="text-sm text-fg-3">
           {description}
@@ -59,7 +63,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
   const descId = description ? `${areaId}-desc` : undefined;
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <label htmlFor={areaId} className={hideLabel ? "sr-only" : "text-sm font-bold text-accent"}>
+      <label htmlFor={areaId} className={hideLabel ? "sr-only" : LABEL}>
         {label}
       </label>
       <textarea
@@ -68,7 +72,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
         rows={rows}
         dir="auto"
         aria-describedby={descId}
-        className={cn(CONTROL, "min-h-11 py-2")}
+        className={cn(CONTROL, "min-h-12 py-2.5")}
         {...rest}
       />
       {description && (

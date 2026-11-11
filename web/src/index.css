@@ -1,23 +1,31 @@
 @import "tailwindcss";
 @import "./design/tokens.css";
 
-/* Base: Arabic-first reading comfort, light theme, no gradients. */
+/* Base: Arabic-first reading comfort, warm light theme, no gradients. */
 html {
   font-family: var(--da-font-sans);
   font-size: 16px;
   background: var(--da-page);
   color: var(--da-text-1);
   -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--da-page);
   line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
-/* Height of the fixed BottomNav (min-h-14 + 1px top border); 0 from md up where the bar is hidden. */
+/*
+ * Height of the fixed BottomNav: 4rem bar + the phone's home-indicator inset; 0 from md up where
+ * the bar is hidden. Screens pad and offset sticky footers (the chat composer) with it.
+ */
 :root {
-  --da-bottom-nav: calc(3.5rem + 1px);
+  --da-bottom-nav: calc(4rem + env(safe-area-inset-bottom, 0px));
 }
 @media (min-width: 48rem) {
   :root {
@@ -28,8 +36,13 @@ html[lang="en"] body {
   line-height: 1.55;
 }
 h1, h2, h3, h4 {
-  font-weight: 600;
-  line-height: 1.4;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--da-text-1);
+}
+::selection {
+  background: var(--da-amber-soft);
+  color: var(--da-text-1);
 }
 :focus-visible {
   outline: 2px solid var(--da-focus);
@@ -52,6 +65,33 @@ h1, h2, h3, h4 {
 }
 .skip-link:focus {
   top: 0.5rem;
+}
+
+/* Entrance animations (opt-in classes). Reduced motion turns them off below. */
+@keyframes da-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes da-rise-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes da-sheet-in {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+.da-fade-in { animation: da-fade-in var(--da-motion-slow) var(--da-ease) both; }
+.da-rise-in { animation: da-rise-in var(--da-motion-slow) var(--da-ease) both; }
+.da-sheet-in { animation: da-sheet-in var(--da-motion-slow) var(--da-ease) both; }
+
+/* Hide scrollbars on horizontal chip/tab strips while keeping them scrollable. */
+.da-scroll-x {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.da-scroll-x::-webkit-scrollbar {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

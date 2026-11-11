@@ -73,7 +73,7 @@ function RowCard<T>({ row, primary, rest, onRowClick }: { row: T; primary: Colum
   const title = primary.length > 1 ? primary[1] : primary[0];
   const tail = primary.slice(2);
   return (
-    <li className="overflow-hidden rounded-lg border border-line-strong bg-surface-0 shadow-1">
+    <li className="overflow-hidden rounded-lg border border-line bg-surface-0 shadow-card">
       <div
         tabIndex={onRowClick ? 0 : undefined}
         onClick={onRowClick ? (e) => !fromControl(e) && onRowClick(row) : undefined}
@@ -134,7 +134,7 @@ function CardList<T>({ columns, shown, rowKey, sort, onSortChange, onRowClick, c
             aria-label={t("ui.table.sortBy")}
             value={sort?.columnId ?? ""}
             onChange={(e) => onSortChange(e.target.value === "" ? null : { columnId: e.target.value, dir: sort?.dir ?? "asc" })}
-            className="min-h-10 min-w-0 flex-1 rounded-md border border-line-strong bg-surface-0 px-2 text-sm text-fg-1"
+            className="min-h-11 min-w-0 flex-1 rounded-md border border-line-strong bg-input px-3 text-sm text-fg-1"
           >
             <option value="">{t("ui.table.sortBy")}</option>
             {sortable.map((c) => (
@@ -148,14 +148,14 @@ function CardList<T>({ columns, shown, rowKey, sort, onSortChange, onRowClick, c
             disabled={!sort}
             aria-label={sort?.dir === "desc" ? t("ui.table.sortDescending") : t("ui.table.sortAscending")}
             onClick={() => sort && onSortChange({ columnId: sort.columnId, dir: sort.dir === "asc" ? "desc" : "asc" })}
-            className="inline-flex size-10 shrink-0 items-center justify-center rounded-md border border-line-strong bg-surface-0 text-accent disabled:opacity-50"
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-line-strong bg-surface-0 text-accent disabled:opacity-50"
           >
             <Icon name="arrow-down" size={16} className={cn(sort?.dir === "asc" && "rotate-180")} />
           </button>
         </div>
       )}
       {shown.length === 0 ? (
-        <p className="rounded-lg border border-line-strong bg-surface-0 px-3 py-6 text-center text-fg-3">{empty ?? t("ui.table.empty")}</p>
+        <p className="rounded-lg border border-line bg-surface-0 px-3 py-6 text-center text-fg-3">{empty ?? t("ui.table.empty")}</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {shown.map((row) => (
@@ -195,14 +195,14 @@ export function DataTable<T>(props: DataTableProps<T>) {
 
   return (
     <div
-      className={cn("relative overflow-x-auto overscroll-x-contain rounded-lg border border-line-strong bg-surface-0 shadow-1", className)}
+      className={cn("relative overflow-x-auto overscroll-x-contain rounded-lg border border-line bg-surface-0 shadow-card", className)}
       tabIndex={0}
       role="region"
       aria-label={caption}
     >
       <table className={cn("w-full border-collapse text-sm", columns.length > 3 && "min-w-[42rem]")}>
         <caption className="sr-only">{caption}</caption>
-        <thead className="border-b-2 border-line-strong bg-surface-2 text-fg-1">
+        <thead className="border-b border-line bg-surface-1 text-fg-2">
           <tr>
             {columns.map((c) => {
               const active = sort?.columnId === c.id ? sort : null;
@@ -212,13 +212,13 @@ export function DataTable<T>(props: DataTableProps<T>) {
                   scope="col"
                   style={c.width ? { width: c.width } : undefined}
                   aria-sort={active ? (active.dir === "asc" ? "ascending" : "descending") : undefined}
-                  className={cn("px-2 py-2 font-bold", align(c.align))}
+                  className={cn("px-3 py-2.5 text-xs font-semibold", align(c.align))}
                 >
                   {c.sortValue ? (
                     <button
                       type="button"
                       onClick={() => toggle(c.id)}
-                      className="inline-flex min-h-8 items-center gap-1 rounded-sm font-bold text-fg-1 hover:text-accent"
+                      className="inline-flex min-h-8 items-center gap-1 rounded-sm font-semibold text-fg-2 hover:text-accent"
                     >
                       {c.header}
                       <Icon name="arrow-down" size={14} className={cn(active ? "text-accent" : "opacity-40", active?.dir === "asc" && "rotate-180")} />
@@ -245,10 +245,10 @@ export function DataTable<T>(props: DataTableProps<T>) {
                 tabIndex={onRowClick ? 0 : undefined}
                 onClick={onRowClick ? (e) => onClick(e, row) : undefined}
                 onKeyDown={onRowClick ? (e) => onKey(e, row) : undefined}
-                className={cn("border-t border-line even:bg-surface-1", onRowClick && "cursor-pointer hover:bg-surface-2")}
+                className={cn("border-t border-line transition-colors hover:bg-surface-1", onRowClick && "cursor-pointer")}
               >
                 {columns.map((c) => (
-                  <td key={c.id} className={cn("px-2 py-1.5 align-middle text-fg-1", align(c.align))}>
+                  <td key={c.id} className={cn("px-3 py-2.5 align-middle text-fg-1", align(c.align))}>
                     {c.cell(row)}
                   </td>
                 ))}

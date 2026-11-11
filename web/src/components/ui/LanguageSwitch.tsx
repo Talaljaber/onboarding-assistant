@@ -1,4 +1,6 @@
 import { LANGS, translate, useLang, useT, type Lang } from "@/i18n";
+import { cn } from "./cn";
+import { segmented } from "./recipes";
 
 /** Props for {@link LanguageSwitch}. */
 export interface LanguageSwitchProps {
@@ -14,7 +16,7 @@ export function LanguageSwitch({ className = "" }: LanguageSwitchProps) {
   const { lang, setLang } = useLang();
   const t = useT();
   return (
-    <div role="group" aria-label={t("lang.label")} className={`inline-flex rounded-md border border-accent p-0.5 ${className}`}>
+    <div role="group" aria-label={t("lang.label")} className={cn(segmented.track, className)}>
       {LANGS.map((l: Lang) => {
         // Each language is named in itself, from the dictionary of that language.
         const name = translate(l, l === "en" ? "lang.en" : "lang.ar");
@@ -27,9 +29,7 @@ export function LanguageSwitch({ className = "" }: LanguageSwitchProps) {
             aria-pressed={active}
             aria-label={t("lang.switchTo", { name })}
             onClick={() => setLang(l)}
-            className={`min-h-9 rounded-sm px-3 text-sm font-semibold transition-colors duration-(--da-motion-fast) ${
-              active ? "bg-accent text-on-accent" : "text-accent hover:bg-surface-2"
-            }`}
+            className={cn(segmented.item, active ? segmented.on : segmented.off)}
           >
             {name}
           </button>
