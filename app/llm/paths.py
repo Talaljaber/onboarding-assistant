@@ -1,11 +1,12 @@
-"""The LLM answer, feedback, translation (P11.1) and tool-choice paths as pure functions over a `CachedChat`.
+"""The LLM answer, feedback, translation (P11.1), small-talk (P12.2) and tool-choice paths as pure functions over a `CachedChat`.
 
 `answer.py`, `scenarios.py` and `agent.py` call these. Each one renders its prompt file, serves a cache
 hit (re-verified) or makes one call, verifies the reply, and stores it in the cache **only after** it
 passed the verifier. Each returns `(result, None)` or `(None, reason)` and never raises.
 
 The answer prompt receives the question, the previous question (follow-ups), the list hint and the KB
-rows with their ranks: never the role, the user's name or the chat history.
+rows with their ranks: never the role, the user's name or the chat history. The small-talk prompt
+receives the current message, its intent, a style word and a first-turn flag only.
 `info` (optional dict) is filled with trace fields: `cached`, `latency_ms`, `model`, `prompt`, `calls`.
 """
 
@@ -28,6 +29,7 @@ from app.verify import (
     parse_json_object,
     verify_answer,
     verify_feedback,
+    verify_small_talk,
     verify_translation,
 )
 
@@ -35,10 +37,17 @@ ANSWER_PROMPT = "answer_v1"
 FEEDBACK_PROMPT = "feedback_v1"
 AGENT_PROMPT = "agent_v1"
 TRANSLATE_PROMPT = "translate_v1"
+SMALL_TALK_PROMPT = "smalltalk_v1"
 ANSWER_MAX_TOKENS = 500
 FEEDBACK_MAX_TOKENS = 200
 AGENT_MAX_TOKENS = 120
 TRANSLATE_MAX_TOKENS = 600
+SMALL_TALK_MAX_TOKENS = 200
+#: P12.2: a small-talk reply waits at most this long for the model; then the offline pool answers.
+SMALL_TALK_MAX_S = 2.0
+#: Style words for the small-talk prompt: the server picks one per turn so repeated greetings vary while the
+#: call stays at temperature 0 and every (message, intent, style, first) reply is cacheable.
+SMALL_TALK_STYLES = ("plain", "upbeat", "curious")
 #: P11.1: the English helper translation gets its own short deadline after the answer is ready; a
 #: timeout only leaves `text_en` null.
 TRANSLATE_MAX_S = 2.5
@@ -354,6 +363,70 @@ def llm_translate(
         return result, None
     except Exception as exc:  # noqa: BLE001 - a translation must never fail the answer
         log_event("llm_path_error", prompt=TRANSLATE_PROMPT, error=type(exc).__name__)
+        return None, "internal_error"
+
+
+# -- small talk (P12.2) ---------------------------------------------------------------------------------------------
+def render_small_talk_prompt(message: str, intent: str, style: str, first: bool) -> str:
+    """The rendered `smalltalk_v1` prompt: the current message, its intent, a style word and the first-turn
+    flag. No role, no name, no profile, no KB row and no earlier message."""
+    return _render(SMALL_TALK_PROMPT, message=message, intent=intent, style=style, first=bool(first))
+
+
+def _accept_small_talk(content: str, documents: Sequence[str]) -> tuple[dict[str, str] | None, str]:
+    parsed = parse_json_object(content)
+    if parsed is None:
+        return None, INVALID_JSON
+    verdict = verify_small_talk(parsed, documents=documents)
+    if not verdict.ok:
+        return None, verdict.reason or BAD_SHAPE
+    return {"text_ar": str(parsed["text_ar"]).strip(), "text_en": str(parsed["text_en"]).strip()}, ""
+
+
+def llm_small_talk(
+    message: str,
+    intent: str,
+    style: str,
+    first: bool,
+    chat: CachedChat | None,
+    deadline_s: float,
+    *,
+    documents: Sequence[str] = (),
+    info: dict[str, Any] | None = None,
+) -> tuple[dict[str, str] | None, str | None]:
+    """A verified `{text_ar, text_en}` small-talk reply, or `(None, reason)`. Never raises.
+
+    `documents` are the live KB document names (a reply may not name one). A cache hit is re-verified; a
+    fresh reply is stored only after it passed. `info` gets `cached`, `latency_ms`, `calls`, `model`, `prompt`.
+    """
+    _fill(info, model=getattr(chat, "model_id", None), prompt=SMALL_TALK_PROMPT, cached=False, latency_ms=0, calls=0)
+    try:
+        if chat is None:
+            return None, "no_llm"
+        rendered = render_small_talk_prompt(message, intent, style, first)
+        ex = _Exchange(chat, SMALL_TALK_PROMPT, rendered, SMALL_TALK_MAX_TOKENS)
+        hit = ex.cached()
+        if hit is not None:
+            result, reason = _accept_small_talk(hit, documents)
+            if result is not None:
+                _fill(info, cached=True)
+                return result, None
+            log_event("llm_cache_stale", prompt=SMALL_TALK_PROMPT, key=ex.key[:12], reason=reason)
+        if deadline_s < MIN_CALL_S:
+            return None, "no_time"
+        content, latency_ms, failure = ex.fresh(deadline_s)
+        _fill(info, latency_ms=latency_ms, calls=1)
+        if content is None:
+            return None, failure
+        result, reason = _accept_small_talk(content, documents)
+        if result is None:
+            log_event("verifier_rejection", prompt=SMALL_TALK_PROMPT, key=ex.key[:12], reason=reason,
+                      model=chat.model_id)
+            return None, reason
+        ex.store(content)
+        return result, None
+    except Exception as exc:  # noqa: BLE001 - small talk must never fail a turn
+        log_event("llm_path_error", prompt=SMALL_TALK_PROMPT, error=type(exc).__name__)
         return None, "internal_error"
 
 

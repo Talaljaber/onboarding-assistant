@@ -67,7 +67,7 @@ def role_of(model_id: str, system: str) -> str:
         return "escalation"
     for marker, role in (("You screen one MESSAGE", "sanitizer"), ("You check the citations", "citation_judge"),
                          ("You check whether one DRAFT", "coverage_judge"), ("You write the answer", "answerer"),
-                         ("You route one message", "agent")):
+                         ("You route one message", "agent"), ("You write one short, warm chat reply", "small_talk")):
         if system.startswith(marker):
             return role
     return "unknown"
@@ -464,7 +464,8 @@ def test_agent_panel_off_has_no_panel_trace_and_five_second_turn(agent: Agent, i
 def test_small_talk_never_uses_the_panel(agent: Agent, install: Any) -> None:
     fake = install(PanelFake(agent=js({"tool": "greet", "args": {}})))
     r = ask(agent, "مرحبا")
-    assert r.reply.kind == "text" and r.trace.panel is None and fake.roles() == ["agent"]
+    # P12.2: router small talk skips the tool choice; the one call is the small-talk reply (timed out → pool)
+    assert r.reply.kind == "text" and r.trace.panel is None and fake.roles() == ["small_talk"]
 
 
 def test_parallel_stages_share_one_wall_clock_end() -> None:

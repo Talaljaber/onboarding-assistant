@@ -403,12 +403,14 @@ def test_eval_summary_counts() -> None:
 
 
 @pytest.mark.parametrize("lang", ["en", "ar"])
-def test_english_greeting_gets_a_fixed_english_line(agent: Agent, lang: str) -> None:
-    from app.translate import GREETING_EN, THANKS_EN
+def test_english_small_talk_is_answered_in_english_only(agent: Agent, lang: str) -> None:
+    """P12.2: small talk is not a translated answer: `text_en` is the reply itself when the person wrote English
+    (any UI language), and absent for Arabic, so the client shows one language only."""
+    from app.smalltalk import POOL
 
     r = ask(agent, "how are u", role="Sales", lang=lang)
-    assert r.reply.kind == "text" and r.reply.text_en is not None
-    assert r.reply.text_en.startswith(GREETING_EN["Sales"]) and r.reply.text_ar  # the Arabic stays
+    assert r.reply.kind == "text" and r.reply.text_en and r.reply.text_ar  # text_ar stays the Arabic counterpart
+    assert not any(s.startswith("translate:") for s in r.trace.steps) and "small_talk:how_are_you" in r.trace.steps
     t = ask(agent, "thanks", lang=lang)
-    assert t.reply.text_en == THANKS_EN
-    assert ask(agent, "مرحبا", lang="ar").reply.text_en is None
+    assert t.reply.text_en in {en for _, en in POOL["thanks"]}
+    assert ask(agent, "مرحبا", lang=lang).reply.text_en is None

@@ -142,7 +142,7 @@ Response `ChatResponse` = `{reply, state, mode, trace}`. `reply` (`Reply`):
 |---|---|---|
 | `kind` | reply kind | all |
 | `text_ar` | string | all (fixed server text for refusals; may be the not-confirmed or partial text) |
-| `text_en` | string \| null | English helper translation of an `answer` (only with `lang: "en"` in llm mode, verified before use and before caching; the supported part only for a partial answer, the fixed partial note is mapped by the client); `null` otherwise. The Arabic K-rows stay verbatim |
+| `text_en` | string \| null | English helper translation of an `answer` (only with `lang: "en"` in llm mode, verified before use and before caching; the supported part only for a partial answer, the fixed partial note is mapped by the client). P12.2: on a `text` reply (small talk) it is the reply itself in English, set only when the person wrote English (or no letters in the English UI), and the client shows it instead of `text_ar`. `null` otherwise. The Arabic K-rows stay verbatim |
 | `status` | answered \| partial \| unsupported \| null | `answer` (answered/partial), refusals (unsupported) |
 | `band` | answer \| not_confirmed \| refuse \| null | offline answer band; `null` in llm mode |
 | `sources` | `Source[]` | answers (≥ 1), employment refusal (optional); `[]` elsewhere |

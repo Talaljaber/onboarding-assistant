@@ -327,6 +327,7 @@ export interface ChatRequest {
 export interface ReplyBase {
   kind: ReplyKind;
   text_ar: string;
+  /** Answers: a verified English helper translation. `text` replies (P12.2 small talk): the reply itself in English, shown instead of `text_ar`. */
   text_en: string | null;
   status: AnswerStatus | null;
   band: Band | null;

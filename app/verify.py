@@ -413,3 +413,73 @@ def verify_translation(
     if _arabic_left(text):
         return _reject(ARABIC_LEFT)
     return Verdict(True)
+
+
+# -- the small-talk reply verifier (P12.2) -------------------------------------------------------------------
+INJECTION_ECHO = "injection_echo"
+WRONG_LANGUAGE = "wrong_language"
+POLICY_WORD = "policy_word"
+SMALL_TALK_MAX_CHARS = 220
+#: Policy nouns a small-talk reply must not mention (normalised Arabic stems; English whole words).
+_SMALL_TALK_POLICY_AR = re.compile(
+    r"اجاز|راتب|رواتب|اجور|دوام|تجربه|عقد|تثبيت|استقال|عطله|عطل|تامين|مكافا|ترقي|خصم|غياب|انذار|عقوب|مخالف"
+)
+_SMALL_TALK_POLICY_EN = re.compile(
+    r"\b(?:leaves?|salary|salaries|pay|paid|payroll|wages?|probation|contracts?|vacations?|holidays?|bonus(?:es)?"
+    r"|overtime|insurance|promotions?|raise|termination|fired|dismiss\w*|deductions?|absence|working hours|shifts?"
+    r"|penalt\w+|warnings?)\b",
+    re.IGNORECASE,
+)
+_SMALL_TALK_ECHO = re.compile(
+    r"prompt|system message|instructions?|as an ai|language model|تعليمات|البرومبت|نموذج لغوي|برمجت",
+    re.IGNORECASE,
+)
+
+
+def _language_ok(text: str, lang: str) -> bool:
+    arabic = len(_ARABIC_LETTER.findall(text))
+    latin = len(_LATIN_LETTER.findall(text))
+    if lang == "ar":
+        return arabic > 0 and latin <= TRANSLATION_ARABIC_SHARE * (arabic + latin)
+    return latin > 0 and not _arabic_left(text)
+
+
+def verify_small_talk(reply: object, *, documents: Iterable[str] = ()) -> Verdict:
+    """Checks on a parsed `{"text_ar": "...", "text_en": "..."}` small-talk reply (P12.2).
+
+    Both texts must be non-empty, at most `SMALL_TALK_MAX_CHARS`, in their language (Arabic letters only in
+    `text_ar`, English in `text_en`), and carry no number (digits or number words), no contact or link, no
+    K-id or document name, no person after an honorific, no echo of the prompt or of an injection, and no
+    policy noun (leave, salary, probation, …): a small-talk reply states no company fact. Never raises.
+    """
+    if not isinstance(reply, Mapping):
+        return _reject(INVALID_JSON)
+    if set(reply) != {"text_ar", "text_en"}:
+        return _reject(BAD_SHAPE)
+    texts: dict[str, str] = {}
+    for lang in ("ar", "en"):
+        value = reply.get(f"text_{lang}")
+        if not isinstance(value, str):
+            return _reject(BAD_SHAPE)
+        texts[lang] = value.strip()
+    docs = list(documents)
+    for lang, text in texts.items():
+        if not text:
+            return _reject(EMPTY)
+        if len(text) > SMALL_TALK_MAX_CHARS:
+            return _reject(TOO_LONG)
+        if numbers_in(english_number_words_to_digits(text)):
+            return _reject(FOREIGN_NUMBER)
+        if has_contact_or_link(text) is not None:
+            return _reject(CONTACT_OR_LINK)
+        if _id_or_document_in_text(text, docs):
+            return _reject(ID_IN_TEXT)
+        if _EN_HONORIFIC_NAME.search(text) or _AR_HONORIFIC.search(_normalize(text)) or _AR_HONORIFIC.search(text):
+            return _reject(FOREIGN_NAME)
+        if injection_suspected(text) or _SMALL_TALK_ECHO.search(text):
+            return _reject(INJECTION_ECHO)
+        if _SMALL_TALK_POLICY_AR.search(_normalize(text)) or _SMALL_TALK_POLICY_EN.search(text):
+            return _reject(POLICY_WORD)
+        if not _language_ok(text, lang):
+            return _reject(WRONG_LANGUAGE)
+    return Verdict(True)
