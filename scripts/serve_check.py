@@ -1,6 +1,7 @@
 """Launch start.bat headless, poll /api/health on 8000 then 8010, print it, always stop the server.
 
-Exit 0 only when status is "ok". Set DADA_PYTHON to pick the interpreter start.bat uses.
+Exit 0 only when status is "ok". Set DADA_PYTHON to pick the interpreter start.bat uses. Prints the
+cold-start time (start.bat launched → first health answer) for docs/perf.md.
 """
 
 from __future__ import annotations
@@ -8,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import time
@@ -18,7 +20,18 @@ ROOT = Path(__file__).resolve().parent.parent
 PORTS = (8000, 8010)
 
 
+def listening(port: int) -> bool:
+    """A quick connect probe (a refused connect on Windows can take ~2 s; this gives up after 0.25 s)."""
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.25):
+            return True
+    except OSError:
+        return False
+
+
 def fetch(port: int) -> dict | None:
+    if not listening(port):
+        return None
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=2) as r:
             return json.loads(r.read().decode("utf-8"))
@@ -43,6 +56,7 @@ def kill(pid: int) -> None:
 def main() -> int:
     env = dict(os.environ, NOPAUSE="1", NOBROWSER="1")
     flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    started = time.monotonic()
     proc = subprocess.Popen(
         ["cmd", "/c", r".\start.bat"],
         cwd=ROOT,
@@ -62,11 +76,12 @@ def main() -> int:
                     used = port
                     break
             else:
-                time.sleep(1)
+                time.sleep(0.2)
         if health is None:
             print("serve check FAILED: no health answer on 8000 or 8010 within 60 s")
             return 1
         print(json.dumps(health, indent=2, ensure_ascii=False))
+        print(f"cold start to health: {time.monotonic() - started:.1f} s (port {used})")
         return 0 if health.get("status") == "ok" else 1
     finally:
         kill(proc.pid)
