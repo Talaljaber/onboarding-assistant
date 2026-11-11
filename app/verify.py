@@ -31,12 +31,21 @@ ID_IN_TEXT = "id_in_text"
 TOO_LONG = "too_long"
 FOREIGN_CHECKLIST_ID = "foreign_checklist_id"
 BAD_VALUE = "bad_value"
+EMPTY = "empty"
+ARABIC_LEFT = "arabic_left"
+FOREIGN_NAME = "foreign_name"
 
 STATUSES = frozenset({"answered", "partial", "unsupported"})
 VALUES = frozenset({"Integrity", "One Team", "Perseverance", "Customer Centricity", "Social Responsibility"})
 ANSWER_MAX_CHARS = 700
 QUOTE_MIN_CHARS = 6
 TIP_MAX_WORDS = 25
+#: P11.1 English helper translation: at most 3x the Arabic length (min 120 chars), never above 2400.
+TRANSLATION_RATIO = 3
+TRANSLATION_MIN_CAP = 120
+TRANSLATION_MAX_CHARS = 2400
+#: Arabic letters allowed in the English text: at most this share of all letters (a stray word, not a sentence).
+TRANSLATION_ARABIC_SHARE = 0.1
 
 # -- normalisation: app.textnorm (§C4.1) -------------------------------------------------------------
 _ascii_digits = ascii_digits
@@ -60,6 +69,27 @@ _INJECTION = (
     re.compile(r"(اطبع|اعرض|print|reveal).{0,20}(prompt|البرومبت|التعليمات)", re.IGNORECASE),
 )
 _RANGE_MAX = 50
+_ARABIC_LETTER = re.compile(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]")
+_LATIN_LETTER = re.compile(r"[A-Za-z]")
+_EN_DIGITS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9}
+#: English number words checked like digits. A lone «one» is left out on purpose: it is mostly a pronoun or
+#: part of a name («One Team», «one of the values») and a 1 adds no invented fact.
+_EN_UNITS = {
+    **{k: v for k, v in _EN_DIGITS.items() if k != "one"}, "zero": 0,
+    "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16,
+    "seventeen": 17, "eighteen": 18, "nineteen": 19,
+}
+_EN_TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80,
+            "ninety": 90}
+_EN_BIG = {"hundred": 100, "thousand": 1000, "million": 1000000}
+_EN_NUMBER = re.compile(
+    r"\b(?:(" + "|".join(_EN_TENS) + r")(?:[\s-]+(" + "|".join(_EN_DIGITS) + r"))?"
+    r"|(" + "|".join(sorted(_EN_UNITS, key=len, reverse=True)) + r")|(" + "|".join(_EN_BIG) + r")|(dozen))\b",
+    re.IGNORECASE,
+)
+#: An honorific followed by a capitalised word: the English text names a person (P11.1 name check).
+_EN_HONORIFIC_NAME = re.compile(r"\b(?:Mr|Mrs|Ms|Miss|Dr|Eng|Prof|Sheikh|Sir|Madam)\.?\s+[A-Z][a-z]+")
+_AR_HONORIFIC = re.compile(r"(?:السيد|السيده|السيدة|الدكتور|الدكتوره|الدكتورة|المهندس|المهندسه|المهندسة|الشيخ|الاستاذ|الأستاذ)")
 
 
 @dataclass(frozen=True)
@@ -308,3 +338,78 @@ def verify_feedback(
     met_out = list(dict.fromkeys(met_ids))
     missing_out = list(dict.fromkeys(missing_ids))
     return FeedbackVerdict(True, None, met_out, missing_out, value.strip(), tip_ok, tip_reason)
+
+
+# -- the English helper translation verifier (P11.1) ---------------------------------------------------
+def english_number_words_to_digits(text: str) -> str:
+    """English number words → digits («twenty-five» → 25, «five» → 5, «a dozen» → 12) so the number check
+    sees them. Ordinals and fractions are left as words."""
+
+    def repl(m: re.Match[str]) -> str:
+        tens, unit, single, big, dozen = m.groups()
+        if tens:
+            return str(_EN_TENS[tens.lower()] + (_EN_DIGITS[unit.lower()] if unit else 0))
+        if single:
+            return str(_EN_UNITS[single.lower()])
+        if big:
+            return str(_EN_BIG[big.lower()])
+        return "12" if dozen else m.group(0)
+
+    return _EN_NUMBER.sub(repl, text)
+
+
+def _arabic_left(text: str) -> bool:
+    arabic = len(_ARABIC_LETTER.findall(text))
+    latin = len(_LATIN_LETTER.findall(text))
+    return arabic > 0 and arabic > TRANSLATION_ARABIC_SHARE * (arabic + latin)
+
+
+def translation_cap(text_ar: str) -> int:
+    """Longest English text accepted for `text_ar`."""
+    return min(TRANSLATION_MAX_CHARS, max(TRANSLATION_MIN_CAP, TRANSLATION_RATIO * len(text_ar)))
+
+
+def verify_translation(
+    reply: object,
+    text_ar: str,
+    row_texts: Sequence[str],
+    *,
+    allowed_documents: Iterable[str] = (),
+    all_documents: Iterable[str] = (),
+) -> Verdict:
+    """Checks on a parsed `{"text_en": "..."}` translation of the verified Arabic answer `text_ar`.
+
+    `row_texts` are the cited rows' Arabic texts (sent as context). A reply passes when `text_en` is a
+    non-empty string no longer than `translation_cap(text_ar)`, has no contact/link, every number in it
+    (digits or English number words) is in `text_ar` or a cited row, it names no K-id that the Arabic
+    answer does not, no document name except the cited rows' (`allowed_documents`), no person after an
+    honorific unless the Arabic input has one, and at most a stray Arabic word. `normalised_ids` is unused.
+    """
+    if not isinstance(reply, Mapping):
+        return _reject(INVALID_JSON)
+    text = reply.get("text_en")
+    if not isinstance(text, str) or set(reply) - {"text_en"}:
+        return _reject(BAD_SHAPE)
+    text = text.strip()
+    if not text:
+        return _reject(EMPTY)
+    if len(text) > translation_cap(text_ar):
+        return _reject(TOO_LONG)
+    if has_contact_or_link(text) is not None:
+        return _reject(CONTACT_OR_LINK)
+    sources = [text_ar, *row_texts]
+    if foreign_numbers(english_number_words_to_digits(text), sources) or _foreign_percent(text, sources):
+        return _reject(FOREIGN_NUMBER)
+    ids_in = {i for t in sources for i in normalise_ids(_KID_IN_TEXT.findall(_ascii_digits(t)))}
+    if any(i not in ids_in for i in normalise_ids(_KID_IN_TEXT.findall(_ascii_digits(text)))):
+        return _reject(ID_IN_TEXT)
+    allowed_docs = {d.strip().casefold() for d in allowed_documents if d.strip()}
+    folded = text.casefold()
+    if any(d.strip() and d.strip().casefold() not in allowed_docs and d.strip().casefold() in folded
+           for d in all_documents):
+        return _reject(ID_IN_TEXT)
+    if _EN_HONORIFIC_NAME.search(text) and not any(_AR_HONORIFIC.search(t) for t in sources):
+        return _reject(FOREIGN_NAME)
+    if _arabic_left(text):
+        return _reject(ARABIC_LEFT)
+    return Verdict(True)

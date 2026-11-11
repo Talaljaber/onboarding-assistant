@@ -1,4 +1,4 @@
-"""The LLM answer, feedback and tool-choice paths as pure functions over a `CachedChat`.
+"""The LLM answer, feedback, translation (P11.1) and tool-choice paths as pure functions over a `CachedChat`.
 
 `answer.py`, `scenarios.py` and `agent.py` call these. Each one renders its prompt file, serves a cache
 hit (re-verified) or makes one call, verifies the reply, and stores it in the cache **only after** it
@@ -28,14 +28,20 @@ from app.verify import (
     parse_json_object,
     verify_answer,
     verify_feedback,
+    verify_translation,
 )
 
 ANSWER_PROMPT = "answer_v1"
 FEEDBACK_PROMPT = "feedback_v1"
 AGENT_PROMPT = "agent_v1"
+TRANSLATE_PROMPT = "translate_v1"
 ANSWER_MAX_TOKENS = 500
 FEEDBACK_MAX_TOKENS = 200
 AGENT_MAX_TOKENS = 120
+TRANSLATE_MAX_TOKENS = 600
+#: P11.1: the English helper translation gets its own short deadline after the answer is ready; a
+#: timeout only leaves `text_en` null.
+TRANSLATE_MAX_S = 2.5
 MIN_CALL_S = 0.3  # below this a call cannot finish; skip it
 AGENT_MIN_S = 0.8  # §C2.2: skip the tool-choice call when less than this remains
 ANSWER_MARGIN_S = 0.3  # §C6: the answer call gets max(0, remaining - 0.3)
@@ -278,6 +284,76 @@ def llm_feedback(
         return result, None
     except Exception as exc:  # noqa: BLE001
         log_event("llm_path_error", prompt=FEEDBACK_PROMPT, error=type(exc).__name__)
+        return None, "internal_error"
+
+
+# -- English helper translation (P11.1) ---------------------------------------------------------------------------
+def render_translate_prompt(text_ar: str, row_texts: Sequence[str]) -> str:
+    """The rendered `translate_v1` prompt: the verified Arabic answer and the cited rows' Arabic text only
+    (no ids, no documents, no role, no profile). The exact Arabic is in the cache key, so an edited row
+    or answer gets a new translation."""
+    return _render(TRANSLATE_PROMPT, answer_ar=text_ar, rows=[{"text": t} for t in row_texts])
+
+
+def _accept_translation(content: str, text_ar: str, row_texts: Sequence[str], allowed_documents: Sequence[str],
+                        all_documents: Sequence[str]) -> tuple[str | None, str]:
+    parsed = parse_json_object(content)
+    if parsed is None:
+        return None, INVALID_JSON
+    verdict = verify_translation(parsed, text_ar, row_texts, allowed_documents=allowed_documents,
+                                 all_documents=all_documents)
+    if not verdict.ok:
+        return None, verdict.reason or BAD_SHAPE
+    return str(parsed["text_en"]).strip(), ""
+
+
+def llm_translate(
+    text_ar: str,
+    row_texts: Sequence[str],
+    chat: CachedChat | None,
+    deadline_s: float,
+    *,
+    allowed_documents: Sequence[str] = (),
+    all_documents: Sequence[str] = (),
+    info: dict[str, Any] | None = None,
+) -> tuple[str | None, str | None]:
+    """A verified English helper translation of `text_ar`, or `(None, reason)`. Never raises.
+
+    `row_texts` are the cited rows' Arabic texts (context and allowed numbers); `allowed_documents` the
+    cited rows' document names, `all_documents` every live row's (a document name the English text may
+    not invent). A cache hit is re-verified; a fresh reply is stored only after it passed.
+    `info` gets `cached`, `latency_ms`, `calls`, `model`, `prompt`.
+    """
+    _fill(info, model=getattr(chat, "model_id", None), prompt=TRANSLATE_PROMPT, cached=False, latency_ms=0, calls=0)
+    try:
+        if chat is None:
+            return None, "no_llm"
+        if not text_ar.strip():
+            return None, "empty"
+        rendered = render_translate_prompt(text_ar, row_texts)
+        ex = _Exchange(chat, TRANSLATE_PROMPT, rendered, TRANSLATE_MAX_TOKENS)
+        hit = ex.cached()
+        if hit is not None:
+            result, reason = _accept_translation(hit, text_ar, row_texts, allowed_documents, all_documents)
+            if result is not None:
+                _fill(info, cached=True)
+                return result, None
+            log_event("llm_cache_stale", prompt=TRANSLATE_PROMPT, key=ex.key[:12], reason=reason)
+        if deadline_s < MIN_CALL_S:
+            return None, "no_time"
+        content, latency_ms, failure = ex.fresh(deadline_s)
+        _fill(info, latency_ms=latency_ms, calls=1)
+        if content is None:
+            return None, failure
+        result, reason = _accept_translation(content, text_ar, row_texts, allowed_documents, all_documents)
+        if result is None:
+            log_event("verifier_rejection", prompt=TRANSLATE_PROMPT, key=ex.key[:12], reason=reason,
+                      model=chat.model_id)
+            return None, reason
+        ex.store(content)
+        return result, None
+    except Exception as exc:  # noqa: BLE001 - a translation must never fail the answer
+        log_event("llm_path_error", prompt=TRANSLATE_PROMPT, error=type(exc).__name__)
         return None, "internal_error"
 
 
