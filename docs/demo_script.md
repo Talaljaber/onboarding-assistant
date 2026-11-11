@@ -12,12 +12,12 @@ row; the cited rows, the checks and the sources panel are the same.
 
 ## Before recording
 
-1. Run `start.bat` with a key in `.env` (AI mode). Check the header chip shows «متصل بالنموذج».
+1. Run `start.bat` with a key in `.env` (AI mode). Open «الإعدادات» (the round button at the top) and check the status reads «متصل بالنموذج».
    If there is no key, record the whole demo offline and skip the AI remarks.
-2. Open «حول والخصوصية» → «امسح بيانات هذا المتصفح» (fresh role, progress and thread).
-3. Open «دخول المسؤول», enter the admin password (`dada2026` unless `ADMIN_PASSWORD` is set), then
+2. Open «الإعدادات» → «حول التطبيق» → «امسح بيانات هذا المتصفح» (fresh role, progress and thread).
+3. Open «الإعدادات» → «دخول المسؤول», enter the admin password (`dada2026` unless `ADMIN_PASSWORD` is set), then
    «قاعدة المعرفة» → «استعادة النسخة الرسمية» (K02 back to 17). The admin stays signed in for 8 h in this tab.
-4. Turn on «عرض التتبع» in the header, mode «تلقائي».
+4. In «الإعدادات», turn on «عرض التتبع» and leave the mode on «تلقائي».
 5. Rehearse once end to end, so verified AI replies are cached and fast.
 
 ## Shot list
@@ -55,7 +55,7 @@ Total: about 6:50.
   «لا أجد إجابة مؤكدة في قاعدة المعرفة.» offline with the row below it. Say so if a juror tries it; it is
   a known limit.
 - If the network drops mid-demo, each answer falls back to the offline result in the same request (its
-  chip reads «وضع بلا اتصال»); the header chip changes to «بلا اتصال بالنموذج» at its next status check
+  chip reads «وضع بلا اتصال»); the status in «الإعدادات» changes to «بلا اتصال بالنموذج» at its next check
   (every 30 s). Continue offline and say so.
 - Only the admin reaches the knowledge editor and the manager view (one shared password, no accounts).
   If the server restarted, sign in again at «دخول المسؤول».

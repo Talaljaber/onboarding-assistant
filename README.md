@@ -26,7 +26,7 @@ the answer band or verifier verdict, mode and latency.
 Also included, **for the admin only**: a knowledge-base editor («قاعدة المعرفة») with a «جرّب الآن» box
 and a manager tab («عرض المدير») that shows completion and practice counts for demo profiles only,
 labelled «ملفات تجريبية، ليست موظفين حقيقيين — ليست تقييماً». Employees never sign in; the admin opens
-«دخول المسؤول» (welcome screen or the tools menu) and enters the admin password. **Demo admin password:
+«دخول المسؤول» (welcome screen, or the settings button at the top) and enters the admin password. **Demo admin password:
 `dada2026`** — set `ADMIN_PASSWORD` in `.env` to change it. On a phone, the header keeps the role chip and
 puts the mode switch, model and storage badges, trace toggle and language in a settings dialog
 («الإعدادات»). The server exposes a JSON HTTP API (`docs/api_contract.md`).
