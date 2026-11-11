@@ -3,8 +3,9 @@
 
 What it does: `run_guards(text)` normalises the message and returns the first hit (employment before
 contact) or None. Every pattern is written in post-normalisation form (ؤ→و, ة→ه, ى→ي, أإآ→ا), so
-«مسؤول» is spelled «مسوول» here. The contact guard needs a phone word **and** a person/department word
-(or a name cue), so «كم رقم المعرض» goes to retrieval.
+«مسؤول» is spelled «مسوول» here. The contact guard needs a phone / email / link word **and** a
+person/department word (or a name cue), so «كم رقم المعرض» goes to retrieval. Pay and contact words take
+proclitics and pronoun suffixes (red team F1–F3, P3.8); bare «بريد», «فصلي» and «طردي» stay out.
 
 What it must never do: substring-match (فصل in مفصل, راتب in مراتب), call the network, or be skipped:
 guards run before any tool choice and their verdict is final.
