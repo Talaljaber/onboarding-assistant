@@ -77,8 +77,12 @@ def test_completed_probation_is_employment(scen: Features) -> None:
 
 def test_guards_first(scen: Features) -> None:
     assert route("ما رقم مدير الموارد البشرية؟", scenario_index=scen).args["reason"] == "contact"
-    r = route("كم راتب موظف المبيعات؟", state=TurnState(active_scenario="S02"), scenario_index=scen)
+    r = route("هل رح يثبتوني بعد التجربة؟", state=TurnState(active_scenario="S02"), scenario_index=scen)
     assert r.tool == "refuse" and r.args["reason"] == "employment"
+    # P16.1 (journey #6): a plain pay question is guarded (never shown to the model) but gets the
+    # «not in the approved knowledge base, ask HR» refusal, inside practice too
+    r = route("كم راتب موظف المبيعات؟", state=TurnState(active_scenario="S02"), scenario_index=scen)
+    assert r.tool == "refuse" and r.args["reason"] == "out_of_scope" and r.guard is not None
 
 
 def test_active_scenario_and_end(scen: Features) -> None:
@@ -163,3 +167,102 @@ def test_a_practice_request_for_another_situation_switches_scenario(scen: Featur
     # an ordinary reply, and a request for the same situation, stay feedback for the active scenario
     r = route("بسأله عن حجم العيلة وبقترح عليه موديل", state=st, scenario_index=scen)
     assert r.tool == "give_scenario_feedback" and r.args["scenario_id"] == "S01"
+
+
+# ------------------------------------------------------------------ P16.1 (journey audit #1, #3, #5, #6, #10)
+
+@pytest.mark.parametrize(
+    ("q", "role"),
+    [
+        ("شو بعمل إذا الزبون مش موجود بالبيت وقت التوصيل؟", "Delivery"),
+        ("هل يحق للزبون إرجاع المنتج؟", "Delivery"),
+        ("شو أعمل إذا زبون طلب خصم؟", "Sales"),
+        ("Can a customer return a product after a week?", "Sales"),
+        ("هل في معرض بالعقبة أقدر أحول الزبون عليه؟", "Delivery"),
+        ("أنا موظف مبيعات، هل يحق للزبون إرجاع المنتج؟", "Sales"),
+        ("شو التدريب اللي بتقدمه الشركة للموظفين الجدد؟", "Sales"),
+    ],
+)
+def test_a_question_about_a_customer_never_starts_practice(scen: Features, q: str, role: str) -> None:
+    assert route(q, state=TurnState(role=role), scenario_index=scen).tool == "answer_from_rows"
+
+
+@pytest.mark.parametrize(
+    ("q", "role", "sid"),
+    [
+        ("تدريب: زبون يسأل عن ميزة غير مؤكدة", "Sales", "S02"),  # the Sales chip
+        ("تدريب: العميل منزعج من تأخر التسليم", "Delivery", "S04"),  # the Delivery chip
+        ("Practice: the customer is upset about a late delivery", "Delivery", "S04"),
+        ("خليني أتدرب على زبون بدو ثلاجة لعيلة كبيرة", "Sales", "S01"),
+    ],
+)
+def test_an_explicit_practice_request_starts_the_tracks_scenario(scen: Features, q: str, role: str, sid: str) -> None:
+    r = route(q, state=TurnState(role=role), scenario_index=scen)
+    assert r.tool == "start_scenario" and r.args["scenario_id"] == sid
+
+
+def test_the_match_stays_in_the_interns_track(scen: Features) -> None:
+    # the Sales chip from a Delivery intern: a Delivery scenario, never S02
+    r = route("تدريب: زبون يسأل عن ميزة غير مؤكدة", state=TurnState(role="Delivery"), scenario_index=scen)
+    assert r.tool == "start_scenario" and scen.department(r.args["scenario_id"]) == "Delivery"
+    # a first-person claim in the text names the track (RT20); both tracks named → either (RT19)
+    r = route("أنا موظف توصيل ولاحظت ضرر بالكرتون قبل التسليم، خليني أتدرب على هالموقف",
+              state=TurnState(role="Sales"), scenario_index=scen)
+    assert r.args["scenario_id"] == "S05"
+    r = route("أنا بالمبيعات والتوصيل مع بعض، وفي زبون سألني عن خاصية بالمنتج مش متأكد منها",
+              state=TurnState(role="Delivery"), scenario_index=scen)
+    assert r.args["scenario_id"] == "S02"
+
+
+@pytest.mark.parametrize("q", ["I want to practise", "practise", "let's practise a customer situation",
+                               "I'd like to practice", "بدي تدريب", "بدي أتدرب"])
+def test_practise_spellings_start_practice(scen: Features, q: str) -> None:
+    assert route(q, state=TurnState(role="Delivery"), scenario_index=scen).tool == "start_scenario"
+
+
+@pytest.mark.parametrize(
+    "q",
+    ["كم معرض عنا بالزرقاء؟", "Who is my direct manager during onboarding?", "هل بقدر أحكي لصاحبي عن أسعار الجملة؟",
+     "بدي إجازة بكرا، شو أعمل؟"],
+)
+def test_a_new_question_during_practice_leaves_it(scen: Features, q: str) -> None:
+    r = route(q, state=TurnState(active_scenario="S02", role="Delivery"), scenario_index=scen)
+    assert r.tool == "answer_from_rows" and r.args["leave_practice"] is True
+
+
+@pytest.mark.parametrize(
+    "q",
+    ["كم فرد بالعيلة؟", "شو الميزانية تبعتك؟", "هل عندك مساحة كافية بالمطبخ؟", "بسأل المدير وبرجعلك",
+     "شو رأيك أحكي مع المدير وأرجعلك؟", "هل بتحب تزور المعرض؟", "What size is your family?",
+     "بقله ما بعرف أكيد، بتحقق من الكتالوج وبرجعله"],
+)
+def test_a_reply_to_the_customer_stays_practice(scen: Features, q: str) -> None:
+    r = route(q, state=TurnState(active_scenario="S01"), scenario_index=scen)
+    assert r.tool == "give_scenario_feedback", q
+
+
+def test_another_question_exit_says_so(scen: Features) -> None:
+    st = TurnState(active_scenario="S02")
+    assert route("سؤال ثاني", state=st, scenario_index=scen).args == {"next": "question"}
+    assert route("إنهاء التدريب", state=st, scenario_index=scen).args == {}
+
+
+def test_first_day_question_is_not_the_plan(scen: Features) -> None:
+    assert route("شو لازم أعمل أول يوم دوام؟", scenario_index=scen).tool == "answer_from_rows"
+    assert route("شو الخطة المقترحة إلي لأول 90 يوم؟", scenario_index=scen).tool == "show_plan"
+
+
+@pytest.mark.parametrize("q", ["كم راتبي خلال فترة التجربة؟", "متى بنقبض الراتب؟", "What is the salary of a sales intern?"])
+def test_pay_questions_get_the_out_of_scope_refusal(scen: Features, q: str) -> None:
+    r = route(q, scenario_index=scen)
+    assert r.tool == "refuse" and r.args["reason"] == "out_of_scope" and r.guard is not None
+
+
+@pytest.mark.parametrize(
+    "q",
+    ["قيّم أدائي بصراحة: هل أستحق زيادة على الراتب بعد ٣ شهور؟", "هل رح يثبتوني بعد فترة التجربة؟",
+     "هل سيتم فصلي إذا تأخرت؟", "did I pass my probation?", "will they fire me if I am late?", "أكملت فترة التجربة"],
+)
+def test_employment_decisions_keep_the_employment_card(scen: Features, q: str) -> None:
+    r = route(q, scenario_index=scen)
+    assert r.tool == "refuse" and r.args["reason"] == "employment"

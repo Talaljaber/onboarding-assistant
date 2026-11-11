@@ -83,7 +83,7 @@ export function ChatMessage(p: ChatMessageProps) {
     case "scenario_end":
       card = (
         <div data-kind="scenario_end">
-          <AssistantBubble text={r.text_ar} />
+          <AssistantBubble text={r.text_ar} textEn={r.text_en} />
         </div>
       );
       break;

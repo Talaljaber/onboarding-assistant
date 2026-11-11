@@ -31,7 +31,7 @@ from app.llm import LLM, build_llm, probe
 from app.llm.paths import AGENT_MIN_S, ANSWER_MARGIN_S, FEEDBACK_MAX_S, llm_choose_tool, store_choice
 from app.logging_setup import log_event
 from app.retrieve import Retriever, load_out_of_scope
-from app.router import Route, TurnState, route
+from app.router import Route, TurnState, detect_milestone, practice_track, route
 from app.schemas import (
     MILESTONES,
     ChatRequest,
@@ -46,7 +46,7 @@ from app.schemas import (
     TraceRouter,
 )
 from app.textnorm import normalize, tokens
-from app.translate import translate_result, wants_translation
+from app.translate import asked_in_english, translate_result, wants_translation
 
 TURN_BUDGET_S = 5.0
 #: P8: the answer panel (judges + an escalation call of up to 6 s) gets a 9 s turn; 5 s with the panel off.
@@ -232,7 +232,7 @@ class Agent:
         else:
             tb.injection_suspected = bool(INJECTION_RE.search(req.message))
             r, how = self.choose_tool(req.message, state, budget, previous=self._previous(req), use_llm=use_llm,
-                                      tb=tb)
+                                      tb=tb, role=req.role)
             if tb.router is None:
                 tb.router = r
             if r.guard is not None:
@@ -310,6 +310,7 @@ class Agent:
         previous: str | None = None,
         use_llm: bool = False,
         tb: TraceBuilder | None = None,
+        role: str | None = None,
     ) -> tuple[Route, str]:
         """Returns the route to run and `"llm" | "offline"` (who chose it).
 
@@ -318,8 +319,8 @@ class Agent:
         validated against the enum tables and any failure (no time, network, non-JSON, unknown tool or id,
         extra key, a precondition, or `refuse`) falls back to the router with `agent.fallback_reason`.
         """
-        r = route(text, state=TurnState(active_scenario=state.active_scenario), scenario_index=self.features,
-                  milestones=MILESTONES)
+        r = route(text, state=TurnState(active_scenario=state.active_scenario, role=role),
+                  scenario_index=self.features, milestones=MILESTONES)
         if tb is not None:
             tb.router = r
         if not use_llm or self.llm is None or r.guard is not None or state.active_scenario or r.tool == "greet":
@@ -361,9 +362,17 @@ class Agent:
             return fallback("refuse_not_allowed" if tool == "refuse" else "precondition", tool, valid)
         if tool == "end_scenario" and not state.active_scenario:
             return fallback("precondition", tool, valid)
+        if tool == "start_scenario":
+            # P16.1 (journey #1, #3): practice starts only on a request the router sees (a practice word or a
+            # first-person role claim with a situation), and only with a scenario of the intern's track.
+            track = practice_track(normalize(text), role)
+            if track is not None and self.features.department(str(valid.get("scenario_id"))) != track:
+                return fallback("scenario_other_track", tool, valid)
+            if r.tool != "start_scenario":
+                return fallback("router_not_practice", tool, valid)
         if r.tool == "answer_from_rows" and (
             tool == "greet"
-            or (tool == "show_plan" and self.retriever.band(self.retriever.margin(text)) == "answer")
+            or (tool == "show_plan" and self._answer_beats_plan(text))
         ):
             # Extends the §2.2 agreement rule (D-W3-choice-agree): a greeting or plan pick never
             # overrides a knowledge question the router sees; the answer path owns refusal.
@@ -392,6 +401,14 @@ class Agent:
                                   latency_ms=latency_ms, cached=cached)
         return chosen, "llm"
 
+    def _answer_beats_plan(self, text: str) -> bool:
+        """A model `show_plan` is refused for a knowledge question the router sees unless the KB has nothing
+        (band `refuse`) or a milestone is named: «شو لازم أعمل أول يوم دوام؟» is K12, not the plan (P16.1)."""
+        band = self.retriever.band(self.retriever.margin(text))
+        if band == "answer":
+            return True
+        return band != "refuse" and detect_milestone(normalize(text)) is None
+
     # ------------------------------------------------------------------ execution
     def _turn_s(self, use_llm: bool) -> float:
         """Turn budget: 9 s when the answer panel can run (LLM_PANEL=1), else LLM_DEADLINE_S (5 s)."""
@@ -412,7 +429,8 @@ class Agent:
     def execute(self, r: Route, req: ChatRequest, budget: TurnBudget, tb: TraceBuilder, *,
                 use_llm: bool = False) -> tools.ToolResult:
         """Run the chosen tool on the server."""
-        state = ClientState(active_scenario=req.state.active_scenario)
+        # P16.1: a clear new question during practice leaves it (the banner closes with the answer)
+        state = ClientState(active_scenario=None if r.args.get("leave_practice") else req.state.active_scenario)
         role = r.args.get("role_override") or req.role
         llm = self.llm if use_llm else None
         if r.tool == "refuse":
@@ -423,7 +441,8 @@ class Agent:
                                                 user_text=r.args.get("user_text"), llm=llm,
                                                 budget_s=self._feedback_s(budget))
         if r.tool == "end_scenario":
-            return tools.end_scenario()
+            return tools.end_scenario(next_question=r.args.get("next") == "question",
+                                      english=req.lang == "en" or asked_in_english(req.message))
         if r.tool == "start_scenario":
             sid = r.args.get("scenario_id") or self.features.first_for_role(role or DEFAULT_ROLE)
             return tools.start_scenario(sid, features=self.features, mode=tb.mode)

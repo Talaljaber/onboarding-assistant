@@ -585,7 +585,7 @@ def test_llm_feedback_accepted_and_stored(tmp_path: Path, online: None) -> None:
         "met": ["S02-C1", "S02-C2"],
         "missing": ["S02-C3"],
         "value": "Integrity",
-        "tip_ar": "أخبر الزبون أنك ستعود إليه بالمعلومة المؤكدة بعد التحقق منها.",
+        "tip_ar": "اشرح للزبون بهدوء لماذا تفضّل التأكد قبل الإجابة.",
     }
     assert cache.puts == 1 and fake.calls[0]["params"]["max_tokens"] == 200
     system = fake.calls[0]["messages"][0]["content"]
@@ -596,6 +596,27 @@ def test_llm_feedback_tip_dropped_on_phone(tmp_path: Path, online: None) -> None
     chat, *_ = make_chat(tmp_path, "feedback_tip_phone")
     result, reason = llm_feedback(S02, CHECK_S02, USER, chat, 3.5)
     assert reason is None and result is not None and result["tip_ar"] is None and result["met"] == ["S02-C1"]
+
+
+@pytest.mark.parametrize(
+    ("tip", "why"),
+    [
+        ("أخبر الزبون أنك ستعود إليه بالمعلومة المؤكدة بعد التحقق منها.", "tip_repeats_checklist"),  # S02-C3
+        ("اعتذر للزبون عن التأخير ثم تحقق من الميزة.", "tip_off_scenario"),  # S02 has no delay (journey #8d)
+    ],
+)
+def test_llm_feedback_drops_a_repeated_or_off_scenario_tip_and_never_caches_it(
+    tmp_path: Path, online: None, tip: str, why: str
+) -> None:
+    raw = json.dumps({"met": ["S02-C1"], "missing": ["S02-C3"], "value": "Integrity", "tip_ar": tip},
+                     ensure_ascii=False)
+    chat, _, cache, _ = make_chat(tmp_path, ChatResult(raw, 1, 1, None, 3))
+    info: dict[str, Any] = {}
+    result, reason = llm_feedback(S02, CHECK_S02, USER, chat, 3.5, info=info)
+    assert reason is None and result is not None and result["tip_ar"] is None and info["tip_reason"] == why
+    assert cache.puts == 1
+    (stored,) = cache.data.values()
+    assert tip not in stored and json.loads(stored)["tip_ar"] is None and json.loads(stored)["met"] == ["S02-C1"]
 
 
 def test_llm_feedback_rejected(tmp_path: Path, online: None) -> None:

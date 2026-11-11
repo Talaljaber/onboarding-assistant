@@ -2,10 +2,14 @@
 
 What it does: `route(text, state=…, scenario_index=…, milestones=…)` returns one `Route(tool, args,
 confidence, reason)` in this order (plan Part C §2, port guide §2.6):
-employment guard (incl. «completed probation») → contact guard → active scenario (END_PRACTICE ends it,
-anything else is practice feedback) → END_PRACTICE → scenario match (situation cue + e5 cosine ≥ 0.80
-against `scenario_ar`) → practice request → progress (completion verb + milestone) → plan → quiz →
-small talk (P12.2 intents: greeting, how_are_you, thanks, goodbye, identity, ack, unclear) → knowledge question. Every pattern is written in post-normalisation form.
+employment guard (incl. «completed probation»; a plain pay question gets the out-of-scope refusal, P16.1) →
+contact guard → active scenario (END_PRACTICE / a whole «another question» message ends it, an explicit
+practice request for another situation switches, a clear new knowledge question leaves it, anything else is
+practice feedback) → END_PRACTICE → practice (P16.1: only an explicit practice request, or a first-person
+role claim «أنا موظف مبيعات و…» with a situation cue; the e5 match against `scenario_ar` is limited to the
+intern's track) → progress (completion verb + milestone) → plan → quiz → small talk (P12.2 intents: greeting,
+how_are_you, thanks, goodbye, identity, ack, unclear) → knowledge question. Every pattern is written in
+post-normalisation form.
 
 What it must never do: refuse a knowledge question on its own (refusal is decided by guards and the
 answer path), call the network, or read KB rows.
@@ -28,12 +32,16 @@ SCENARIO_MIN_COS = 0.80
 class ScenarioMatcher(Protocol):
     """`ScenarioIndex.match`: best scenario id by e5 cosine against `scenario_ar` (any role), or None."""
 
-    def match(self, text: str, *, min_cos: float = SCENARIO_MIN_COS) -> tuple[str, float] | None: ...
+    def match(
+        self, text: str, *, min_cos: float = SCENARIO_MIN_COS, role: str | None = None
+    ) -> tuple[str, float] | None: ...
 
 
 @dataclass(frozen=True)
 class TurnState:
     active_scenario: str | None = None
+    #: P16.1: the intern's track from the request/session (never reaches the answer path); None = unknown.
+    role: str | None = None
 
 
 @dataclass(frozen=True)
@@ -85,7 +93,34 @@ QUIZ_Q = re.compile(_W + r"(?:اختبرني|كويز|quiz|test me|اختبار 
 QUIZ_WORD = re.compile(_W + r"(?:ال)?اختبار" + _E)
 REQUEST_VERB = re.compile(_W + r"(?:ابدا|ابدء|نبدا|بدي|اريد|اعطيني|عطيني|ابغي|خليني|ممكن|start|give me)" + _E)
 PRACTICE_Q = re.compile(
-    _W + r"(?:(?:ال)?تدريب|اتدرب|نتدرب|تمرين|practice|roleplay|role play|موقف عملي|سيناريو)" + _E
+    _W + r"(?:(?:ال)?تدريب|اتدرب|نتدرب|تمرين|practi[cs]e|practi[cs]ing|roleplay|role play|موقف عملي|سيناريو)" + _E
+)
+#: P16.1: explicit practice requests that may be longer than `_PRACTICE_MAX_WORDS` words: a message that opens
+#: with a practice word and a colon or «على» (the chips «تدريب: …», "Practice: …"), a first-person practise
+#: verb («خليني اتدرب», "let me practise", "practising"), or a request verb right before a practice noun.
+PRACTICE_LEAD = re.compile(r"^(?:تدريب|تمرين|practi[cs]e|role ?play)(?:\s*:|\s+(?:علي|على|on|for)(?![\w])|$)")
+PRACTICE_VERB = re.compile(
+    _W + r"(?:اتدرب|نتدرب|practi[cs]ing|role ?playing)" + _E
+    + r"|" + _W + r"(?:let me|let'?s|let us|i want to|i'd like to|i would like to|i'd love to|can i|can we|want to"
+    r"|wanna|i need to|i'm going to)\s+(?:a\s+|some\s+)?(?:practi[cs]e|role ?play)" + _E
+)
+PRACTICE_ASK = re.compile(
+    _W + r"(?:ابدا|ابدء|نبدا|بدي|اريد|اعطيني|عطيني|ابغي|خليني|start|begin|give me)\s+(?:\S+\s+)?"
+    r"(?:(?:ال)?(?:تدريب|تمرين|موقف|سيناريو)|practi[cs]e|role ?play|scenario)" + _E
+)
+#: P16.1: a first-person track claim («أنا موظف مبيعات»، «بقسم التوصيل»، "I'm a delivery driver"): with a
+#: situation cue it is the jury's way of asking for practice (T06/T07) without a practice word.
+SELF_ROLE = re.compile(
+    _W + r"(?:انا|احنا)\s+(?:\S+\s+){0,2}?(?:(?:ال|بال|ب|لل)?(?:مبيعات|توصيل)|سايق|سواق)" + _E
+    + r"|" + _W + r"(?:ب|في )?(?:ال)?قسم (?:ال)?(?:مبيعات|توصيل)" + _E
+    + r"|" + _W + r"(?:موظف|موظفه|مندوب|مندوبه) (?:ال)?(?:مبيعات|توصيل)" + _E
+    + r"|" + _W + r"(?:i'?m|i am|im) (?:a |an |in |on |the )*(?:sales|delivery|driver)" + _E
+    + r"|" + _W + r"i work (?:in|on|as) (?:a |an |the )*(?:sales|delivery|driver)" + _E
+)
+#: A yes/no or entitlement question («هل يحق للزبون…»، "Can a customer…") is a knowledge question even after a
+#: role claim; only an explicit practice word starts practice then.
+POLICY_ASK = re.compile(
+    _W + r"(?:هل|يحق|بيحق|يحقلي|بيحقلي|مسموح|can|could|may|is it|are we|allowed|does|do i|do we)" + _E
 )
 #: Situation cues that, with a close scenario embedding, mean «let me practise this situation».
 CUSTOMER = re.compile(_W + r"(?:و|ب|ل|ال|وال|بال|لل)?(?:عميل|زبون|زبونه)" + _E)
@@ -155,6 +190,39 @@ INTERROGATIVE = re.compile(
 ROLE_SALES = re.compile(_W + r"(?:(?:ال|بال|لل)?مبيعات|sales)" + _E)
 ROLE_DELIVERY = re.compile(_W + r"(?:(?:ال|بال|لل)?توصيل|سايق|delivery|driver)" + _E)
 _PRACTICE_MAX_WORDS = 4
+_ROLES = ("Sales", "Delivery")
+#: P16.1 (journey #6): a pay question is information the KB does not hold (out-of-scope refusal), unless it
+#: asks for a decision about the intern (a raise, a promotion, being confirmed or fired): that stays employment.
+PAY_WORD = re.compile(
+    _W + r"(?:ال|بال|و|ب|لل)?(?:راتب|رواتب|معاش)(?:ي|ك|ه|نا|هم)?" + _E
+    + r"|" + _W + r"(?:my |the |a )?(?:salary|salaries|pay|wage|wages)" + _E
+)
+PAY_DECISION = re.compile(
+    _W + r"(?:ال|و|ب)?(?:زياده|زيادات|ترقيه|ترقيتي|ترقيات|تثبيت|تثبيتي|اتثبت|استحق|بستحق|بستاهل|استاهل|علاوه|علاوات"
+    r"|مكافاه|مكافات|خصم|خصومات|raise|raises|promotion|promote|bonus|increase|deserve|hired|confirmed|fired)" + _E
+    + r"|" + _W + r"(?:رح|راح|سوف|هل س\w+|will i|am i going to|would i)" + _E
+)
+#: P16.1 (journey #1): a clear new knowledge question during practice leaves it. All three must hold: the
+#: message opens with a question word (or «بدي إجازة…»), names an employee-side KB topic, and is not addressed
+#: to the customer (no second-person word). When unsure the message stays practice feedback.
+_LEAVE_Q_START = re.compile(
+    r"^(?:و|ف)?(?:متي|كيف|ماذا|كم|قديش|هل|وين|مين|ليش|لماذا|اين|شو|ايش|وش|ما|من|اي|what|how|when|where|who|why"
+    r"|which|can|could|do|does|is|are|may)" + _E
+)
+_LEAVE_WANT = re.compile(r"^(?:انا )?(?:بدي|اريد|ابغي|حابب|حابه|محتاج|محتاجه|i want|i need|i'd like)" + _E)
+_LEAVE_TOPIC = re.compile(
+    _W + r"(?:و|ب|ل|ال|بال|لل|وال|ع|عال)?(?:اجاز\w*|دوام\w*|معرض|معارض|فرع|فروع|مدير|مديري|تاسس\w*|سياس\w*|عقدي"
+    r"|تهيئه|جمله|الموارد|نظام|قيم الشركه|قيمنا|leave|vacation|showrooms?|branch(?:es)?|manager|founded|polic(?:y|ies)"
+    r"|probation|wholesale|onboarding|values|hr)" + _E
+)
+_LEAVE_WANT_TOPIC = re.compile(_W + r"(?:ال|ب)?(?:اجاز\w*|عطله|دوام\w*|leave|vacation|day off)" + _E)
+_ADDRESSED = re.compile(
+    _W + r"(?:عندك|عندكم|بدك|بدكم|حضرتك|انت|انتي|انتو|معك|معكم|الك|الكم|تبعك|تبعتك|بيتك|طلبك|طلبيتك|بتحب|بتحبي|بتفضل"
+    r"|بتفضلي|بتريد|بتقدر|بتقدري|you|your|yours|you're|sir|madam|استاذ|استاذه|عمي|خالتي)" + _E
+)
+#: Words ending in «ك» that are not a second-person suffix.
+_NOT_ADDRESSED_K = frozenset({"ذلك", "كذلك", "لذلك", "هناك", "هنالك", "تلك", "بنك", "البنك", "مشترك", "المشترك",
+                              "شريك", "ملك", "سمك", "شبك", "كمان"})
 
 
 def detect_milestone(text_norm: str) -> str | None:
@@ -238,13 +306,55 @@ def detect_practice_request(text_norm: str) -> bool:
     return bool(PRACTICE_Q.search(text_norm)) and len(text_norm.split()) <= _PRACTICE_MAX_WORDS
 
 
+def detect_explicit_practice(text_norm: str) -> bool:
+    """P16.1: the user asks to practise (a short practice message, a chip, a practise verb or a request verb
+    before a practice noun). A question that merely mentions a customer is not one."""
+    return (
+        detect_practice_request(text_norm)
+        or PRACTICE_LEAD.search(text_norm) is not None
+        or PRACTICE_VERB.search(text_norm) is not None
+        or PRACTICE_ASK.search(text_norm) is not None
+    )
+
+
+def practice_track(text_norm: str, role: str | None) -> str | None:
+    """P16.1: the track a scenario may come from. A first-person claim in the text («أنا موظف توصيل») names it
+    (both tracks named → either); otherwise the intern's role from the request; None = either track."""
+    if SELF_ROLE.search(text_norm):
+        return detect_role(text_norm)
+    return role if role in _ROLES else None
+
+
+def detect_pay_question(text_norm: str) -> bool:
+    """P16.1: a pay question with no employment decision in it («كم راتبي خلال فترة التجربة؟»)."""
+    if not PAY_WORD.search(text_norm) or PAY_DECISION.search(text_norm):
+        return False
+    return employment_guard(PAY_WORD.sub(" ", text_norm)) is None
+
+
+def _addressed_to_customer(text_norm: str) -> bool:
+    if _ADDRESSED.search(text_norm):
+        return True
+    return any(len(w) >= 3 and w.endswith("ك") and w not in _NOT_ADDRESSED_K for w in text_norm.split())
+
+
+def detect_new_question(text_norm: str) -> bool:
+    """P16.1: during practice, a message that is clearly a new knowledge question (see `_LEAVE_Q_START`)."""
+    t = text_norm.strip()
+    if not t or _addressed_to_customer(t):
+        return False
+    if _LEAVE_Q_START.search(t) and _LEAVE_TOPIC.search(t):
+        return True
+    return bool(_LEAVE_WANT.search(t) and _LEAVE_WANT_TOPIC.search(t))
+
+
 def _guard_route(hit: GuardHit) -> Route:
     return Route("refuse", {"reason": hit.kind}, DEFAULT_CONFIDENCE, f"{hit.kind} guard", hit)
 
 
 #: An explicit practice word («تدريب: …»): during practice only this, plus a situation that matches a
 #: different scenario, switches scenarios; a reply that merely describes the customer stays feedback.
-PRACTICE_WORD = re.compile(r"(?<![\w])(?:تدريب|تدرب|اتدرب|بدي اتدرب|practice)(?![\w])")
+PRACTICE_WORD = re.compile(r"(?<![\w])(?:تدريب|تدرب|اتدرب|بدي اتدرب|practi[cs]e|practi[cs]ing)(?![\w])")
 
 
 def route(
@@ -259,6 +369,11 @@ def route(
     t = normalize(text)
 
     hit = employment_guard(t)
+    if hit and detect_pay_question(t):
+        # the guard still fires (the model never sees the message), but the reply is the plain
+        # «not in the approved knowledge base, ask HR» refusal with no row attached (journey #6)
+        return Route("refuse", {"reason": "out_of_scope"}, DEFAULT_CONFIDENCE, "pay question: not in the KB",
+                     GuardHit("employment", f"pay:{hit.pattern}"))
     if hit:
         return _guard_route(hit)
     if detect_completion(t) and PROBATION.search(t):
@@ -267,17 +382,23 @@ def route(
     if hit:
         return _guard_route(hit)
 
+    track = practice_track(t, state.role)
     if state.active_scenario:
-        if END_PRACTICE.search(t) or NEW_TOPIC.match(t.strip()):
+        if NEW_TOPIC.match(t.strip()):
+            return Route("end_scenario", {"next": "question"}, DEFAULT_CONFIDENCE, "new question phrase")
+        if END_PRACTICE.search(t):
             return Route("end_scenario", {}, DEFAULT_CONFIDENCE, "end practice phrase")
         # an explicit practice request for a *different* situation switches scenarios instead of being
         # graded as a reply to the current one (QA: «تدريب: زبون يسأل عن ميزة غير مؤكدة» during S01)
-        asks_practice = detect_practice_request(t) or PRACTICE_WORD.search(t) is not None
+        asks_practice = detect_explicit_practice(t) or PRACTICE_WORD.search(t) is not None
         if scenario_index is not None and asks_practice and has_situation_cue(t):
-            m = scenario_index.match(text, min_cos=SCENARIO_MIN_COS)
+            m = scenario_index.match(text, min_cos=SCENARIO_MIN_COS, role=track)
             if m is not None and m[0] != state.active_scenario:
-                return Route("start_scenario", {"scenario_id": m[0], "role_override": detect_role(t)},
+                return Route("start_scenario", {"scenario_id": m[0], "role_override": track or detect_role(t)},
                              DEFAULT_CONFIDENCE, f"switch scenario {state.active_scenario} -> {m[0]} ({m[1]:.2f})")
+        if not asks_practice and detect_new_question(t):
+            return Route("answer_from_rows", {"question": text, "list_topic": None, "leave_practice": True},
+                         DEFAULT_CONFIDENCE, f"new question during {state.active_scenario}: leave practice")
         return Route(
             "give_scenario_feedback",
             {"scenario_id": state.active_scenario, "user_text": text},
@@ -288,20 +409,24 @@ def route(
         return Route("end_scenario", {}, DEFAULT_CONFIDENCE, "end practice phrase")
 
     role_override = detect_role(t)
-    if scenario_index is not None and has_situation_cue(t):
-        m = scenario_index.match(text, min_cos=SCENARIO_MIN_COS)
+    explicit = detect_explicit_practice(t)
+    # P16.1: a customer word alone never starts practice (journey #1). A situation is matched only for an
+    # explicit practice request or a first-person role claim that is not a yes/no or entitlement question.
+    role_claim = SELF_ROLE.search(t) is not None and POLICY_ASK.search(t) is None
+    if scenario_index is not None and (explicit or role_claim) and has_situation_cue(t):
+        m = scenario_index.match(text, min_cos=SCENARIO_MIN_COS, role=track)
         if m is not None:
             sid, cos = m
             return Route(
                 "start_scenario",
-                {"scenario_id": sid, "role_override": role_override},
+                {"scenario_id": sid, "role_override": track or role_override},
                 DEFAULT_CONFIDENCE,
-                f"scenario match {sid} ({cos:.2f})",
+                f"scenario match {sid} ({cos:.2f}){' in ' + track if track else ''}",
             )
-    if detect_practice_request(t):
+    if explicit:
         return Route(
             "start_scenario",
-            {"scenario_id": None, "role_override": role_override},
+            {"scenario_id": None, "role_override": track or role_override},
             DEFAULT_CONFIDENCE,
             "practice request",
         )
@@ -337,7 +462,10 @@ __all__ = [
     "ScenarioMatcher",
     "TurnState",
     "detect_completion",
+    "detect_explicit_practice",
     "detect_milestone",
+    "detect_new_question",
+    "detect_pay_question",
     "detect_plan_question",
     "detect_practice_request",
     "detect_quiz_request",
@@ -345,5 +473,6 @@ __all__ = [
     "detect_small_talk",
     "detect_small_talk_intent",
     "has_situation_cue",
+    "practice_track",
     "route",
 ]

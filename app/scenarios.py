@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -27,6 +28,7 @@ from numpy.typing import NDArray
 
 from app import schemas
 from app.llm.paths import FEEDBACK_MAX_S, llm_feedback
+from app.textnorm import normalize
 
 ROLES = schemas.ROLES
 VALUES = schemas.VALUES
@@ -37,6 +39,28 @@ START_TEXT_LLM_AR = "لنتدرّب على هذا الموقف. اكتب كيف 
 FEEDBACK_TEXT_AR = "شكراً على ردك. هذه ملاحظات تدريبية على الموقف."
 OPTION_FEEDBACK_TEXT_AR = "هذه ملاحظات تدريبية على اختيارك."
 END_TEXT_AR = "انتهى التدريب على هذا الموقف. يمكنك البدء بموقف آخر متى شئت."
+#: P16.1: the exit after «سؤال ثاني» / "another question" invites the question; fixed English lines for the
+#: English UI or an English message.
+END_NEXT_Q_AR = "انتهى التدريب على هذا الموقف. تفضّل، اسأل سؤالك."
+END_TEXT_EN = "Practice on this situation has ended. You can start another one any time."
+END_NEXT_Q_EN = "Practice on this situation has ended. Go ahead and ask your question."
+#: P16.1 (journey #8e): shown whenever a free-text reply promises or asserts an unconfirmed feature or time.
+INTEGRITY_FLAG_AR = "انتبه للنزاهة: لا تعِد بميزة أو موعد غير مؤكد؛ قل إنك ستتحقق وتعود بالمعلومة المؤكدة."
+_PROMISE = re.compile(
+    r"(?<![\w])(?:بوعدك|اوعدك|بوعدكم|اوعدكم|وعد مني|بضمنلك|اضمنلك|بضمنلكم|مضمون|مضمونه|بكفلك"
+    r"|اكيد (?:فيها|فيه|موجوده|موجود|بتوصل|رح توصل|راح توصل|بتكفي|رح تكفي|بتكفيكم|بتشتغل|عندها|بتيجي|بتجي)"
+    r"|(?:فيها|فيه|موجوده|موجود|عندها) (?:هالميزه |الميزه |هاي الميزه )?(?:اكيد|مية بالمية)"
+    r"|(?:بتوصل|رح توصل|راح توصل|بتوصلك|رح توصلك|بتيجي|رح تيجي) (?:الساعه|بكرا|بكره|اليوم|علي الموعد|ع الموعد|بالموعد)"
+    r"|ما (?:رح|راح) تتاخر"
+    r"|i promise|i guarantee|guaranteed|definitely (?:has|have|will|arrives?|comes?|works?|fits?)"
+    r"|it will definitely|for sure it|it'?ll be there (?:at|by|tomorrow|today))(?![\w])"
+)
+#: A negation just before the promise word («ما بقدر أوعدك», "I can't promise") is not a promise.
+_PROMISE_NEGATION = re.compile(
+    r"(?<![\w])(?:ما|مش|مو|لا|لن|ليس|مبقدر|can'?t|cannot|won'?t|not|don'?t|never)(?![\w])"
+)
+#: Checklist items a promise contradicts («لا تخترع مواصفات»، «المعلومات المؤكدة فقط»): never a strength then.
+_CONFIRMED_ONLY = re.compile(r"تخترع|مؤكد|لا تعد")
 
 
 class Encoder(Protocol):
@@ -299,14 +323,20 @@ class ScenarioIndex:
             self._vectors = np.asarray(self._encoder.encode_array(texts), dtype=np.float32)
         return self._vectors
 
-    def match(self, text: str, *, min_cos: float = MIN_COS) -> tuple[str, float] | None:
-        """Best scenario for a message by e5 cosine against `scenario_ar` (any role), or None."""
+    def match(self, text: str, *, min_cos: float = MIN_COS, role: str | None = None) -> tuple[str, float] | None:
+        """Best scenario for a message by e5 cosine against `scenario_ar`, or None. `role` (P16.1) limits the
+        candidates to that department's scenarios; None = any role."""
         vectors = self._scenario_vectors()
         if vectors is None or not text.strip():
             return None
         assert self._encoder is not None
         q = np.asarray(self._encoder.encode_array([text]), dtype=np.float32)[0]
         cos = vectors @ q
+        if role is not None:
+            keep = np.array([self._by_id[i].department == role for i in self._order])
+            if not keep.any():
+                return None
+            cos = np.where(keep, cos, -np.inf)
         best = int(np.argmax(cos))
         score = float(cos[best])
         if score < min_cos:
@@ -330,6 +360,21 @@ def _check_scenario(sc: Scenario, opts: Sequence[ScenarioOption], items: Sequenc
 # --------------------------------------------------------------------------------------
 
 
+def makes_promise(user_text: str) -> bool:
+    """P16.1: the reply promises or asserts an unconfirmed feature or time («أكيد فيها هالميزة»، «بوعدك»،
+    «بتوصل الساعة …»، "I promise", "definitely has"), not negated just before («ما بقدر أوعدك»)."""
+    t = normalize(user_text or "")
+    for m in _PROMISE.finditer(t):
+        before = t[max(0, m.start() - 16):m.start()]
+        if not _PROMISE_NEGATION.search(before):
+            return True
+    return False
+
+
+def _with_integrity(improve_ar: str | None) -> str:
+    return INTEGRITY_FLAG_AR if not improve_ar else f"{INTEGRITY_FLAG_AR} {improve_ar}"
+
+
 def _base(scenario: Scenario, mode: str) -> dict[str, Any]:
     return {
         "scenario_id": scenario.id,
@@ -341,14 +386,15 @@ def _base(scenario: Scenario, mode: str) -> dict[str, Any]:
 
 
 def feedback_option(scenario: Scenario, option_id: str) -> Feedback:
-    """Fixed feedback for a chosen option: the best option's text is a strength, another is "improve"."""
+    """Fixed feedback for a chosen option: the best option's text is a strength, another is "improve".
+    The value is always the scenario's own (P16.1: an option's value never flips the banner)."""
     opt = next((o for o in scenario.options if o.option_id == option_id), None)
     if opt is None:
         raise ValueError(f"option {option_id} does not belong to {scenario.id}")
     return Feedback(
         strengths_ar=[opt.feedback_ar] if opt.is_best else [],
         improve_ar=None if opt.is_best else opt.feedback_ar,
-        value=opt.company_value,
+        value=scenario.company_value,
         tip_ar=None,
         option_id=opt.option_id,
         **_base(scenario, "offline"),
@@ -356,11 +402,11 @@ def feedback_option(scenario: Scenario, option_id: str) -> Feedback:
 
 
 def feedback_freetext_offline(scenario: Scenario, user_text: str) -> Feedback:
-    """Offline free text: nothing is judged; the suggested response and the scenario's value are shown."""
-    del user_text  # offline mode does not judge the text
+    """Offline free text: nothing is judged; the suggested response and the scenario's value are shown. The one
+    deterministic check: a promise of an unconfirmed feature or time gets the integrity line (P16.1)."""
     return Feedback(
         strengths_ar=[],
-        improve_ar=None,
+        improve_ar=INTEGRITY_FLAG_AR if makes_promise(user_text) else None,
         value=scenario.company_value,
         tip_ar=None,
         **_base(scenario, "offline"),
@@ -375,21 +421,30 @@ def feedback_from_checklist(
     tip_ar: str | None,
     *,
     mode: str = "llm",
+    user_text: str = "",
 ) -> Feedback:
     """Server-worded feedback from verified checklist ids: `done_ar` per met item, `add_ar` of the first missing.
 
     The caller has already verified that every id belongs to the scenario's checklist, that `value`
-    is one of the five values and that `tip_ar` passed the tip checks (or is None).
+    is one of the five values and that `tip_ar` passed the tip checks (or is None). P16.1: the value shown is
+    always the scenario's own; a reply that promises an unconfirmed feature or time gets the integrity line
+    first, and a «confirmed information only» item is never its strength.
     """
     items = {c.item_id: c for c in scenario.checklist}
     unknown = [i for i in [*met, *missing] if i not in items]
     if unknown or value not in VALUES:
         raise ValueError(f"unknown checklist ids {unknown} or value {value!r}")
+    promise = makes_promise(user_text)
+    if promise:
+        demoted = [i for i in met if _CONFIRMED_ONLY.search(items[i].text_ar)]
+        met = [i for i in met if i not in demoted]
+        missing = [*demoted, *missing]
     missing_items = [items[i] for i in missing if i not in met]
+    improve = missing_items[0].add_ar if missing_items else None
     return Feedback(
         strengths_ar=[items[i].done_ar for i in met],
-        improve_ar=missing_items[0].add_ar if missing_items else None,
-        value=value,
+        improve_ar=_with_integrity(improve) if promise else improve,
+        value=scenario.company_value,
         tip_ar=tip_ar,
         met=list(met),
         **_base(scenario, mode),
@@ -445,7 +500,9 @@ def feedback_llm(
             return done(None)
         trace["llm_used"] = True
         deadline = min(FEEDBACK_MAX_S, float(budget_s if budget_s is not None else FEEDBACK_MAX_S))
-        checklist = [{"item_id": c.item_id, "text_ar": c.text_ar} for c in scenario.checklist]
+        # done_ar / add_ar feed the tip checks only (the prompt shows id and text_ar)
+        checklist = [{"item_id": c.item_id, "text_ar": c.text_ar, "done_ar": c.done_ar, "add_ar": c.add_ar}
+                     for c in scenario.checklist]
         call_info: dict[str, Any] = {}
         reply, reason = llm_feedback(
             _scenario_payload(scenario), checklist, user_text, llm.chat, deadline, info=call_info
@@ -460,7 +517,8 @@ def feedback_llm(
         trace["tip_dropped"] = bool(call_info.get("tip_dropped"))
         return done(
             feedback_from_checklist(
-                scenario, reply["met"], reply["missing"], reply["value"], reply["tip_ar"], mode="llm"
+                scenario, reply["met"], reply["missing"], reply["value"], reply["tip_ar"], mode="llm",
+                user_text=user_text,
             )
         )
     except Exception:  # noqa: BLE001 - the LLM path must never fail a request
@@ -473,7 +531,11 @@ def start_text_ar(*, with_options: bool) -> str:
 
 
 __all__ = [
+    "END_NEXT_Q_AR",
+    "END_NEXT_Q_EN",
     "END_TEXT_AR",
+    "END_TEXT_EN",
+    "INTEGRITY_FLAG_AR",
     "FEEDBACK_TEXT_AR",
     "MIN_COS",
     "OPTION_FEEDBACK_TEXT_AR",
@@ -491,5 +553,6 @@ __all__ = [
     "load_customer_lines",
     "load_options",
     "load_scenarios",
+    "makes_promise",
     "start_text_ar",
 ]
