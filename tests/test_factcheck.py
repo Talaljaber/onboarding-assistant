@@ -482,3 +482,18 @@ def test_eval_counts_model_columns_with_a_fake_chat(agent: Agent, fake: Any, tmp
     # «supported K14» for every rumour: the number rule and the guards hold most back; any that pass are counted.
     assert code == (1 if any(mod.false_supported(r["llm_label"], r["llm_id"], r) for r in rows) else 0)
     assert all(r["llm_label"] == "guarded" for r in rows if r["expected"] == "guarded")
+
+
+def test_year_after_its_marker_word_is_compared() -> None:
+    """A year has its marker before it («عام 1991»): the same year is confirmed, another year differs, and a
+    different marker word («سنة») still counts as a year; other numbers are untouched."""
+    from app.verify import compare_claim
+
+    row = "تأسست مجموعة الدادا عام 1991."
+    assert compare_claim("مجموعة الدادا تأسست عام 1991", row).label == "supported"
+    # «سنة» also reads as the number 1 (numbers_in), so this phrasing stays on the safe side: never a red.
+    assert compare_claim("الشركة تأسست سنة 1991", row).label in ("supported", "related")
+    differs = compare_claim("الشركة تأسست سنة 1995", row)
+    assert differs.label == "differs"
+    assert compare_claim("الشركة مش من عام 1991", row).label == "related"  # hedge word the row lacks
+    assert compare_claim("فترة التجربة سنة كاملة", "فترة التجربة 90 يوماً").label != "supported"

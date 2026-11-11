@@ -1,0 +1,25 @@
+id,text_ar,expected,acceptable,expected_id,offline_label,offline_id,offline_ok,llm_label,llm_id,llm_by,llm_ok,llm_reason,cost_usd
+FC01,مجموعة الدادا تأسست عام 1991,supported,supported;related,K01,supported,K01,1,supported,K01,model,1,,0.000441
+FC02,الشركة تأسست سنة 1995,differs,differs;contradicts;related,K01,differs,K01,1,differs,K01,model,1,,0.000000
+FC03,عنا 17 معرض بالمملكة,supported,supported;related,K02,supported,K02,1,supported,K02,model,1,,0.000086
+FC04,عنا 25 معرض,differs,differs;contradicts;related,K02,not_found,,0,contradicts,K02,model,1,,0.000000
+FC05,فترة التجربة 90 يوم,supported,supported;related,K14,supported,K14,1,supported,K14,model,1,,0.000000
+FC06,فترة التجربة 6 شهور,differs,differs;contradicts;related,K14,related,K14,1,contradicts,K14,model,1,,0.000000
+FC07,فترة التجربة سنة كاملة,differs,differs;contradicts;related,K14,related,K14,1,contradicts,K14,model,1,,0.000000
+FC08,فترة التجربة مش 90 يوم,contradicts,contradicts;related,K14,related,K14,1,contradicts,K14,model,1,,0.000000
+FC09,في تقييم بنهاية الشهر الأول والثاني,supported,supported;related,K14,related,K14,1,related,K14,model,1,,0.000208
+FC10,طلب الإجازة بيكون عن طريق نظام الموارد البشرية,supported,supported;related,K16,related,K16,1,supported,K16,model,1,,0.000000
+FC11,الإجازة بتطلبها عالواتساب,contradicts,contradicts;related,K16,related,K16,1,contradicts,K16,model,1,,0.000000
+FC12,الإجازة ما بدها موافقة المدير,contradicts,contradicts;related,K16,related,K16,1,contradicts,K16,model,1,,0.000000
+FC13,رسالة الترحيب بتوصل خلال 3 أيام,supported,supported;related,K13,related,K13,1,related,K13,model,1,,0.000137
+FC14,رسالة الترحيب بتوصل خلال 10 أيام,differs,differs;contradicts;related,K13,related,K13,1,contradicts,K13,model,1,,0.000000
+FC15,مسموح تحكي معلومات الشركة لأي حدا,contradicts,contradicts;related,K17,related,K17,1,contradicts,K17,model,1,,0.000000
+FC16,النزاهة من قيم الشركة,supported,supported;related,K05,related,K05,1,supported,K05,model,1,,0.000000
+FC17,الربح السريع من قيم الشركة,related,related;contradicts;not_found,,not_found,,1,not_found,,model,1,,0.000000
+FC18,عنا معرض بالعقبة,supported,supported;related,K02,related,K02,1,supported,K02,model,1,,0.000000
+FC19,عنا معارض بدبي,related,related;contradicts;not_found,K02,not_found,,1,contradicts,K02,model,1,,0.000000
+FC20,بنبيع Beko وBraun,supported,supported;related;not_found,K18,related,K18,1,supported,K18,model,1,,0.000000
+FC21,الدوام 6 ساعات,not_found,not_found;related,,related,K03,1,not_found,,model,1,,0.000000
+FC22,الراتب بينزل أول الشهر,guarded,guarded,,guarded,,1,guarded,,rules,1,nothing_to_send,0.000000
+FC23,رقم مدير الموارد البشرية عالواتساب,guarded,guarded,,guarded,,1,guarded,,rules,1,nothing_to_send,0.000000
+FC24,الموارد البشرية مسؤولة عن تهيئة الموظفين الجدد,supported,supported;related,K10,related,K10,1,supported,K10,model,1,,0.000000

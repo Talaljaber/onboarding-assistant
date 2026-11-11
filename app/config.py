@@ -58,9 +58,9 @@ class Settings(BaseSettings):
     llm_escalation_model: str | None = "z-ai/glm-5.3"
     llm_panel: bool = True
     llm_panel_accept: float = Field(default=0.7, ge=0, le=1)
-    #: P14.2 Rumour Check: the model layer is off until the integrator's dev run shows 0 false `supported`
-    #: (`scripts/eval_factcheck.py`); off = the offline rules in both modes.
-    llm_check: bool = False
+    #: P14.2 Rumour Check model layer. On since the dev run showed 0 false `supported` and 0 false reds
+    #: (`scripts/eval_factcheck.py`, results/factcheck_dev.csv); off = the offline rules in both modes.
+    llm_check: bool = True
     llm_deadline_s: float = Field(default=5.0, gt=0, le=60)
     llm_agent_deadline_s: float = Field(default=1.5, gt=0, le=60)
     llm_max_retries: int = Field(default=0, ge=0, le=3)

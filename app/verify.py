@@ -722,6 +722,11 @@ def _count_value(token_norm: str) -> str | None:
     return (m.group(1).lstrip("0") or "0") if m else None
 
 
+#: Words that mark the 4-digit number after them as a year (normalised, with and without the final ة/ه).
+_YEAR_WORDS = frozenset({"عام", "سنه", "سنة", "العام", "السنه", "السنة"})
+_YEAR_UNIT = "عام"
+
+
 def number_spans(text: str) -> list[NumberSpan]:
     """Counts in `text` (digits, Arabic-Indic digits, cardinal number words such as «تسعين»), each with the
     normalised word right after it when that word is not itself a number («17 معرضاً» → (17, «معرضا»))."""
@@ -746,6 +751,9 @@ def number_spans(text: str) -> list[NumberSpan]:
             nxt = toks[j + 1][2]
             if _CHECK_LETTER.search(nxt) and not _NUMBER.search(_number_words_to_digits(nxt)):
                 unit = nxt
+        # A year has its marker before it, not after: «عام 1991», «سنة 1995» (any year word counts as one unit).
+        if value.isdigit() and len(value) == 4 and i > 0 and toks[i - 1][2] in _YEAR_WORDS:
+            unit = _YEAR_UNIT
         out.append(NumberSpan(value, start, toks[j][1], unit))
         i = j + 1
     return out
