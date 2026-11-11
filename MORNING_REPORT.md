@@ -1,4 +1,4 @@
-# Morning report — Dada Academy — Wed 11 Nov 2026, run ended __END_TIME__
+# Morning report — Dada Academy — Wed 11 Nov 2026, run ended 05:40
 
 ## 1. One paragraph
 The onboarding assistant is built and every wave gated: W0–W4 are tagged and pushed to the private `origin`, and W5 deliverables are in `main`. All five features work for both roles in the browser: role choice, grounded Q&A with K-row sources and fixed refusals, scenarios with value-linked feedback that is never a score, the suggested 90-day plan with a Day 90 summary, quiz and progress dashboard, plus the KB live editor and a demo-profile manager view. The AI is a tool-using agent: guards first, an LLM tool choice with a rule-router fallback, and LLM answers that the server verifies (ids, quotes, numbers, contacts), cached only after they pass. With no key, a dead network or an exhausted budget it falls back to offline retrieval and never errors. Supabase holds the KB with history, demo profiles, progress, attempts and turn logs (metadata only, no chat text), with a local SQLite fallback. **Held-out (run once, after the freeze):** AI mode 43/50 correct, 0 answerable refused, 14/14 unanswerable refused; offline 25/50, 2 answerable refused; 0 invented contacts in both. Not done: the hierarchical lead mode (fell back to flat; see D-A11-mode), the Gemini model comparison (HTTP 400), .docx/.pptx exports (Markdown only), and the real second-Windows-account test.
@@ -11,8 +11,8 @@ The onboarding assistant is built and every wave gated: W0–W4 are tagged and p
 | W2 core/features/web | pass | 05:52 (05:48) | DEV offline gate PASS; Supabase migrated, RLS on all 7 tables, seeded 18 rows; `w2-gate` |
 | W3 API/LLM/chat/KB | pass | 07:58 (07:33) | DEV AI 142/154 (92.2%), 0 answerable refused; live store smoke OK; storyboard smoke OK in AI mode; `w3-gate` |
 | W4 model/red team/smoke/hardening | pass | 08:58 (08:48) | red team 19/20 offline; browser smoke 2/2 viewports; clean-clone start OK; tripwire 0 network attempts; 640 tests; `w4-gate` |
-| W5 deliverables | __W5__ | __W5_TIME__ (10:13) | freeze `c6ea919` → held-out AI 43/50, offline 25/50; jury block 9/9 both modes (reported only); docs final; release zip __ZIP__ |
-| W6 handoff | this file | __END_TIME__ (10:33) | __FINAL_TESTS__ |
+| W5 deliverables | pass | 05:35 (10:13) | freeze `c6ea919` → held-out AI 43/50, offline 25/50; jury block 9/9 both modes (reported only); docs final; release zip releaseonboarding-assistant-d0b181b.zip (54 MB, local only, not uploaded) |
+| W6 handoff | this file | 05:40 (10:33) | 643 py tests, 185 vitest, e2e 2/2, ruff, mypy, check_web, check_ours all green |
 
 ## 3. Decisions needing you (recommended answer first)
 - **D-A11-mode** — Hierarchical leads never ran: `claude --bg` refuses untrusted folders. Recommended: run `claude` once in `C:\Users\hp\.m2\dada-coord` and in the `dada-wt-*` folders and accept the trust prompt before the next unattended run. Default applied: flat mode, with the integrator plus Agent-tool workers. Reversible: yes.
@@ -54,16 +54,16 @@ Then `docs\demo_script.md`, shot by shot (6:50).
 - [ ] Check origin (Talaljaber/onboarding-assistant) has `main` and tags `w0-gate`…`w4-gate` (+ `p6-exit`); make the repo public only at submission
 - [ ] Record the video from `docs\demo_script.md` (5–7 min)
 - [ ] Review `README.md`, `docs\report.md`, `docs\slides.md`, `docs\privacy_ai_note.md`; export the report/slides to .docx/.pptx if you want files
-- [ ] Release zip: `.venv\Scripts\python.exe scripts\make_release.py` (built tonight: __ZIP__); upload it yourself
+- [ ] Release zip: `.venv\Scripts\python.exe scripts\make_release.py` (built tonight: releaseonboarding-assistant-d0b181b.zip (54 MB, local only, not uploaded)); upload it yourself
 - [ ] Final rehearsal fully offline and on a phone hotspot; warm the cache: `run_eval.py --set dev --mode llm` and `--set jury --mode llm`
 - [ ] Email the submission to nadia.alrousan@gju.edu.jo before Sat 14 Nov 23:59 Amman (you send it; nothing here sends mail)
 
 ## 7. Budget and cost
-OpenRouter spend tonight: __SPEND__ of $3.00 (`.cache\budget.json`), covering DEV ×3, held-out ×1, jury ×1, probes and the live smoke. Fable decision calls: 1 of 5 (D-W2-offline-bands).
+OpenRouter spend tonight: $0.057 of $3.00 (`.cache\budget.json`), covering DEV ×3, held-out ×1, jury ×1, probes and the live smoke. Fable decision calls: 1 of 5 (D-W2-offline-bands).
 
 ## 8. Where things are
-- Tags `w0-gate` … `w4-gate`, `p6-exit` (all pushed unless noted: __PUSH__). Freeze commit `c6ea919`.
-- Branches not merged: none. Worktrees removed: __WT__. The app is not running.
+- Tags `w0-gate` … `w4-gate`, `p6-exit`; report.docx (2 pages) and slides.pptx exported — check slide 4 by eye, its fit was estimated, not rendered (all pushed unless noted: main + all tags pushed). Freeze commit `c6ea919`.
+- Branches not merged: none. Worktrees removed: yes (only main remains). The app is not running.
 - Logs: `logs\app.jsonl`, `C:\Users\hp\.m2\dada-coord\RUNLOG.md` (run log), `dada-coord\*.log` (eval outputs).
 - Results: `results\summary.md` (all sets), `results\results.csv`, `docs\redteam.md`, `docs\perf.md`, `docs\security_review.md`, `docs\screenshots\INDEX.md`.
 
