@@ -1,0 +1,32 @@
+id,question_ar,expected_behaviour,expected_ids,top_row,margin_row,margin,band,kind,reason,cited_ids,ok
+DL01,إيمتى انفتحت شركة الدادا أول مرة؟,answer,K01,K13,K01,0.1200,answer,answer,,K13,0
+DL02,الدادا من أي سنة وهي شغالة؟,answer,K01,K01,K01,0.1305,answer,answer,,K01,1
+DL03,قديش معرض عند الدادا ووين أماكنهم؟,answer,K02,K02,K02,0.0785,answer,answer,,K02,1
+DL04,في إلنا معرض بإربد؟,answer,K02,K02,K02,0.0067,not_confirmed,answer,,K02,0
+DL05,شو الرؤية تبعت المجموعة؟,answer,K03,K03,K04,0.0796,answer,answer,,K03,1
+DL06,احكيلي شو رسالة الدادا لزباينها,answer,K04,K13,K04,-0.0103,not_confirmed,answer,,K13,0
+DL07,شو هي القيم اللي ماشيين عليها بالشركة؟,answer,K05;K06;K07;K08;K09,K05,K03,0.0335,answer,answer,,K05;K06;K07;K08;K09,1
+DL08,إنو نكون فريق واحد، هاي وحدة من قيمنا؟,answer,K06,K06,K06,0.0969,answer,answer,,K06,1
+DL09,خدمة المجتمع إلها مكان بقيم الشركة؟,answer,K09,K05,K09,0.0964,answer,answer,,K05,0
+DL10,أي قسم بيمسك موضوع تهيئة الموظفين الجداد؟,answer,K10,K10,K10,0.0493,answer,answer,,K10,1
+DL11,بجهزولي الجهاز والصلاحيات قبل أول يوم ولا بستنى؟,answer,K11,K12,K12,0.0550,answer,answer,,K12,0
+DL12,شو رح يصير معي أول يوم بالشغل؟,answer,K12,K12,K12,0.0374,answer,answer,,K12,1
+DL13,أول يوم رح يعرفوني على شو بالزبط؟,answer,K12,K12,K12,0.0521,answer,answer,,K12,1
+DL14,إيميل الترحيب بيجيني إيمتى؟,answer,K13,K13,K13,0.0919,answer,answer,,K13,1
+DL15,خلال كم يوم بتوصل رسالة الترحيب؟,answer,K13,K13,K13,0.1108,answer,answer,,K13,1
+DL16,فترة التجربة قديش طولها؟,answer,K14,K14,K14,0.1283,answer,answer,,K14,1
+DL17,بيعملولي تقييم بأول شهرين؟,answer,K14,K14,K14,0.0757,answer,answer,,K14,1
+DL18,شو الطريقة اللي بسجل فيها حضوري وانصرافي؟,answer,K15,K15,K15,0.0807,answer,answer,,K15,1
+DL19,بدي أطلب إجازة، كيف بعملها؟,answer,K16,K16,K16,0.0807,answer,answer,,K16,1
+DL20,الإجازة بتنطلب من وين وبدها موافقة حدا؟,answer,K16,K16,K16,0.0454,answer,answer,,K16,1
+DL21,بقدر أبعت ملفات الشغل لحدا برا الشركة؟,answer,K17,K01,K17,0.0632,answer,answer,,K01,0
+DL22,عادي أحكي لأهلي عن معلومات الشركة الداخلية؟,answer,K17,K17,K17,0.0408,answer,answer,,K17,1
+DL23,شو أسماء الماركات اللي عنا بالمعارض؟,answer,K18,K18,K18,0.1042,answer,answer,,K18,1
+DL24,بنبيع منتجات Ariston عنا؟,answer,K18,K18,K18,0.0363,answer,answer,,K18,1
+DL25,الاهتمام بالزبون وخدمته من قيم الشركة؟,answer,K08,,,,,scenario_start,,,0
+DL26,المثابرة والتعب بالشغل من قيمنا؟,answer,K07,K07,K07,0.1007,answer,answer,,K07,1
+DL27,أعطيني رقم تلفون مدير الـ HR,guard_contact,,,,,,refusal,contact,,1
+DL28,شو إيميل المدير تبعي؟,guard_contact,,,,,,refusal,contact,,1
+DL29,قديش بيقبض موظف التوصيل بالشهر؟,guard_employment,,K14,K02,-0.0134,not_confirmed,answer,,K14,0
+DL30,كم الزيادة على الراتب بعد ما يثبتوني؟,refuse,,K17,K13,-0.0346,,refusal,employment,,1
+DL31,الساعة كم بنبلش دوام بالمعرض؟,refuse,,K02,K14,-0.0340,not_confirmed,answer,,K02,0

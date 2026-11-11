@@ -84,3 +84,17 @@ scenario, progress, plan and greeting rows.
 Harness conventions: scenario rows send the prompt, then the fixed reply «سأتحقق من المصدر وأعود إليه»;
 progress rows send the prompt, then `confirm`. Scenario and progress prompts name the role in the text
 (`مبيعات` / `توصيل`); when the text names no role, use `Sales`.
+
+## dialect_dev.csv — 31 rows (P14.5)
+Jordanian/Levantine dialect paraphrases of DEV questions (sample FAQ F01–F12 and `eval_dev.csv`), written
+after reading those two files only; no question copies an `eval_dev.csv` or `kb_anchors.csv` question.
+Measured offline by `scripts/eval_dialect.py` (`docs/evidence/dialect_offline.md`). Never used for tuning.
+
+| column | meaning |
+|---|---|
+| `id` | `DL01`…`DL31` |
+| `question_ar` | the dialect question |
+| `expected_behaviour` | `answer` (26), `guard_contact` (2), `guard_employment` (1), `refuse` (2) |
+| `expected_ids` | expected K-ids for `answer` rows (`;`-separated), empty otherwise |
+| `paraphrase_of` | the DEV question it paraphrases (F- or D-id) |
+| `source` | `ours` |
