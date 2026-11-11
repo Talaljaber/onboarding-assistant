@@ -1,14 +1,12 @@
-// #/scenarios: one card per official scenario of the role, with a tab to peek at the other
-// track's list. "Start practice" is a plain link to `#/chat?scenario=<id>`: ChatScreen reads the
-// `scenario` query param from the hash and starts scenario mode for that id.
+// #/scenarios: one card per official scenario of the role, and a quiet link to peek at the other
+// track's list. A card opens `#/chat?scenario=<id>`: ChatScreen reads the `scenario` query param
+// from the hash and starts scenario mode for that id.
 import { useState } from "react";
 import type { Role } from "@/api/types";
-import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
 import { Loadable } from "@/components/ui/Loadable";
 import { Page, PageHeader } from "@/components/ui/Page";
-import { TabPanel, Tabs } from "@/components/ui/Tabs";
 import { useT } from "@/i18n";
 import { practisedScenarios } from "@/state/progress";
 import { useAppState } from "@/state/useAppState";
@@ -30,8 +28,9 @@ export default function ScenariosScreen() {
   // the current role's; the other track has nothing to match.
   const done = practisedScenarios(practised.practised, plan, progress.done);
   const isDone = (scenarioId: string) => view === "mine" && scenarioId in done;
-
   const doneCount = view === "mine" ? list.scenarios.filter((s) => isDone(s.id)).length : 0;
+  const showCount = view === "mine" && list.status === "ready" && list.scenarios.length > 0;
+  const swapTo: Role = view === "mine" ? other(mine) : mine;
 
   return (
     <section data-screen="scenarios">
@@ -39,46 +38,40 @@ export default function ScenariosScreen() {
         <PageHeader
           icon="flask"
           title={t("nav.scenarios")}
-          badges={
-            <Badge tone="neutral" icon={null}>
-              {t("scenario.synthetic")}
-            </Badge>
-          }
-          description={t("uiLearning.scenariosIntro")}
-        />
-        <div className="flex flex-col gap-1">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Tabs
-              idBase="scn"
-              label={t("nav.scenarios")}
-              value={view}
-              onChange={(id) => setView(id === "other" ? "other" : "mine")}
-              items={[
-                { id: "mine", label: shortName(mine) },
-                { id: "other", label: shortName(other(mine)) },
-              ]}
-            />
-            {view === "mine" && list.status === "ready" && list.scenarios.length > 0 && (
-              <p className="m-0 inline-flex items-center gap-1.5 text-sm text-fg-2">
-                <Icon name="check" size={16} className="shrink-0 text-ok" />
-                {t("scenario.done")}: {t("progress.ofTotal", { done: doneCount, total: list.scenarios.length })}
-              </p>
-            )}
-          </div>
-          <TabPanel idBase="scn" id={view} value={view} className="pt-4">
-            <Loadable state={list.status} onRetry={list.reload} lines={6}>
-              {list.scenarios.length === 0 ? (
-                <EmptyState icon="flask" title={t("nav.scenarios")} />
-              ) : (
-                <ul className="m-0 grid gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">
-                  {list.scenarios.map((s) => (
-                    <ScenarioCard key={s.id} scenario={s} done={isDone(s.id)} otherRole={view === "other" ? shown : undefined} />
-                  ))}
-                </ul>
+          description={
+            <>
+              {t("uiCalm.scenariosLead")}
+              {showCount && (
+                <>
+                  {" "}
+                  <span data-testid="scenarios-count">
+                    {t("uiCalm.scenariosCount", { done: doneCount, total: list.scenarios.length })}
+                  </span>
+                </>
               )}
-            </Loadable>
-          </TabPanel>
-        </div>
+            </>
+          }
+        />
+        <Loadable state={list.status} onRetry={list.reload} lines={6}>
+          {list.scenarios.length === 0 ? (
+            <EmptyState icon="flask" title={t("nav.scenarios")} />
+          ) : (
+            <ul aria-label={t(shown === "Sales" ? "role.sales" : "role.delivery")} className="m-0 grid gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">
+              {list.scenarios.map((s) => (
+                <ScenarioCard key={s.id} scenario={s} done={isDone(s.id)} otherRole={view === "other" ? shown : undefined} />
+              ))}
+            </ul>
+          )}
+        </Loadable>
+        {/* Viewing the other track is an edge feature: a quiet text link under the list. */}
+        <button
+          type="button"
+          onClick={() => setView(view === "mine" ? "other" : "mine")}
+          className="inline-flex min-h-11 items-center gap-1.5 self-start text-sm font-semibold text-fg-2 underline decoration-line-strong underline-offset-4 hover:text-accent"
+        >
+          <Icon name="flask" size={16} className="shrink-0" />
+          {t("scenario.viewOther", { role: shortName(swapTo) })}
+        </button>
       </Page>
     </section>
   );

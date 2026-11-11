@@ -1,11 +1,10 @@
 import { useId } from "react";
 import type { Role, ScenarioOut } from "@/api/types";
-import { linkButton } from "@/components/plan/shared";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
 import { Icon } from "@/components/ui/Icon";
-import { surface } from "@/components/ui/recipes";
-import { ValueLabel } from "@/components/ui/ValueLabel";
+import { pressable, surface } from "@/components/ui/recipes";
+import { ValueTag } from "@/components/ui/ValueLabel";
 import { useT } from "@/i18n";
 
 export interface ScenarioCardProps {
@@ -16,64 +15,55 @@ export interface ScenarioCardProps {
   otherRole?: Role;
 }
 
-/** One practice scenario: verbatim text, value badge, synthetic badge, done check, start link. */
+/**
+ * One practice scenario. The situation is the heading; a quiet meta line carries the id and the
+ * company value; the only badge is the per-item "Practised" state. The whole card is clickable
+ * through the start link (a stretched link) to `#/chat?scenario=<id>`. The screen states once,
+ * above the list, that scenarios are fictional.
+ */
 export function ScenarioCard({ scenario, done, otherRole }: ScenarioCardProps) {
   const t = useT();
   const titleId = useId();
   const roleName = otherRole ? t(otherRole === "Sales" ? "role.sales" : "role.delivery") : "";
   return (
     <li data-scenario={scenario.id} className="flex list-none">
-      <article
-        aria-labelledby={titleId}
-        className={cn(
-          surface.card,
-          "flex w-full flex-col gap-4 p-4 transition-[border-color,box-shadow] duration-(--da-motion-fast) ease-da hover:border-accent-line hover:shadow-3 sm:p-5",
-        )}
-      >
-        <header className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-md bg-amber-soft text-amber-ink">
-              <Icon name="flask" size={20} />
+      <article aria-labelledby={titleId} className={cn(surface.card, pressable, "relative flex w-full flex-col gap-3 p-4 sm:p-5")}>
+        <div className="flex min-h-7 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <p className="m-0 flex min-w-0 flex-wrap items-center gap-x-2 text-sm text-fg-2">
+            <bdi dir="ltr" className="font-id text-xs font-semibold text-fg-3">
+              {scenario.id}
+            </bdi>
+            <span aria-hidden="true" className="text-fg-3">
+              ·
             </span>
-            <h3 id={titleId} className="m-0 flex flex-wrap items-baseline gap-x-2 text-base font-bold text-fg-1">
-              {t("scenario.title")}
-              <bdi dir="ltr" className="font-id text-xs font-semibold text-fg-3">
-                {scenario.id}
-              </bdi>
-            </h3>
-          </div>
+            <ValueTag ar={scenario.value_ar} en={scenario.company_value} />
+          </p>
           {done && (
             <Badge tone="ok" icon="check">
               {t("scenario.done")}
             </Badge>
           )}
-        </header>
-        <p lang="ar" dir="rtl" className="m-0 text-start text-lg font-medium leading-relaxed text-fg-1">
-          {scenario.scenario_ar}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Badge tone="value" className="text-start">
-            <ValueLabel ar={scenario.value_ar} en={scenario.company_value} />
-          </Badge>
-          <Badge tone="neutral" icon={null}>
-            {t("scenario.synthetic")}
-          </Badge>
         </div>
+        <h3 id={titleId} lang="ar" dir="rtl" className="m-0 text-start text-lg font-bold leading-relaxed text-fg-1">
+          {scenario.scenario_ar}
+        </h3>
         {otherRole && (
           <p className="m-0 flex items-center gap-1.5 text-sm text-fg-2">
             <Icon name="info" size={16} className="shrink-0 text-fg-3" />
             {t("scenario.otherRole", { role: roleName })}
           </p>
         )}
-        <div className="mt-auto border-t border-line pt-4">
-          <a
-            href={`#/chat?scenario=${encodeURIComponent(scenario.id)}`}
-            className={cn(linkButton(done ? "secondary" : "primary"), "w-full sm:w-auto")}
-          >
-            {t("scenario.start")}
-            <Icon name="arrow-end" size={18} className="shrink-0" />
-          </a>
-        </div>
+        <a
+          href={`#/chat?scenario=${encodeURIComponent(scenario.id)}`}
+          className={cn(
+            "mt-auto inline-flex min-h-11 items-center gap-1.5 self-start text-sm font-semibold text-accent",
+            // Stretched link: its hit area covers the whole card; the focus ring stays on the text.
+            "after:absolute after:inset-0 after:rounded-lg after:content-['']",
+          )}
+        >
+          {t(done ? "uiCalm.practiseAgain" : "scenario.start")}
+          <Icon name="arrow-end" size={16} className="shrink-0" />
+        </a>
       </article>
     </li>
   );

@@ -505,7 +505,7 @@ export const en: Dict = {
     fictionalShort: "Fictional example",
     scenarioPrompt: "Write your reply, or pick one:",
     practiseAgain: "Practise again",
-    scenariosLead: "Fictional training situations (not official procedures), linked to company values. You get practice notes, never a grade.",
+    scenariosLead: "Fictional training situations (not official procedures), linked to company values. You get practice notes, never an evaluation.",
     scenariosCount: "Practised {done} of {total}.",
     tileHint: "Practice scenarios · 90-day plan",
     readCount: "Read the rows ({n})",

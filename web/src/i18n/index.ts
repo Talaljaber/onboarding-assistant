@@ -14,4 +14,4 @@ export {
   type FlatTables,
   type Lang,
 } from "./core";
-export { I18nContext, LangScope, useLang, useT, type I18nValue } from "./context";
+export { I18nContext, LangScope, useLang, useServerLabel, useT, type I18nValue } from "./context";

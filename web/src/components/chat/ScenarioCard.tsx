@@ -1,24 +1,39 @@
 // Scenario cards (plan D2.4): start (with the three offline options) and feedback (never a score).
 import type { ReactNode } from "react";
 import type { Feedback, Option, ScenarioOut } from "@/api/types";
-import { useT } from "@/i18n";
-import { Badge } from "../ui/Badge";
+import { useServerLabel, useT } from "@/i18n";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
 import { Icon, type IconName } from "../ui/Icon";
-import { Notice } from "../ui/Notice";
 import { sourceQuote, surface } from "../ui/recipes";
-import { ValueLabel } from "../ui/ValueLabel";
+import { ValueTag } from "../ui/ValueLabel";
 
-/** Decorative flask tile in the value colour (the practice family). */
-function FlaskTile() {
+/** Card title with a small inline flask (no icon tile: the thread already gives context). */
+function CardTitle({ children }: { children: ReactNode }) {
   return (
-    <span
-      aria-hidden="true"
-      className="grid size-11 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--da-value)_12%,var(--da-surface-0))] text-value"
-    >
-      <Icon name="flask" size={22} />
-    </span>
+    <h4 className="flex flex-wrap items-center gap-x-2 text-base font-bold text-fg-1 sm:text-lg">
+      <Icon name="flask" size={18} className="shrink-0 text-value" />
+      {children}
+    </h4>
+  );
+}
+
+/** Quiet meta line: items separated by middle dots, plain text (no pills). */
+function MetaLine({ children }: { children: ReactNode[] }) {
+  const items = children.filter(Boolean);
+  return (
+    <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-fg-2">
+      {items.map((c, i) => (
+        <span key={i} className="inline-flex items-center gap-x-2">
+          {i > 0 && (
+            <span aria-hidden="true" className="text-fg-3">
+              ·
+            </span>
+          )}
+          {c}
+        </span>
+      ))}
+    </p>
   );
 }
 
@@ -33,26 +48,23 @@ export interface ScenarioStartCardProps {
 
 export function ScenarioStartCard({ scenario, label, live, busy, onPick }: ScenarioStartCardProps) {
   const t = useT();
+  // The server label is Arabic; English UI shows the dictionary's equivalent (labels follow the UI).
+  const note = useServerLabel(label, "scenario.notEval");
+  const hasOptions = Boolean(scenario.options && scenario.options.length > 0);
   return (
     <article data-kind="scenario_start" className={`${surface.card} w-full min-w-0 p-4 sm:p-5`}>
-      <header className="mb-3 flex items-start gap-3">
-        <FlaskTile />
-        <div className="min-w-0 flex-1">
-          <h4 className="flex flex-wrap items-center gap-x-2 text-base font-bold text-fg-1 sm:text-lg">
-            {t("scenario.title")}
-            <bdi dir="ltr" className="font-id text-xs font-semibold text-fg-3">
+      {/* Each card stands alone in the thread, so it keeps its own one-word "fictional" mention. */}
+      <header className="mb-3">
+        <CardTitle>{t("scenario.title")}</CardTitle>
+        <MetaLine>
+          {[
+            <bdi key="id" dir="ltr" className="font-id text-xs font-semibold text-fg-3">
               {scenario.id}
-            </bdi>
-          </h4>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <Badge tone="value">
-              <ValueLabel ar={scenario.value_ar} />
-            </Badge>
-            <Badge size="sm" tone="neutral" icon={null}>
-              {t("scenario.synthetic")}
-            </Badge>
-          </div>
-        </div>
+            </bdi>,
+            <ValueTag key="v" ar={scenario.value_ar} />,
+            <span key="f">{t("uiCalm.fictionalShort")}</span>,
+          ]}
+        </MetaLine>
       </header>
       <blockquote
         lang="ar"
@@ -63,40 +75,37 @@ export function ScenarioStartCard({ scenario, label, live, busy, onPick }: Scena
       </blockquote>
       <p className="mt-4 flex items-center gap-2 text-base font-bold text-fg-1">
         <Icon name="edit" size={18} className="shrink-0 text-accent" />
-        {t("scenario.prompt")}
+        {t(hasOptions ? "uiCalm.scenarioPrompt" : "scenario.prompt")}
       </p>
-      {scenario.options && scenario.options.length > 0 && (
-        <div className="mt-3">
-          <p className="mb-2 text-sm text-fg-2">{t("scenario.options")}</p>
-          <ul className="flex flex-col gap-2">
-            {scenario.options.map((o) => (
-              <li key={o.id}>
-                <button
-                  type="button"
-                  data-option-id={o.id}
-                  disabled={!live || busy}
-                  onClick={() => onPick(o)}
-                  lang="ar"
-                  dir="rtl"
-                  className={cn(
-                    "group flex min-h-12 w-full items-center gap-3 rounded-md border border-line-strong bg-surface-0 px-3.5 py-2 text-start text-base leading-7 text-fg-1",
-                    "transition-[background-color,border-color,transform] duration-(--da-motion-fast) ease-da",
-                    "hover:border-accent hover:bg-accent-soft motion-safe:active:scale-[0.99]",
-                    "disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:border-line-strong disabled:hover:bg-surface-0",
-                  )}
-                >
-                  <span className="min-w-0 flex-1">{o.text_ar}</span>
-                  <Icon name="chevron-end" size={18} className="shrink-0 text-fg-3 group-hover:text-accent" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+      {hasOptions && (
+        <ul className="mt-3 flex flex-col gap-2">
+          {scenario.options!.map((o) => (
+            <li key={o.id}>
+              <button
+                type="button"
+                data-option-id={o.id}
+                disabled={!live || busy}
+                onClick={() => onPick(o)}
+                lang="ar"
+                dir="rtl"
+                className={cn(
+                  "group flex min-h-12 w-full items-center gap-3 rounded-md border border-line-strong bg-surface-0 px-3.5 py-2 text-start text-base leading-7 text-fg-1",
+                  "transition-[background-color,border-color,transform] duration-(--da-motion-fast) ease-da",
+                  "hover:border-accent hover:bg-accent-soft motion-safe:active:scale-[0.99]",
+                  "disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:border-line-strong disabled:hover:bg-surface-0",
+                )}
+              >
+                <span className="min-w-0 flex-1">{o.text_ar}</span>
+                <Icon name="chevron-end" size={18} className="shrink-0 text-fg-3 group-hover:text-accent" />
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
-      {label && (
-        <p className="mt-3 flex items-center gap-1.5 text-xs text-fg-3" lang="ar" dir="rtl">
+      {note && (
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-fg-3">
           <Icon name="info" size={14} className="shrink-0" />
-          {label}
+          {note}
         </p>
       )}
     </article>
@@ -127,25 +136,24 @@ function Block({ title, icon, iconClass, children }: { title: string; icon: Icon
 export function ScenarioFeedbackCard({ feedback, live, onTryAgain }: ScenarioFeedbackCardProps) {
   const t = useT();
   const judged = feedback.strengths_ar.length > 0 || feedback.improve_ar !== null;
+  const notEval = useServerLabel(feedback.label_ar, "scenario.notEval");
   return (
     <article data-kind="scenario_feedback" className={`${surface.card} w-full min-w-0 p-4 sm:p-5`}>
-      <header className="flex items-start gap-3">
-        <FlaskTile />
-        <div className="min-w-0 flex-1">
-          <h4 className="text-base font-bold text-fg-1 sm:text-lg">{t("uiChat.feedbackTitle")}</h4>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <span className="text-xs text-fg-2">{t("scenario.value")}</span>
-            <Badge tone="value">
-              <ValueLabel ar={feedback.value_ar} />
-            </Badge>
-          </div>
-        </div>
+      <header>
+        <CardTitle>{t("uiChat.feedbackTitle")}</CardTitle>
+        <MetaLine>
+          {[
+            <span key="v" className="inline-flex items-center gap-1.5">
+              {t("scenario.value")}: <ValueTag ar={feedback.value_ar} />
+            </span>,
+          ]}
+        </MetaLine>
+        {/* The one "not a score" statement of this card. */}
+        <p className="mt-1.5 flex items-center gap-1.5 text-sm font-medium text-amber-ink">
+          <Icon name="sparkle" size={16} className="shrink-0" />
+          {notEval}
+        </p>
       </header>
-      <Notice tone="suggest" icon="sparkle" className="mt-3">
-        <span lang="ar" className="font-semibold">
-          {feedback.label_ar || t("scenario.notEval")}
-        </span>
-      </Notice>
       {judged ? (
         <>
           {feedback.strengths_ar.length > 0 && (

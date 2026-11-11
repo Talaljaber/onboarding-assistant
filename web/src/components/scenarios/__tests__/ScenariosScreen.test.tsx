@@ -22,7 +22,10 @@ describe("ScenariosScreen", () => {
     expect(within(card).getByText(first.value_ar)).toBeInTheDocument();
     // Arabic UI: the Arabic value name only, never the English one
     expect(within(card).queryByText(first.company_value)).toBeNull();
-    expect(within(card).getByText("مثال تدريبي افتراضي")).toBeInTheDocument();
+    // "fictional" is stated once per screen (the description), never per card
+    expect(within(card).queryByText(/افتراضي/)).toBeNull();
+    expect(screen.getAllByText(/مواقف تدريبية افتراضية/)).toHaveLength(1);
+    expect(within(card).getByRole("heading", { level: 3 })).toHaveTextContent(first.scenario_ar);
     const link = within(card).getByRole("link", { name: "ابدأ التدريب" });
     expect(link).toHaveAttribute("href", `#/chat?scenario=${first.id}`);
     // never a score
@@ -35,7 +38,9 @@ describe("ScenariosScreen", () => {
     await screen.findByText("تم التدرب");
     expect(document.querySelector('[data-scenario="S01"]')).toHaveTextContent("تم التدرب");
     expect(document.querySelector('[data-scenario="S02"]')).not.toHaveTextContent("تم التدرب");
-    await userEvent.click(screen.getByRole("tab", { name: "التوصيل" }));
+    expect(within(document.querySelector('[data-scenario="S01"]') as HTMLElement).getByRole("link")).toHaveTextContent("تدرّب مجدداً");
+    expect(screen.getByTestId("scenarios-count")).toHaveTextContent("1 من");
+    await userEvent.click(screen.getByRole("button", { name: "عرض مواقف التوصيل" }));
     await waitFor(() => expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes("role=Delivery"))).toBe(true));
     expect((await screen.findAllByText("هذا الموقف من مسار التوصيل.")).length).toBeGreaterThan(0);
   });

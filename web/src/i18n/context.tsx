@@ -35,3 +35,13 @@ export function LangScope({ lang, children, className }: { lang: Lang; children:
     </I18nContext.Provider>
   );
 }
+
+/**
+ * A label the server sends in Arabic only (`label_ar`): Arabic UI shows it verbatim, English UI shows
+ * the dictionary's equivalent, so chrome follows the UI language while content stays Arabic.
+ */
+export function useServerLabel(labelAr: string | null | undefined, fallbackKey: DictKey): string {
+  const { lang } = useContext(I18nContext);
+  if (lang === "ar" && labelAr) return labelAr;
+  return translate(lang, fallbackKey);
+}
