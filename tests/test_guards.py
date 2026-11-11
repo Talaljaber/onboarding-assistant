@@ -30,6 +30,9 @@ from app.guards import run_guards
         "إنهاء خدمتي",
         "هل يمكن إنهاء عقدي؟",
         "هل رح يستغنوا عني؟",
+        # UAT: probation outcome / dismissal about me
+        "هل سيتم تثبيتي بعد فترة التجربة أو فصلي؟",
+        "اذا تاخرت بتنفصل",
     ],
 )
 def test_employment_positive(q: str) -> None:

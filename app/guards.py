@@ -33,6 +33,9 @@ EMPLOYMENT = re.compile(
     # bare «فصلي» / «طردي» stay out: «تقييم فصلي» (quarterly) and «طردي» (my parcel) are ordinary words
     r"|انهاء (?:ال)?خدمه|يفصلني|بفصلني|يطردني|بطردني|يستغنوا عني|بستغنوا عني"
     r"|(?:فصلي|طردي) من (?:ال)?(?:شغل|عمل|وظيفه|شركه)"
+    # UAT: «هل سيتم تثبيتي … او فصلي؟», «اذا تاخرت بتنفصل؟»: an outcome verb about *me*
+    r"|(?:سيتم|رح يتم|راح يتم|بيتم|هل يتم|يتم) (?:تثبيتي|فصلي|طردي|ترقيتي)"
+    r"|(?:بنفصل|بتنفصل|رح انفصل|راح انفصل|سانفصل|حنفصل|بنطرد|بتنطرد|رح انطرد)"
     r"|" + _PAY +
     r"|(?:fire|fired|firing) me|fail(?:ed)? (?:my )?probation|pass(?:ed)? (?:my )?probation"
     r"|promote me|my salary|salary)(?![\w])"

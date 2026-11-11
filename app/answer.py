@@ -332,7 +332,10 @@ def _compose(reply: dict[str, Any], topic_rows: list[Row], list_topic: str | Non
     partial = status == "partial"
     if topic_rows:  # §4.3: the server list is always the first paragraph
         server = build_list_answer(topic_rows)
-        extra = text if status in ("answered", "partial") and text else ""
+        # the model's paragraph is kept only when it cites a row outside the list: otherwise it just
+        # restates the server list (UAT: the values answer said the same sentence twice)
+        adds_rows = any(i not in server.ids for i in ids)
+        extra = text if status in ("answered", "partial") and text and adds_rows else ""
         parts = [server.text_ar] + ([extra] if extra else []) + ([PARTIAL_NOTE_AR] if partial and extra else [])
         all_ids = server.ids + [i for i in ids if i not in server.ids] if extra else list(server.ids)
         return AnswerResult(

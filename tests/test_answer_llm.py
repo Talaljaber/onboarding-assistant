@@ -235,9 +235,10 @@ def test_list_question_keeps_the_server_list_first(tmp_path: Path, kb: Knowledge
     server = build_list_answer(values)
     llm, *_ = make_llm(tmp_path, "answer_values_range")
     res = answer_llm("ما هي قيم الشركة؟", kb.rows(), hits_for(kb, "K05"), llm, 4.0, list_topic="Values")
-    assert res is not None and res.text_ar.startswith(server.text_ar + "\n\n")
+    assert res is not None
     assert res.ids == ["K05", "K06", "K07", "K08", "K09"] and res.topic_expanded == "Values"
     assert res.status == "answered" and res.mode == "llm"
+    assert res.text_ar == server.text_ar  # a paragraph citing only list rows restates the list: dropped
     llm, fake, _ = make_llm(tmp_path, "answer_unsupported")
     res = answer_llm("ما هي قيم الشركة؟", kb.rows(), hits_for(kb, "K05"), llm, 4.0, list_topic="Values")
     assert res is not None and res.text_ar == server.text_ar and res.ids == server.ids

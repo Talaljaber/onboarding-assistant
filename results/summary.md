@@ -1,15 +1,15 @@
-# Results (2026-11-11 06:32, commit e45fb7b)
+# Results (2026-11-11 08:14, commit f056eb8)
 
 ## DEV — llm mode: correct 152/154 (98.7%)
 - answerable: answered correctly 78 · answered wrong 2 · not attempted (refused) 0 — of 80
 - unanswerable: refused 43/43 (100.0%) · refused or not-confirmed 43/43 (100.0%)
 - guards 13/13 · greet 3/3 · plan 3/3 · progress 6/6 · scenario 6/6
 - invented contacts: 0 · errors: 0
-- latency p50 / p95: 9 / 14 ms · cached 137 · escalated 9
+- latency p50 / p95: 8 / 20 ms · cached 137 · escalated 9
 - LLM-vs-router disagreement: 4 rows (D032, D042, D113, D118)
 - panel rows 119: escalation rate 9/119 (7.6%) · acceptance rate 109/119 (91.6%) · mean flash calls/row 0.29 (uncached votes)
-- cost per 100 rows: $0.0021 (over 154 rows)
-- latency p50 / p95 escalated: 11 / 821 ms (9) · not escalated: 8 / 14 ms (145)
+- cost per 100 rows: $0.0000 (over 154 rows)
+- latency p50 / p95 escalated: 12 / 18 ms (9) · not escalated: 8 / 20 ms (145)
 - gate: correct 152/154 (98.7%) (≥ 90%) → PASS
 - gate: answerable refused = 0 → PASS
 
@@ -40,7 +40,7 @@ Not correct: D009 (ids_ok); D041 (ids_ok)
 - unanswerable: refused 13/43 (30.2%) · refused or not-confirmed 40/43 (93.0%)
 - guards 13/13 · greet 3/3 · plan 3/3 · progress 6/6 · scenario 6/6
 - invented contacts: 0 · errors: 0
-- latency p50 / p95: 10 / 25 ms · cached 0 · escalated 0
+- latency p50 / p95: 11 / 14 ms · cached 0 · escalated 0
 - gate: answerable refused = 0 → PASS
 - gate: unanswerable refused or not-confirmed 40/43 (93.0%) (≥ 90%) → PASS
 - gate: invented contacts = 0 → PASS
