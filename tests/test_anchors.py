@@ -30,3 +30,22 @@ def test_anchor_loader_reads_pairs() -> None:
     pairs = load_anchors()
     assert len(pairs) == 72
     assert all(rid.startswith("K") and q for rid, q in pairs)
+
+
+def test_small_edit_keeps_offline_confidence(tmp_path, monkeypatch) -> None:
+    """Jury "modify an answer": a number edit keeps the row's anchors, so offline still answers."""
+    monkeypatch.setenv("DATA_LIVE", str(tmp_path))
+    from app.agent import build_default_agent
+    from app.schemas import ChatRequest, KbPatch
+
+    agent = build_default_agent()
+    row = agent.kb.get("K02")
+    assert row is not None
+    try:
+        agent.kb.put("K02", KbPatch(answer_ar=row.answer_ar.replace("17", "18")))
+        reply = agent.turn(ChatRequest(message="كم عدد المعارض؟", role="Sales")).reply
+        assert reply.kind == "answer" and reply.band == "answer"
+        assert [s.id for s in reply.sources] == ["K02"] and reply.sources[0].edited
+        assert "18" in reply.text_ar
+    finally:
+        agent.kb.reset()

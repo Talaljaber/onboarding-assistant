@@ -36,6 +36,7 @@ DEFAULT_REFUSE = 0.01
 DEFAULT_NOT_CONFIRMED = 0.05
 OOS_DISABLE_ANY = 0.95
 OOS_DISABLE_EDITED = 0.90
+ANCHOR_KEEP_COS = 0.85  # an edited row keeps its anchors while cos(edited, official) >= this
 _QCACHE_SIZE = 256
 
 
@@ -268,7 +269,20 @@ class Retriever:
             if anchors
             else np.zeros((0, encoder.dim), dtype=np.float32)
         )
+        self._official_vecs: dict[str, NDArray[np.float32]] = {}
         self.reindex()
+        self._official_vecs = {
+            r.id: self._row_mat[i] for i, r in enumerate(self._rows) if not r.edited
+        }
+        if anchors and len(self._official_vecs) < len({rid for rid, _ in anchors}):
+            # Started from an edited live KB: embed the official texts for the anchor check.
+            from app.config import ROOT
+            from app.kb import load_official
+
+            off_rows = load_official(ROOT / "data" / "official" / "knowledge_base.csv")
+            vecs = self.encoder.encode_array([r.embed_text() for r in off_rows])
+            for r, v in zip(off_rows, vecs, strict=True):
+                self._official_vecs.setdefault(r.id, v)
         if subscribe:
             kb.subscribe(self._on_kb_change)
 
@@ -304,6 +318,11 @@ class Retriever:
             if disabled:
                 log_event("oos_disabled", ids=disabled, row=changed_id)
             return disabled
+
+    def _still_like_official(self, row_id: str, vec: NDArray[np.float32]) -> bool:
+        """An edited row keeps its anchors while its text stays close to the official text."""
+        off = self._official_vecs.get(row_id)
+        return off is not None and float(off @ vec) >= ANCHOR_KEEP_COS
 
     def _on_kb_change(self, changed_id: str | None) -> None:
         self.reindex(changed_id, reset=changed_id is None)
@@ -359,7 +378,11 @@ class Retriever:
             # Row side = max(row-text cosine, best anchor cosine) for rows still official;
             # live-edited or added rows keep the row-text cosine only.
             dense = dense.copy()
-            official = {r.id: i for i, r in enumerate(rows) if not r.edited}
+            official = {
+                r.id: i
+                for i, r in enumerate(rows)
+                if not r.edited or self._still_like_official(r.id, mat[i])
+            }
             a_sims = self._anchor_mat @ q
             for rid, s in zip(self._anchor_ids, a_sims, strict=True):
                 i = official.get(rid)

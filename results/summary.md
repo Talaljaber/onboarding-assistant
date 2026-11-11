@@ -1,11 +1,11 @@
-# Results (2026-11-11 03:23, commit 7cb9612)
+# Results (2026-11-11 03:36, commit b2e4d4b)
 
 ## DEV — offline mode: correct 100/154 (64.9%)
 - answerable: answered correctly 62 · answered wrong 18 · not attempted (refused) 0 — of 80
 - unanswerable: refused 7/43 (16.3%) · refused or not-confirmed 40/43 (93.0%)
 - guards 13/13 · greet 3/3 · plan 3/3 · progress 6/6 · scenario 6/6
 - invented contacts: 0 · errors: 0
-- latency p50 / p95: 11 / 25 ms · cached 0 · escalated 0
+- latency p50 / p95: 12 / 33 ms · cached 0 · escalated 0
 - gate: answerable refused = 0 → PASS
 - gate: unanswerable refused or not-confirmed 40/43 (93.0%) (≥ 90%) → PASS
 - gate: invented contacts = 0 → PASS
