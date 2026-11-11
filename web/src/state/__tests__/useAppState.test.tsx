@@ -2,13 +2,14 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import plan from "@fixtures/plan.json";
-import profile from "@fixtures/profile.json";
+import progressFx from "@fixtures/progress.json";
+import sessionFx from "@fixtures/intern_session.json";
 import { ToastProvider } from "@/components/ui/Toast";
 import { RtlProvider } from "@/components/ui/RtlProvider";
 import { planActivityIds, pyRound } from "../progress";
 import { STORAGE_KEY, load } from "../storage";
 import { AppStateProvider, useAppState } from "../useAppState";
-import type { PlanOut } from "@/api/types";
+import type { InternSession, PlanOut } from "@/api/types";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -22,52 +23,71 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 );
 
 const IDS = planActivityIds(plan as unknown as PlanOut);
+const SESSION = sessionFx as InternSession;
+const PID = SESSION.profile_id;
+/** What GET /api/progress answers (null = unreachable). */
+let serverProgress: unknown = null;
 
 beforeEach(() => {
+  serverProgress = null;
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (url: string) => {
+    vi.fn(async (url: string, init?: RequestInit) => {
       if (url.startsWith("/api/plan")) return json(plan);
-      if (url.startsWith("/api/profiles")) return json(profile, 201);
+      if (url.startsWith("/api/interns/") && url.endsWith("/session")) return json(SESSION);
+      if (url.startsWith("/api/progress") && (init?.method ?? "GET") === "GET" && serverProgress) return json(serverProgress);
       return Promise.reject(new TypeError("offline"));
     }),
   );
 });
 afterEach(() => vi.unstubAllGlobals());
 
+function signedIn() {
+  const hook = renderHook(() => useAppState(), { wrapper });
+  act(() => hook.result.current.signIn(SESSION));
+  return hook;
+}
+
 describe("useAppState", () => {
-  it("starts without a role and an empty plan", () => {
+  it("starts signed out, without a role and an empty plan", () => {
     const { result } = renderHook(() => useAppState(), { wrapper });
     expect(result.current.role).toBeNull();
+    expect(result.current.intern).toBeNull();
     expect(result.current.plan).toBeNull();
     expect(result.current.progress.percent).toBe(0);
     expect(result.current.forceOffline).toBe(false);
   });
 
-  it("choosing a role loads its plan, creates a profile and drives the percentage", async () => {
-    const { result } = renderHook(() => useAppState(), { wrapper });
-    act(() => result.current.setRole("Sales"));
+  it("signing in sets the intern, the track from the admin and the profile, and drives the percentage", async () => {
+    const { result } = signedIn();
+    expect(result.current.intern).toEqual({ id: SESSION.intern.id, name_ar: SESSION.intern.name_ar, name_en: SESSION.intern.name_en });
+    expect(result.current.role).toBe(SESSION.role);
+    expect(result.current.profileId).toBe(PID);
     await waitFor(() => expect(result.current.planStatus).toBe("ready"));
     expect(result.current.progress.total).toBe(IDS.length);
-    await waitFor(() => expect(result.current.profileId).toBe(profile.profile_id));
 
     let pct = 0;
     act(() => {
       pct = result.current.progress.toggle(IDS[0]!);
     });
     expect(pct).toBe(pyRound((100 * 1) / IDS.length));
-    expect(result.current.progress.isDone(IDS[0]!)).toBe(true);
     act(() => {
       result.current.progress.fromProposal([IDS[0]!, IDS[1]!]);
     });
     expect(result.current.progress.doneCount).toBe(2);
   });
 
-  it("ticks, unticks and reset are mirrored on the server for the manager view", async () => {
-    const { result } = renderHook(() => useAppState(), { wrapper });
-    act(() => result.current.setRole("Sales"));
+  it("the server's ticks win when the intern signs in (progress follows the intern)", async () => {
+    serverProgress = progressFx;
+    const { result } = signedIn();
+    await waitFor(() => expect(Object.keys(result.current.progress.done).sort()).toEqual([...progressFx.completed_ids].sort()));
     await waitFor(() => expect(result.current.planStatus).toBe("ready"));
-    await waitFor(() => expect(result.current.profileId).toBe(profile.profile_id));
+    expect(result.current.progress.doneCount).toBe(progressFx.completed_ids.length);
+  });
+
+  it("ticks, unticks and reset are mirrored on the server for the admin", async () => {
+    const { result } = signedIn();
+    await waitFor(() => expect(result.current.planStatus).toBe("ready"));
     const fetch = vi.mocked(globalThis.fetch);
     const puts = () =>
       fetch.mock.calls
@@ -84,55 +104,44 @@ describe("useAppState", () => {
       result.current.progress.toggle(IDS[0]!);
     });
     act(() => result.current.progress.reset());
-    const pid = profile.profile_id;
     expect(puts()).toEqual([
-      { profile_id: pid, activity_ids: [IDS[0]], completed: true },
-      { profile_id: pid, activity_ids: [IDS[1]], completed: true },
-      { profile_id: pid, activity_ids: [IDS[0]], completed: false },
-      { profile_id: pid, activity_ids: [IDS[1]], completed: false },
+      { profile_id: PID, activity_ids: [IDS[0]], completed: true },
+      { profile_id: PID, activity_ids: [IDS[1]], completed: true },
+      { profile_id: PID, activity_ids: [IDS[0]], completed: false },
+      { profile_id: PID, activity_ids: [IDS[1]], completed: false },
     ]);
-    // A failed save (the stub rejects) leaves the browser copy as it is.
     expect(result.current.progress.doneCount).toBe(0);
   });
 
-  it("progress, quiz results and scenarios are kept per role", async () => {
-    const { result } = renderHook(() => useAppState(), { wrapper });
-    act(() => result.current.setRole("Sales"));
+  it("signing out clears the session; the intern's data stays for the next sign-in", async () => {
+    const { result } = signedIn();
     await waitFor(() => expect(result.current.planStatus).toBe("ready"));
     act(() => {
       result.current.progress.toggle(IDS[0]!);
       result.current.quiz.add(4, 5);
-      result.current.scenarios.mark("S01");
     });
-    expect(result.current.quiz.last).toMatchObject({ correct: 4, total: 5 });
-
-    act(() => result.current.setRole("Delivery"));
-    await waitFor(() => expect(result.current.planStatus).toBe("ready"));
+    act(() => result.current.signOut());
+    expect(result.current.role).toBeNull();
+    expect(result.current.intern).toBeNull();
     expect(result.current.progress.doneCount).toBe(0);
-    expect(result.current.quiz.attempts).toHaveLength(0);
-    expect(result.current.scenarios.practised).toEqual({});
-
-    act(() => result.current.setRole("Sales"));
+    act(() => result.current.signIn(SESSION));
     await waitFor(() => expect(result.current.progress.doneCount).toBe(1));
     expect(result.current.quiz.attempts).toHaveLength(1);
-    expect(result.current.scenarios.practised.S01).toBeTruthy();
   });
 
-  it("persists to localStorage and reset clears only the current role", async () => {
-    const { result } = renderHook(() => useAppState(), { wrapper });
-    act(() => result.current.setRole("Sales"));
+  it("persists to localStorage", async () => {
+    const { result } = signedIn();
     await waitFor(() => expect(result.current.planStatus).toBe("ready"));
     act(() => {
       result.current.setMode("offline");
       result.current.progress.toggle(IDS[0]!);
     });
     await waitFor(() => expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull());
+    await waitFor(() => expect(load().mode).toBe("offline"));
     const saved = load();
-    expect(saved.mode).toBe("offline");
-    expect(saved.role).toBe("Sales");
-    expect(Object.keys(saved.perRole.Sales.progress)).toEqual([IDS[0]]);
-
-    act(() => result.current.progress.reset());
-    expect(result.current.progress.doneCount).toBe(0);
+    expect(saved.role).toBe(SESSION.role);
+    expect(saved.intern).toBe(SESSION.intern.id);
+    expect(saved.internName?.name_en).toBe(SESSION.intern.name_en);
+    expect(Object.keys(saved.perIntern[`${SESSION.intern.id}:${SESSION.role}`]!.progress)).toEqual([IDS[0]]);
   });
 });

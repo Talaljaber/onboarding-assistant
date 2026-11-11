@@ -1,6 +1,9 @@
-// App state shared by every screen: role, mode, trace, profile, plan and per-role progress, quiz
-// results, practised scenarios and the chat thread. Persisted to localStorage (`dada.v1`) through
-// state/storage.ts; a blocked store degrades to in-memory state with one toast.
+// App state shared by every screen: the signed-in intern and their track (set by the admin), mode,
+// trace, profile, plan and per-intern-and-track progress, quiz results, practised scenarios and the chat
+// thread. Persisted to localStorage (`dada.v1`) through state/storage.ts; a blocked store degrades to
+// in-memory state with one toast. The session is refreshed from the server on load (a track change or
+// a deactivation by the admin takes effect) and the intern's plan ticks follow the intern: the server
+// copy is loaded at sign-in and when the page comes back into view, so every browser and the admin agree.
 import {
   createContext,
   useCallback,
@@ -11,13 +14,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { createProfile, getPlan, putProgress } from "@/api/client";
-import type { PlanOut, Role } from "@/api/types";
+import { getPlan, getProgress, putProgress, startInternSession, type Result } from "@/api/client";
+import type { InternSession, PlanOut, ProgressResponse, Role } from "@/api/types";
 import { useToast } from "@/components/ui/Toast";
 import { useLang, useT, type Lang } from "@/i18n";
 import {
   countDone,
   fromProposal as applyProposal,
+  fromServer,
   percent as pctOf,
   planActivityIds,
   toggle as toggleDone,
@@ -28,6 +32,7 @@ import {
   createSaver,
   emptyRoleData,
   load,
+  slotKey,
   type QuizAttempt,
   type RoleData,
   type StoredState,
@@ -35,6 +40,13 @@ import {
 } from "./storage";
 
 export type PlanStatus = "idle" | "loading" | "ready" | "error";
+
+/** The signed-in intern (fictional demo persona). */
+export interface SignedInIntern {
+  id: string;
+  name_ar: string;
+  name_en: string | null;
+}
 
 export interface ProgressApi {
   /** activity id -> ISO completion date, for the current role (may hold ids no longer in the plan). */
@@ -62,8 +74,16 @@ export interface QuizState {
 }
 
 export interface AppState {
+  /** The signed-in intern's track (set by the admin); null when signed out. */
   role: Role | null;
+  /** Tests and tools only: change the track locally. The app takes the track from the session. */
   setRole: (role: Role | null) => void;
+  /** The signed-in intern, else null. */
+  intern: SignedInIntern | null;
+  /** Start the app as this intern (the reply of `POST /api/interns/{id}/session`). */
+  signIn: (session: InternSession) => void;
+  /** Sign the intern out (their data stays on the server and in this browser). */
+  signOut: () => void;
   lang: Lang;
   setLang: (lang: Lang) => void;
   /** Header switch: "auto" (LLM when available) or "offline". */
@@ -75,7 +95,7 @@ export interface AppState {
   setTrace: (on: boolean) => void;
   demoBannerSeen: boolean;
   setDemoBannerSeen: (seen: boolean) => void;
-  /** Server profile of the current role (created lazily after the role is chosen), else null. */
+  /** Server profile of the signed-in intern on their track, else null. */
   profileId: string | null;
   plan: PlanOut | null;
   planStatus: PlanStatus;
@@ -96,11 +116,27 @@ export interface AppState {
 
 /**
  * Mirror Plan/Progress ticks on the server (`PUT /api/progress`) so the manager view counts them.
- * Fire and forget: the browser copy stays the employee's source of truth, so a failure changes nothing on screen.
+ * Fire and forget: a failure changes nothing on screen.
  */
 function sendProgress(profileId: string | null | undefined, ids: string[], completed: boolean): void {
   if (!profileId || ids.length === 0) return;
   void putProgress({ profile_id: profileId, activity_ids: ids.slice(0, 40), completed });
+}
+
+const EMPTY: RoleData = emptyRoleData();
+
+/** The data of one intern on one track, or of an anonymous session's role. */
+function slotOf(s: StoredState, role: Role, intern: string | null): RoleData {
+  return intern ? (s.perIntern[slotKey(intern, role)] ?? EMPTY) : s.perRole[role];
+}
+
+function withSlot(s: StoredState, role: Role, intern: string | null, fn: (d: RoleData) => RoleData): StoredState {
+  const before = slotOf(s, role, intern);
+  const after = fn(before);
+  if (after === before) return s;
+  return intern
+    ? { ...s, perIntern: { ...s.perIntern, [slotKey(intern, role)]: after } }
+    : { ...s, perRole: { ...s.perRole, [role]: after } };
 }
 
 const AppStateContext = createContext<AppState | null>(null);
@@ -166,11 +202,18 @@ export function AppStateProvider({ children, initial }: AppStateProviderProps) {
   }, []);
 
   const role = state.role;
-  const roleData: RoleData = role ? state.perRole[role] : emptyRoleData();
+  const internId = state.intern;
+  const roleData: RoleData = role ? slotOf(state, role, internId) : EMPTY;
+  const slot = role ? (internId ? slotKey(internId, role) : role) : null;
 
-  const patchRole = useCallback((r: Role, fn: (d: RoleData) => RoleData) => {
-    setState((s) => ({ ...s, perRole: { ...s.perRole, [r]: fn(s.perRole[r]) } }));
+  const patchSlot = useCallback((r: Role, i: string | null, fn: (d: RoleData) => RoleData) => {
+    setState((s) => withSlot(s, r, i, fn));
   }, []);
+
+  const intern = useMemo<SignedInIntern | null>(
+    () => (internId && state.internName ? { id: internId, ...state.internName } : null),
+    [internId, state.internName],
+  );
 
   // ---- plan of the current role (activity ids drive every percentage)
   useEffect(() => {
@@ -194,24 +237,6 @@ export function AppStateProvider({ children, initial }: AppStateProviderProps) {
     return () => ctl.abort();
   }, [role, planTick]);
 
-  // ---- profile: created lazily per role, best effort (offline demo keeps working without it)
-  const profileId = roleData.profile_id;
-  const asked = useRef(new Set<Role>());
-  useEffect(() => {
-    if (!role || profileId || asked.current.has(role)) return;
-    asked.current.add(role);
-    void createProfile({ role, alias: null }).then((r) => {
-      if (!r.ok) {
-        asked.current.delete(role);
-        return;
-      }
-      patchRole(role, (d) => ({ ...d, profile_id: r.value.profile_id }));
-      // Ticks made before the profile existed.
-      const early = Object.keys(stateRef.current.perRole[role].progress).filter((id) => planIdsRef.current.includes(id));
-      sendProgress(r.value.profile_id, early, true);
-    });
-  }, [role, profileId, patchRole]);
-
   const planIds = useMemo(() => planActivityIds(plan), [plan]);
   const doneNow = roleData.progress;
 
@@ -221,8 +246,93 @@ export function AppStateProvider({ children, initial }: AppStateProviderProps) {
   const planIdsRef = useRef(planIds);
   planIdsRef.current = planIds;
 
+  // ---- session and profile: the intern's profile on their track comes with the session
+  const profileId = roleData.profile_id;
+  /** Bumped by every local tick, untick, confirm and reset: a server copy fetched before one is stale. */
+  const edits = useRef(0);
+  /** `slot|profile` pairs already loaded from the server in this page. */
+  const synced = useRef(new Set<string>());
+
+  /** The session was fetched in this page (sign-in or the refresh on load). */
+  const refreshed = useRef(false);
+  const signIn = useCallback(
+    (sess: InternSession) => {
+      refreshed.current = true;
+      setState((s) => {
+        const named = {
+          ...s,
+          role: sess.role,
+          intern: sess.intern.id,
+          internName: { name_ar: sess.intern.name_ar, name_en: sess.intern.name_en },
+        };
+        return withSlot(named, sess.role, sess.intern.id, (d) =>
+          d.profile_id === sess.profile_id ? d : { ...d, profile_id: sess.profile_id },
+        );
+      });
+    },
+    [],
+  );
+  const signOut = useCallback(() => setState((s) => ({ ...s, role: null, intern: null, internName: null })), []);
+
+  /**
+   * Load the server's ticks for one slot (server wins). A 404 means the server no longer knows the
+   * profile (a reset store): the session is fetched again, which gets or creates the profile.
+   */
+  const syncProgress = useCallback(
+    (r: Role, i: string | null, pid: string) => {
+      const key = i ? slotKey(i, r) : r;
+      const before = edits.current;
+      const req: Promise<Result<ProgressResponse>> = getProgress(pid);
+      void req.then((res) => {
+        if (!res.ok) {
+          if (res.error.status === 404 && i) {
+            synced.current.delete(`${key}|${pid}`);
+            void startInternSession(i).then((again) => {
+              if (again.ok) signIn(again.value);
+            });
+          }
+          return;
+        }
+        if (edits.current !== before) return; // a local change is on its way to the server
+        patchSlot(r, i, (d) => {
+          if (d.profile_id !== pid) return d;
+          const next = fromServer(d.progress, res.value.completed_ids);
+          return next === d.progress ? d : { ...d, progress: next };
+        });
+      });
+    },
+    [patchSlot, signIn],
+  );
+
+
+  // On load: refresh the session (the admin may have changed the track, a name, or deactivated the intern).
+  useEffect(() => {
+    if (refreshed.current || !internId) return;
+    refreshed.current = true;
+    void startInternSession(internId).then((r) => {
+      if (r.ok) signIn(r.value);
+      else if (r.error.kind === "http" && r.error.status === 404) signOut();
+    });
+  }, [internId, signIn, signOut]);
+
+  // A stored profile: load the server copy once per page and slot, and again when the page is shown again.
+  useEffect(() => {
+    if (!role || !slot || !profileId) return;
+    const key = `${slot}|${profileId}`;
+    if (!synced.current.has(key)) {
+      synced.current.add(key);
+      syncProgress(role, internId, profileId);
+    }
+    const onShow = () => {
+      if (document.visibilityState === "visible") syncProgress(role, internId, profileId);
+    };
+    document.addEventListener("visibilitychange", onShow);
+    return () => document.removeEventListener("visibilitychange", onShow);
+  }, [role, internId, slot, profileId, syncProgress]);
+
   const progress = useMemo<ProgressApi>(() => {
-    const cur = () => (role ? stateRef.current.perRole[role].progress : {});
+    const cur = () => (role ? slotOf(stateRef.current, role, internId).progress : {});
+    const pidNow = () => (role ? slotOf(stateRef.current, role, internId).profile_id : null);
     return {
       done: doneNow,
       percent: pctOf(doneNow, planIds),
@@ -232,54 +342,58 @@ export function AppStateProvider({ children, initial }: AppStateProviderProps) {
       toggle: (id) => {
         if (!role) return 0;
         const next = toggleDone(cur(), id);
-        patchRole(role, (d) => ({ ...d, progress: next }));
-        sendProgress(stateRef.current.perRole[role].profile_id, [id], id in next);
+        edits.current += 1;
+        patchSlot(role, internId, (d) => ({ ...d, progress: next }));
+        sendProgress(pidNow(), [id], id in next);
         return pctOf(next, planIdsRef.current);
       },
       fromProposal: (ids) => {
         if (!role) return 0;
         const next = applyProposal(cur(), ids);
-        patchRole(role, (d) => ({ ...d, progress: next }));
+        edits.current += 1;
+        patchSlot(role, internId, (d) => ({ ...d, progress: next }));
         return pctOf(next, planIdsRef.current);
       },
       reset: () => {
         if (!role) return;
         const ticked = Object.keys(cur()).filter((id) => planIdsRef.current.includes(id));
-        sendProgress(stateRef.current.perRole[role].profile_id, ticked, false);
-        patchRole(role, (d) => ({ ...emptyRoleData(), thread: d.thread, profile_id: d.profile_id }));
+        edits.current += 1;
+        sendProgress(pidNow(), ticked, false);
+        patchSlot(role, internId, (d) => ({ ...emptyRoleData(), thread: d.thread, profile_id: d.profile_id }));
       },
     };
-  }, [role, doneNow, planIds, patchRole]);
+  }, [role, internId, doneNow, planIds, patchSlot]);
 
   const quiz = useMemo<QuizState>(
     () => ({
       attempts: roleData.quiz,
       last: roleData.quiz[roleData.quiz.length - 1] ?? null,
       add: (correct, total) => {
-        if (role) patchRole(role, (d) => ({ ...d, quiz: [...d.quiz, { at: new Date().toISOString(), correct, total }] }));
+        if (role) patchSlot(role, internId, (d) => ({ ...d, quiz: [...d.quiz, { at: new Date().toISOString(), correct, total }] }));
       },
     }),
-    [role, roleData.quiz, patchRole],
+    [role, internId, roleData.quiz, patchSlot],
   );
 
   const scenarios = useMemo(
     () => ({
       practised: roleData.scenarios,
       mark: (id: string) => {
-        if (role) patchRole(role, (d) => ({ ...d, scenarios: { ...d.scenarios, [id]: d.scenarios[id] ?? new Date().toISOString() } }));
+        if (role)
+          patchSlot(role, internId, (d) => ({ ...d, scenarios: { ...d.scenarios, [id]: d.scenarios[id] ?? new Date().toISOString() } }));
       },
     }),
-    [role, roleData.scenarios, patchRole],
+    [role, internId, roleData.scenarios, patchSlot],
   );
 
   const thread = useMemo(
     () => ({
       items: roleData.thread,
       set: (items: unknown[]) => {
-        if (role) patchRole(role, (d) => ({ ...d, thread: items.slice(-40) }));
+        if (role) patchSlot(role, internId, (d) => ({ ...d, thread: items.slice(-40) }));
       },
     }),
-    [role, roleData.thread, patchRole],
+    [role, internId, roleData.thread, patchSlot],
   );
 
   const setRole = useCallback((r: Role | null) => setState((s) => ({ ...s, role: r })), []);
@@ -300,6 +414,9 @@ export function AppStateProvider({ children, initial }: AppStateProviderProps) {
     () => ({
       role,
       setRole,
+      intern,
+      signIn,
+      signOut,
       lang,
       setLang,
       mode: state.mode,
@@ -323,9 +440,9 @@ export function AppStateProvider({ children, initial }: AppStateProviderProps) {
       clearBrowserData,
     }),
     [
-      role, setRole, lang, setLang, state.mode, setMode, state.trace, setTrace, state.demoBannerSeen,
-      setDemoBannerSeen, profileId, plan, planStatus, reloadPlan, progress, quiz, scenarios, thread,
-      practiceActive, storageOk, clearBrowserData,
+      role, setRole, intern, signIn, signOut, lang, setLang, state.mode,
+      setMode, state.trace, setTrace, state.demoBannerSeen, setDemoBannerSeen, profileId, plan, planStatus,
+      reloadPlan, progress, quiz, scenarios, thread, practiceActive, setPracticeActive, storageOk, clearBrowserData,
     ],
   );
 

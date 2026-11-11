@@ -32,10 +32,25 @@ export interface RoleData {
 export interface StoredState {
   version: 1;
   role: Role | null;
+  /** The signed-in intern's id (null = signed out). `role` is their track, set by the admin. */
+  intern: string | null;
+  /** The signed-in intern's names, for the header (refreshed from the server on load). */
+  internName: { name_ar: string; name_en: string | null } | null;
   mode: UiMode;
   trace: boolean;
   demoBannerSeen: boolean;
+  /** Data of older anonymous sessions (kept, no longer used). */
   perRole: Record<Role, RoleData>;
+  /** Data per intern and track, keyed by {@link slotKey} (`I1:Sales`). */
+  perIntern: Record<string, RoleData>;
+}
+
+export const INTERN_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const SLOT_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:(Sales|Delivery)$/;
+
+/** Key of one intern's data on one track, e.g. `<intern uuid>:Sales`. */
+export function slotKey(intern: string, role: Role): string {
+  return `${intern}:${role}`;
 }
 
 export function emptyRoleData(): RoleData {
@@ -46,10 +61,13 @@ export function defaultState(): StoredState {
   return {
     version: 1,
     role: null,
+    intern: null,
+    internName: null,
     mode: "auto",
     trace: false,
     demoBannerSeen: false,
     perRole: { Sales: emptyRoleData(), Delivery: emptyRoleData() },
+    perIntern: {},
   };
 }
 
@@ -89,6 +107,16 @@ export function normalize(raw: unknown): StoredState {
   d.demoBannerSeen = raw.demoBannerSeen === true;
   const per = isObj(raw.perRole) ? raw.perRole : {};
   for (const r of ROLES) d.perRole[r] = normalizeRole(per[r]);
+  if (typeof raw.intern === "string" && INTERN_ID_RE.test(raw.intern)) d.intern = raw.intern;
+  const nm = raw.internName;
+  if (d.intern && isObj(nm) && typeof nm.name_ar === "string") {
+    d.internName = { name_ar: nm.name_ar, name_en: typeof nm.name_en === "string" ? nm.name_en : null };
+  }
+  // Sign-in first (P11.2): an older anonymous session (a track without an intern) starts signed out.
+  if (!d.intern) d.role = null;
+  if (isObj(raw.perIntern)) {
+    for (const [k, v] of Object.entries(raw.perIntern)) if (SLOT_RE.test(k)) d.perIntern[k] = normalizeRole(v);
+  }
   return d;
 }
 
@@ -120,6 +148,7 @@ export function save(state: StoredState): boolean {
     const out: StoredState = {
       ...state,
       perRole: { Sales: trimmed(state.perRole.Sales), Delivery: trimmed(state.perRole.Delivery) },
+      perIntern: Object.fromEntries(Object.entries(state.perIntern).map(([k, d]) => [k, trimmed(d)])),
     };
     s.setItem(STORAGE_KEY, JSON.stringify(out));
     return true;
