@@ -1,0 +1,59 @@
+{
+  "rows": [
+    {
+      "id": "K19",
+      "topic": "Policy",
+      "answer_ar": "يلتزم الموظف بارتداء الزي الرسمي المعتمد أثناء العمل في المعرض، ويُسمح باللباس غير الرسمي يوم الخميس فقط.",
+      "keyword_en": "dress code uniform",
+      "source_document": "General Policies",
+      "source_page": 3,
+      "edited": true,
+      "status": "added",
+      "offline_edit": false
+    },
+    {
+      "id": "K20",
+      "topic": "Policy",
+      "answer_ar": "تتوفر مواقف مجانية للموظفين خلف المبنى الرئيسي.",
+      "keyword_en": "parking",
+      "source_document": "General Policies",
+      "source_page": 3,
+      "edited": true,
+      "status": "added",
+      "offline_edit": false
+    }
+  ],
+  "drafts": [
+    {
+      "id": "0000000d-1a2b-4c3d-8e4f-5a6b7c8d9e01",
+      "import_id": "0000000c-1a2b-4c3d-8e4f-5a6b7c8d9e01",
+      "ord": 0,
+      "page": 3,
+      "text_ar": "يلتزم الموظف بارتداء الزي الرسمي المعتمد أثناء العمل في المعرض، ويُسمح باللباس غير الرسمي يوم الخميس فقط.",
+      "topic": "Policy",
+      "keyword_en": "dress code uniform",
+      "question_ar": "ما هو الزي المطلوب أثناء العمل في المعرض؟",
+      "status": "approved",
+      "row_id": "K19",
+      "created_at": "2026-11-11T10:00:00.000+00:00",
+      "updated_at": "2026-11-11T10:05:00.000+00:00"
+    },
+    {
+      "id": "0000000d-1a2b-4c3d-8e4f-5a6b7c8d9e02",
+      "import_id": "0000000c-1a2b-4c3d-8e4f-5a6b7c8d9e01",
+      "ord": 1,
+      "page": 3,
+      "text_ar": "تتوفر مواقف مجانية للموظفين خلف المبنى الرئيسي.",
+      "topic": "Policy",
+      "keyword_en": "parking",
+      "question_ar": "أين يركن الموظفون سياراتهم؟",
+      "status": "approved",
+      "row_id": "K20",
+      "created_at": "2026-11-11T10:00:00.000+00:00",
+      "updated_at": "2026-11-11T10:05:00.000+00:00"
+    }
+  ],
+  "version": "5c1e0a9d7b42",
+  "reindex_ms": 210,
+  "oos_disabled": []
+}

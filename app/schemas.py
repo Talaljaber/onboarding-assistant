@@ -84,7 +84,12 @@ ErrorCode = Literal[
     "unauthorized",
     "too_many_requests",
     "internal_error",
+    "imports_unavailable",
 ]
+#: P12.1 document import: file types the server can read (pdf only when the optional pypdf is installed).
+ImportFileType = Literal["txt", "md", "csv", "docx", "pdf"]
+ImportStatus = Literal["open", "done"]
+DraftStatus = Literal["draft", "approved", "discarded"]
 
 ROLES: tuple[str, ...] = get_args(Role)
 MILESTONES: tuple[str, ...] = get_args(MilestoneKey)
@@ -95,6 +100,8 @@ MODES: tuple[str, ...] = get_args(Mode)
 ANSWER_STATUSES: tuple[str, ...] = get_args(AnswerStatus)
 BANDS: tuple[str, ...] = get_args(Band)
 KB_STATUSES: tuple[str, ...] = get_args(KbStatus)
+IMPORT_FILE_TYPES: tuple[str, ...] = get_args(ImportFileType)
+DRAFT_STATUSES: tuple[str, ...] = get_args(DraftStatus)
 TOOL_NAMES: tuple[str, ...] = get_args(ToolName)
 ERROR_CODES: tuple[str, ...] = get_args(ErrorCode)
 
@@ -108,6 +115,7 @@ ERROR_STATUS: dict[str, int] = {
     "unauthorized": 401,
     "too_many_requests": 429,
     "internal_error": 500,
+    "imports_unavailable": 503,
 }
 
 #: Arabic value names, taken from K05–K09.
@@ -142,6 +150,13 @@ MESSAGE_MAX = 1000
 USER_TEXT_MAX = 1500
 COMPLETED_IDS_MAX = 64
 BODY_MAX_BYTES = 32 * 1024
+#: P12.1: an uploaded document (decoded) is at most 2 MB; its base64 JSON body may reach 3 MB, and only
+#: `POST /api/admin/kb/imports` with a valid admin token gets that larger body limit.
+IMPORT_FILE_MAX_BYTES = 2 * 1024 * 1024
+IMPORT_BODY_MAX_BYTES = 3 * 1024 * 1024
+IMPORT_MAX_PASSAGES = 200
+IMPORT_FILENAME_MAX = 120
+IMPORT_QUESTION_MAX = 160
 
 KB_ID_RE = r"^K\d{2,3}$"
 SCENARIO_ID_RE = r"^S0[1-6]$"
@@ -717,6 +732,123 @@ class KbResetResponse(_Model):
 
 
 # --------------------------------------------------------------------------------------
+# Document import (P12.1): upload -> stored passage drafts -> admin approval -> added K-rows
+# --------------------------------------------------------------------------------------
+
+UuidStr = Annotated[str, Field(pattern=PROFILE_ID_RE)]
+
+
+class ImportCapabilities(_Model):
+    """`GET /api/admin/kb/import/capabilities`: what this server can read now."""
+
+    types: list[ImportFileType]
+    pdf: bool
+    max_bytes: NonNeg
+    max_passages: NonNeg
+    ai_available: bool
+
+
+class ImportCreate(_Model):
+    """`POST /api/admin/kb/imports`: the file as base64 in JSON (no multipart). The bytes are parsed in
+    memory and never stored. `organize` sends the passages to the pinned model (LLM mode only)."""
+
+    filename: Annotated[Line, Field(min_length=1, max_length=IMPORT_FILENAME_MAX)]
+    content_b64: Annotated[str, Field(min_length=1, max_length=IMPORT_BODY_MAX_BYTES)]
+    document_name: KbDocument | None = None
+    organize: bool = False
+
+
+class KbImport(_Model):
+    id: UuidStr
+    filename: str
+    document_name: str
+    file_type: ImportFileType
+    pages: NonNeg
+    passages: NonNeg
+    organized: bool
+    status: ImportStatus
+    created_at: str
+    #: Drafts per status (counted by the server).
+    approved: NonNeg
+    pending: NonNeg
+    discarded: NonNeg
+
+
+class KbDraft(_Model):
+    """One extracted passage awaiting review. `text_ar` is the document's text (never rewritten by a
+    model); `question_ar` is a review hint only and never becomes part of a K-row."""
+
+    id: UuidStr
+    import_id: UuidStr
+    ord: NonNeg
+    page: KbPage
+    text_ar: str
+    topic: str
+    keyword_en: str
+    question_ar: str | None
+    status: DraftStatus
+    row_id: KbId | None
+    created_at: str
+    updated_at: str
+
+
+class OrganizeSummary(_Model):
+    """What the optional model step did: passages it organized vs. the offline fallback."""
+
+    requested: bool
+    used: bool
+    organized: NonNeg
+    fallback: NonNeg
+    merged: NonNeg
+    skipped: NonNeg
+    reason: str | None
+
+
+class ImportDetail(_Model):
+    """`POST /api/admin/kb/imports` (201, `organize` set) and `GET /api/admin/kb/imports/{id}` (`organize` null)."""
+
+    document: KbImport
+    drafts: list[KbDraft]
+    organize: OrganizeSummary | None
+
+
+class ImportListResponse(_Model):
+    imports: list[KbImport]
+
+
+class DraftPatch(_Model):
+    """`PATCH /api/admin/kb/drafts/{id}`: null = unchanged, at least one field. `status` discards a draft
+    or restores a discarded one; approved drafts cannot change."""
+
+    text_ar: KbAnswer | None = None
+    topic: KbTopic | None = None
+    keyword_en: KbKeyword | None = None
+    page: KbPage | None = None
+    ord: Annotated[int, Field(ge=0, le=9999)] | None = None
+    status: Literal["draft", "discarded"] | None = None
+
+    @model_validator(mode="after")
+    def _at_least_one(self) -> DraftPatch:
+        if all(getattr(self, name) is None for name in type(self).model_fields):
+            raise ValueError("send at least one non-null field")
+        return self
+
+
+class ApproveRequest(_Model):
+    draft_ids: Annotated[list[UuidStr], Field(min_length=1, max_length=IMPORT_MAX_PASSAGES)]
+
+
+class ApproveResponse(_Model):
+    """The new K-rows (document order, next free ids), the approved drafts and one reindex."""
+
+    rows: list[KbRow]
+    drafts: list[KbDraft]
+    version: str
+    reindex_ms: NonNeg
+    oos_disabled: list[OosId]
+
+
+# --------------------------------------------------------------------------------------
 # Profiles, progress, manager summary (plan §A12.4)
 # --------------------------------------------------------------------------------------
 
@@ -1028,6 +1160,21 @@ __all__ = [
     "AdminLogin",
     "AdminSession",
     "ANSWER_STATUSES",
+    "ApproveRequest",
+    "ApproveResponse",
+    "DRAFT_STATUSES",
+    "DraftPatch",
+    "IMPORT_BODY_MAX_BYTES",
+    "IMPORT_FILE_MAX_BYTES",
+    "IMPORT_FILE_TYPES",
+    "IMPORT_MAX_PASSAGES",
+    "ImportCapabilities",
+    "ImportCreate",
+    "ImportDetail",
+    "ImportListResponse",
+    "KbDraft",
+    "KbImport",
+    "OrganizeSummary",
     "BANDS",
     "ERROR_CODES",
     "ERROR_STATUS",

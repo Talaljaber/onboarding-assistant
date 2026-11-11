@@ -76,6 +76,21 @@ the not-confirmed / out-of-scope questions are illustrative placeholders until
 | `health.json` | `GET /api/health` (offline, local store) | `Health` |
 | `health_llm.json` | `GET /api/health` (llm, supabase store) | `Health` |
 
+## Document import (P12.1, admin only)
+
+| File | Endpoint | Model |
+|---|---|---|
+| `import_capabilities.json` | `GET /api/admin/kb/import/capabilities` (no pypdf, offline) | `ImportCapabilities` |
+| `import_create_request.json` | `POST /api/admin/kb/imports` body (a tiny `.md` as base64) | `ImportCreate` |
+| `import_detail.json` | `POST /api/admin/kb/imports` (201; `organize` set) and `GET /api/admin/kb/imports/{id}` (`organize: null`) | `ImportDetail` |
+| `imports_list.json` | `GET /api/admin/kb/imports` (newest first, counts per status) | `ImportListResponse` |
+| `draft_patch_request.json` | `PATCH /api/admin/kb/drafts/{id}` body | `DraftPatch` |
+| `draft.json` | `PATCH /api/admin/kb/drafts/{id}` | `KbDraft` |
+| `approve_request.json` | `POST /api/admin/kb/imports/{id}/approve` body | `ApproveRequest` |
+| `approve.json` | `POST /api/admin/kb/imports/{id}/approve` (two drafts → K19, K20) | `ApproveResponse` |
+
+The passage texts, keywords and suggested questions are illustrative placeholders (not official rows).
+
 ## Errors (`ErrorBody`)
 
 | File | Status | Code |
@@ -88,3 +103,4 @@ the not-confirmed / out-of-scope questions are illustrative placeholders until
 | `error_423.json` | 423 | `kb_locked` |
 | `error_429.json` | 429 | `too_many_requests` (5 wrong admin passwords inside 60 s) |
 | `error_500.json` | 500 | `internal_error` |
+| `error_503.json` | 503 | `imports_unavailable` (document import only: the store has no import tables or failed) |

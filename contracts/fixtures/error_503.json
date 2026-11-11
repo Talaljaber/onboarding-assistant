@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "imports_unavailable",
+    "message": "document import is unavailable: the store has no import tables (apply migration 0003) or failed",
+    "request_id": "7f3a9c2e41b0",
+    "field": null
+  }
+}
