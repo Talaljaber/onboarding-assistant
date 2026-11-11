@@ -511,6 +511,7 @@ export const en: Dict = {
     activitiesLine: "{done} of {total} activities",
     milestoneLine: "{done}/{total}",
     managerHeading: "Manager view",
+    practiceNotEval: "Practice, not an evaluation",
     mgrLabel: "Demo profiles, not real employees — not an evaluation",
   },
 };

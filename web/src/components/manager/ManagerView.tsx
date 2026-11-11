@@ -176,7 +176,10 @@ export function ManagerView() {
               <p className="m-0">
                 <span data-manager-label lang={lang} dir={lang === "ar" ? "rtl" : "ltr"} className="font-semibold">
                   {label}
-                </span>{" "}
+                </span>
+                <span aria-hidden="true" className="text-fg-3">
+                  {" · "}
+                </span>
                 <span className="text-fg-2">{t("extra.mgrCountsOnly")}</span>
               </p>
             </Notice>

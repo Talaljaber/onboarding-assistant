@@ -103,22 +103,24 @@ export default function ProgressScreen() {
                   <p className="m-0 text-sm text-fg-2">{t("progress.caption")}</p>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-5 py-2">
-                <h2 className="m-0 flex items-center gap-2 text-sm font-semibold text-fg-2">
-                  <Icon name="help" size={16} className="shrink-0 text-fg-3" />
-                  {t("quiz.title")}
-                </h2>
-                <p className="m-0 flex flex-1 flex-wrap items-center justify-end gap-x-3 text-sm text-fg-1">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-0 border-t border-line px-5 py-2">
+                <div className="flex min-w-0 flex-col py-1.5">
+                  <h2 className="m-0 flex items-center gap-2 text-sm font-semibold text-fg-1">
+                    <Icon name="help" size={16} className="shrink-0 text-fg-3" />
+                    {t("quiz.title")}
+                  </h2>
                   {quiz.last ? (
-                    <span data-testid="quiz-last">{t("progress.quizLast", { correct: quiz.last.correct, total: quiz.last.total })}</span>
+                    <p className="m-0 ps-6 text-sm text-fg-2" data-testid="quiz-last">
+                      {t("progress.quizLast", { correct: quiz.last.correct, total: quiz.last.total })}
+                    </p>
                   ) : (
-                    <span className="text-fg-2">{t("progress.quizNone")}</span>
+                    <p className="m-0 ps-6 text-sm text-fg-2">{t("progress.quizNone")}</p>
                   )}
-                  <a href="#/quiz" className="inline-flex min-h-11 items-center gap-1 font-semibold text-accent hover:underline">
-                    {t("plan.takeQuiz")}
-                    <Icon name="chevron-end" size={16} className="shrink-0" />
-                  </a>
-                </p>
+                </div>
+                <a href="#/quiz" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent hover:underline">
+                  {t("plan.takeQuiz")}
+                  <Icon name="chevron-end" size={16} className="shrink-0" />
+                </a>
               </div>
             </div>
 

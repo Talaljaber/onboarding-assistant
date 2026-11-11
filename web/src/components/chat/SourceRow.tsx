@@ -46,15 +46,29 @@ export function SourceRow({ source, meta = { doc: true, page: true } }: { source
     }
   };
   return (
-    <li data-source-id={source.id} className={`${sourceQuote} min-w-0 py-2 pe-1`}>
-      <div className="flex items-start gap-1">
-        <p lang="ar" dir="rtl" className="min-w-0 flex-1 py-1 text-base leading-[1.8] text-fg-1">
-          <bdi
-            dir="ltr"
-            className="font-id me-2 inline-flex items-center rounded-full border border-accent-line bg-surface-0 px-2 align-[0.1em] text-xs font-bold leading-5 text-accent"
-          >
-            {source.id}
-          </bdi>
+    <li data-source-id={source.id} className={`${sourceQuote} min-w-0 py-2 pe-1 flow-root`}>
+      {/* The row is always Arabic (rtl), so the copy button floats at the line's end (left) and only
+          the first line of the row is shortened by its 44px hit area. */}
+      <div dir="rtl">
+        <button
+          type="button"
+          onClick={() => void copy()}
+          aria-label={t("extra.copyRow", { id: source.id })}
+          title={t("extra.copyRow", { id: source.id })}
+          className="float-end -my-1 ms-1 grid size-11 place-items-center rounded-md text-fg-3 transition-colors duration-(--da-motion-fast) hover:bg-surface-2 hover:text-accent"
+        >
+          <Icon name="copy" size={16} />
+        </button>
+        <p lang="ar" className="py-1 text-base leading-[1.8] text-fg-1">
+          {/* The wrapper span sits in the rtl flow, so its end margin separates the id from the text. */}
+          <span className="me-2 inline-block align-[0.1em]">
+            <bdi
+              dir="ltr"
+              className="font-id inline-flex items-center rounded-full border border-accent-line bg-surface-0 px-2 text-xs font-bold leading-5 text-accent"
+            >
+              {source.id}
+            </bdi>
+          </span>
           {source.status === "edited" && (
             <Badge tone="warn" className="me-2 align-[0.1em]">
               {t("chat.editedLive")}
@@ -67,15 +81,6 @@ export function SourceRow({ source, meta = { doc: true, page: true } }: { source
           )}
           {source.answer_ar}
         </p>
-        <button
-          type="button"
-          onClick={() => void copy()}
-          aria-label={t("extra.copyRow", { id: source.id })}
-          title={t("extra.copyRow", { id: source.id })}
-          className="grid size-11 shrink-0 place-items-center rounded-md text-fg-3 transition-colors duration-(--da-motion-fast) hover:bg-surface-2 hover:text-accent"
-        >
-          <Icon name="copy" size={16} />
-        </button>
       </div>
       <DocLine source={source} meta={meta} className="mt-0.5 pe-2" />
     </li>

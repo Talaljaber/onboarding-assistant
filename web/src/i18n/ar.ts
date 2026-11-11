@@ -522,6 +522,7 @@ export const ar = {
     activitiesLine: "{done} من {total} أنشطة",
     milestoneLine: "{done}/{total}",
     managerHeading: "عرض المدير",
+    practiceNotEval: "تدريب عملي، ليس تقييماً",
     mgrLabel: "ملفات تجريبية، ليست موظفين حقيقيين — ليست تقييماً",
   },
 };

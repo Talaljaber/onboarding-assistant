@@ -86,25 +86,26 @@ function RowCard({ row, onEdit }: { row: KbRow; onEdit: (row: KbRow) => void }) 
   const changed = row.status !== "official";
   return (
     <li data-row-id={row.id} className={cn(surface.card, "flex flex-col gap-3 p-4 sm:p-5", changed && "border-s-4 border-s-amber")}>
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
+      {/* One top line: id, topic, live-change badge and the edit action; no separate action row. */}
+      <div className="-my-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
         <KId id={row.id} />
         <span dir="auto" className="text-sm font-semibold text-fg-2">
           {row.topic}
         </span>
-        <span className="ms-auto">
-          <StatusBadges row={row} />
+        <StatusBadges row={row} />
+        <span className="-me-2 ms-auto">
+          <Button variant="ghost" icon="edit" onClick={() => onEdit(row)} aria-label={`${t("kb.edit")} ${row.id}`}>
+            {t("kb.edit")}
+          </Button>
         </span>
       </div>
       <p lang="ar" dir="auto" className="text-base leading-[1.8] text-fg-1">
         {row.answer_ar}
       </p>
-      <div className="flex flex-wrap items-end justify-between gap-3 border-t border-line pt-3">
-        {/* Phones: the source line lives in the edit dialog; the row stays short. */}
-        <div className="flex min-w-0 flex-col gap-1 max-sm:hidden">
-          <span className="text-xs font-semibold text-fg-3">{t("uiAdmin.colSource")}</span>
-          <SourceMeta row={row} />
-        </div>
-        <EditButton row={row} onEdit={onEdit} />
+      {/* Phones: the source line lives in the edit dialog; the row stays short. */}
+      <div className="flex min-w-0 flex-col gap-1 border-t border-line pt-3 max-sm:hidden">
+        <span className="text-xs font-semibold text-fg-3">{t("uiAdmin.colSource")}</span>
+        <SourceMeta row={row} />
       </div>
     </li>
   );

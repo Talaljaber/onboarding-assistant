@@ -49,7 +49,7 @@ export interface ScenarioStartCardProps {
 export function ScenarioStartCard({ scenario, label, live, busy, onPick }: ScenarioStartCardProps) {
   const t = useT();
   // The server label is Arabic; English UI shows the dictionary's equivalent (labels follow the UI).
-  const note = useServerLabel(label, "scenario.notEval");
+  const note = useServerLabel(label, "uiCalm.practiceNotEval");
   const hasOptions = Boolean(scenario.options && scenario.options.length > 0);
   return (
     <article data-kind="scenario_start" className={`${surface.card} w-full min-w-0 p-4 sm:p-5`}>
