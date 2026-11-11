@@ -26,6 +26,8 @@ export function Dialog({ open, onClose, title, children, size = "md" }: DialogPr
   const t = useT();
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
@@ -34,7 +36,22 @@ export function Dialog({ open, onClose, title, children, size = "md" }: DialogPr
     document.body.style.overflow = "hidden";
     const first = panel.current?.querySelectorAll<HTMLElement>(FOCUSABLE)[0];
     (first ?? panel.current)?.focus();
+    // Escape and Tab are also handled at the document: when focus fell out of the panel (a button
+    // that disabled itself while saving drops it to <body>), Escape still closes and Tab comes back.
+    const onDocKey = (e: globalThis.KeyboardEvent) => {
+      const el = panel.current;
+      if (!el || el.contains(document.activeElement)) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeRef.current();
+      } else if (e.key === "Tab") {
+        e.preventDefault();
+        (el.querySelectorAll<HTMLElement>(FOCUSABLE)[0] ?? el).focus();
+      }
+    };
+    document.addEventListener("keydown", onDocKey);
     return () => {
+      document.removeEventListener("keydown", onDocKey);
       document.body.style.overflow = prevOverflow;
       opener?.focus?.();
     };

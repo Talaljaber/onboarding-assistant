@@ -1,6 +1,6 @@
 // Edit / add dialog for one K-row. Edit sends only the changed fields (null = unchanged);
 // add sends the five fields and shows the id the server will most likely assign.
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { KbNewRow, KbPatch, KbRow } from "@/api/types";
 import { useT } from "@/i18n";
 import { Button } from "../ui/Button";
@@ -10,7 +10,7 @@ import { Select } from "../ui/Select";
 import { TextArea, TextField } from "../ui/TextField";
 import { StatusBadges } from "./KbTable";
 
-type Draft = {
+export type Draft = {
   topic: string;
   answer: string;
   keyword: string;
@@ -18,6 +18,37 @@ type Draft = {
   page: string;
 };
 type Errors = Partial<Record<keyof Draft, string>>;
+
+/** The server's limits (app/schemas.py KbAnswer, KbTopic, KbKeyword, KbDocument, KbPage). */
+export const KB_LIMITS = {
+  answer: { min: 5, max: 600 },
+  topic: { max: 40 },
+  keyword: { max: 60 },
+  document: { max: 80 },
+  page: { min: 1, max: 999 },
+} as const;
+
+const FIELD_ORDER: (keyof Draft)[] = ["answer", "topic", "keyword", "document", "page"];
+
+/** Client-side checks mirroring the server, so its English validation text never reaches the dialog. */
+export function validateDraft(d: Draft, t: ReturnType<typeof useT>): Errors {
+  const required = t("kb.validation.empty");
+  const next: Errors = {};
+  const answer = d.answer.trim();
+  if (!answer) next.answer = required;
+  else if (answer.length < KB_LIMITS.answer.min || answer.length > KB_LIMITS.answer.max)
+    next.answer = t("uiQa.kbLength", { min: KB_LIMITS.answer.min, max: KB_LIMITS.answer.max });
+  if (!d.keyword.trim()) next.keyword = required;
+  else if (d.keyword.trim().length > KB_LIMITS.keyword.max) next.keyword = t("uiQa.kbMax", { max: KB_LIMITS.keyword.max });
+  if (!d.document.trim()) next.document = required;
+  else if (d.document.trim().length > KB_LIMITS.document.max) next.document = t("uiQa.kbMax", { max: KB_LIMITS.document.max });
+  if (!d.topic.trim()) next.topic = required;
+  else if (d.topic.trim().length > KB_LIMITS.topic.max) next.topic = t("uiQa.kbMax", { max: KB_LIMITS.topic.max });
+  const page = Number(d.page);
+  if (!/^\d+$/.test(d.page.trim()) || page < KB_LIMITS.page.min) next.page = t("kb.validation.page");
+  else if (page > KB_LIMITS.page.max) next.page = t("uiQa.kbPageRange", KB_LIMITS.page);
+  return next;
+}
 
 export interface RowDialogProps {
   /** The row being edited, or `null` for a new row. */
@@ -44,22 +75,33 @@ export function RowDialog({ row, nextId, topics, onClose, onSubmit }: RowDialogP
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Focus targets: the first invalid field after client checks, the Save button after a failed
+  // save (it was disabled while saving, which dropped focus to <body>).
+  const fields = useRef<Partial<Record<keyof Draft, HTMLElement | null>>>({});
+  const saveRef = useRef<HTMLButtonElement>(null);
+  const [focusSeq, setFocusSeq] = useState<{ n: number; target: keyof Draft | "save" } | null>(null);
+  useEffect(() => {
+    if (!focusSeq) return;
+    (focusSeq.target === "save" ? saveRef.current : fields.current[focusSeq.target])?.focus();
+  }, [focusSeq]);
+  const focusOn = (target: keyof Draft | "save") => setFocusSeq((cur) => ({ n: (cur?.n ?? 0) + 1, target }));
+  const answerLen = d.answer.trim().length;
   const set = (k: keyof Draft) => (v: string) => setD((cur) => ({ ...cur, [k]: v }));
   const options = (topics.includes(d.topic) || d.topic === "" ? topics : [d.topic, ...topics]).map((x) => ({ value: x, label: x }));
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
-    const required = t("kb.validation.empty");
-    const next: Errors = {};
-    if (!d.answer.trim()) next.answer = required;
-    if (!d.keyword.trim()) next.keyword = required;
-    if (!d.document.trim()) next.document = required;
-    if (!d.topic.trim()) next.topic = required;
-    const page = Number(d.page);
-    if (!/^\d+$/.test(d.page.trim()) || page < 1) next.page = t("kb.validation.page");
+    // A new attempt: any earlier server or "nothing changed" message is stale now.
+    setFailure(null);
+    const next = validateDraft(d, t);
     setErrors(next);
-    if (Object.keys(next).length > 0) return;
+    const firstBad = FIELD_ORDER.find((k) => next[k]);
+    if (firstBad) {
+      focusOn(firstBad);
+      return;
+    }
+    const page = Number(d.page);
 
     const value = {
       topic: d.topic.trim(),
@@ -79,6 +121,7 @@ export function RowDialog({ row, nextId, topics, onClose, onSubmit }: RowDialogP
       };
       if (Object.values(patch).every((v) => v === null)) {
         setFailure(t("extra.kbEmptyPatch"));
+        focusOn("save");
         return;
       }
       payload = { patch };
@@ -89,7 +132,10 @@ export function RowDialog({ row, nextId, topics, onClose, onSubmit }: RowDialogP
     setFailure(null);
     const err = await onSubmit(payload);
     setBusy(false);
-    if (err) setFailure(err);
+    if (err) {
+      setFailure(err);
+      focusOn("save");
+    }
   }
 
   return (
@@ -108,17 +154,32 @@ export function RowDialog({ row, nextId, topics, onClose, onSubmit }: RowDialogP
           </Notice>
         )}
         <TextArea
+          ref={(el) => {
+            fields.current.answer = el;
+          }}
           label={t("kb.fields.answer")}
           rows={5}
           value={d.answer}
           lang="ar"
           dir="auto"
+          minLength={KB_LIMITS.answer.min}
+          maxLength={KB_LIMITS.answer.max}
           onChange={(e) => set("answer")(e.target.value)}
           aria-invalid={errors.answer ? true : undefined}
-          description={errors.answer}
+          description={
+            <span className="flex flex-wrap items-baseline justify-between gap-x-3">
+              <span>{errors.answer ?? t("uiQa.kbLength", { min: KB_LIMITS.answer.min, max: KB_LIMITS.answer.max })}</span>
+              <span data-counter className="ms-auto whitespace-nowrap font-normal text-fg-3 tabular-nums">
+                {t("uiQa.kbCounter", { n: answerLen, max: KB_LIMITS.answer.max })}
+              </span>
+            </span>
+          }
         />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Select
+            ref={(el) => {
+              fields.current.topic = el;
+            }}
             label={t("kb.fields.topic")}
             value={d.topic}
             options={options}
@@ -126,9 +187,13 @@ export function RowDialog({ row, nextId, topics, onClose, onSubmit }: RowDialogP
             description={errors.topic}
           />
           <TextField
+            ref={(el) => {
+              fields.current.keyword = el;
+            }}
             label={t("kb.fields.keyword")}
             value={d.keyword}
             dir="ltr"
+            maxLength={KB_LIMITS.keyword.max}
             onChange={(e) => set("keyword")(e.target.value)}
             aria-invalid={errors.keyword ? true : undefined}
             description={errors.keyword}
@@ -136,14 +201,21 @@ export function RowDialog({ row, nextId, topics, onClose, onSubmit }: RowDialogP
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_8rem]">
           <TextField
+            ref={(el) => {
+              fields.current.document = el;
+            }}
             label={t("kb.fields.document")}
             value={d.document}
             dir="auto"
+            maxLength={KB_LIMITS.document.max}
             onChange={(e) => set("document")(e.target.value)}
             aria-invalid={errors.document ? true : undefined}
             description={errors.document}
           />
           <TextField
+            ref={(el) => {
+              fields.current.page = el;
+            }}
             label={t("kb.fields.page")}
             value={d.page}
             inputMode="numeric"
@@ -162,7 +234,7 @@ export function RowDialog({ row, nextId, topics, onClose, onSubmit }: RowDialogP
           <Button variant="secondary" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button type="submit" icon="check" loading={busy}>
+          <Button ref={saveRef} type="submit" icon="check" loading={busy}>
             {t("common.save")}
           </Button>
         </div>
