@@ -7,6 +7,9 @@ import { cn } from "../ui/cn";
 import { Icon, type IconName } from "../ui/Icon";
 import { SourceRow, SourcesBlock } from "./SourceRow";
 
+/** Mirror of the server's `PARTIAL_NOTE_AR` (app/answer.py), which ends the text of a partial answer. */
+export const PARTIAL_NOTE_AR = "بقية سؤالك غير موجود في قاعدة المعرفة المعتمدة لدي.";
+
 function CardShell({
   kind,
   tone,
@@ -38,6 +41,10 @@ function CardShell({
 export function AnswerCard({ reply, partial }: { reply: AnswerReply; partial: boolean }) {
   const t = useT();
   const { lang } = useLang();
+  // The server already ends a partial text with its note: split on it to keep the divider styling,
+  // and only add our own trailer when the note is missing.
+  const noteAt = partial ? reply.text_ar.lastIndexOf(PARTIAL_NOTE_AR) : -1;
+  const body = noteAt >= 0 ? reply.text_ar.slice(0, noteAt).trimEnd() : reply.text_ar;
   return (
     <CardShell kind={partial ? "partial" : "answer"} tone="line">
       {lang === "en" && reply.text_en && (
@@ -49,10 +56,15 @@ export function AnswerCard({ reply, partial }: { reply: AnswerReply; partial: bo
         </div>
       )}
       <p lang="ar" dir="rtl" className="whitespace-pre-line text-[1.05rem] leading-[1.7] text-fg-1">
-        {reply.text_ar}
+        {body}
       </p>
       {partial && (
-        <p className="mt-3 border-t border-line pt-3 text-sm font-medium text-fg-2">{t("chat.partialTrailer")}</p>
+        <p
+          {...(noteAt >= 0 ? { lang: "ar", dir: "rtl" } : {})}
+          className="mt-3 border-t border-line pt-3 text-sm font-medium text-fg-2"
+        >
+          {noteAt >= 0 ? PARTIAL_NOTE_AR : t("chat.partialTrailer")}
+        </p>
       )}
       <SourcesBlock sources={reply.sources} />
       <p className="mt-3 text-xs text-fg-3">{t("chat.groundedNote")}</p>

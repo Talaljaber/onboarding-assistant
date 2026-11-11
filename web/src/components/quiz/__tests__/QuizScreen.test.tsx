@@ -23,6 +23,14 @@ describe("QuizScreen", () => {
     expect(screen.getByRole("button", { name: "تحقق" })).toBeDisabled();
   });
 
+  it("keeps Arabic options in RTL", async () => {
+    stubApi();
+    renderScreen(<QuizScreen />);
+    const span = (await screen.findByText(first.options.A)) as HTMLElement;
+    expect(span).toHaveAttribute("dir", "rtl");
+    expect(span).toHaveAttribute("lang", "ar");
+  });
+
   it("checks an answer, shows the verbatim row with id, document and page, then moves on", async () => {
     const spy = stubApi();
     renderScreen(<QuizScreen />);

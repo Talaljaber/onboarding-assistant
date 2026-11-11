@@ -149,6 +149,8 @@ export default function QuizScreen() {
                 items={KEYS.map((k) => ({
                   id: k,
                   label: item.options[k],
+                  lang: "ar",
+                  dir: "rtl" as const,
                   disabled: result !== null && result.correct_option !== k && picked !== k,
                   tone: result ? (result.correct_option === k ? "ok" : picked === k ? "danger" : "neutral") : "neutral",
                 }))}

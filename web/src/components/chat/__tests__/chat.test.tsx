@@ -27,6 +27,7 @@ import { LangScope } from "@/i18n";
 import { ToastProvider } from "@/components/ui/Toast";
 import { AppStateProvider } from "@/state/useAppState";
 import { STORAGE_KEY, defaultState, type StoredState } from "@/state/storage";
+import { Header } from "@/components/shell/Header";
 import ChatScreen from "../ChatScreen";
 
 const json = (body: unknown, status = 200) =>
@@ -158,6 +159,18 @@ describe("card mapping", () => {
       expect(row).toHaveTextContent(s.answer_ar);
       expect(row).toHaveTextContent(s.source_document);
     }
+    // the server's text already ends with the note: shown once, no second trailer
+    const noteText = partial.reply.text_ar.split(/\n\n/).pop() as string;
+    expect(card("partial")!.textContent!.split(noteText).length - 1).toBe(1);
+    expect(screen.queryByText(/rest of your question/i)).toBeNull();
+  });
+
+  it("adds its own trailer when the text lacks the note", async () => {
+    const bare = { ...partial, reply: { ...partial.reply, text_ar: "فترة التجربة 90 يوماً." } };
+    backend([bare]);
+    mount();
+    await ask("سؤال");
+    await waitFor(() => expect(card("partial")).not.toBeNull());
     expect(screen.getByText(/rest of your question/i)).toBeInTheDocument();
   });
 
@@ -311,6 +324,36 @@ describe("practice mode", () => {
     expect(be.chat()).toHaveLength(0);
     expect(document.querySelector("[data-practice-banner]")).toHaveTextContent("S02");
     expect(window.location.hash).toBe("#/chat");
+  });
+});
+
+describe("quiz hand-off and role lock", () => {
+  it("#/chat?ask=... prefills the composer, does not send and clears the param", async () => {
+    const q = "ما مدة فترة التجربة؟";
+    window.history.replaceState(null, "", `#/chat?ask=${encodeURIComponent(q)}`);
+    const be = backend([]);
+    mount();
+    await waitFor(() => expect(screen.getByRole("textbox")).toHaveValue(q));
+    expect(be.chat()).toHaveLength(0);
+    expect(window.location.hash).toBe("#/chat");
+  });
+
+  it("locks the header role chip while practice mode is active", async () => {
+    backend([scenarioStart]);
+    render(
+      <Harness initial={seed()}>
+        <Header health={null} />
+        <ChatScreen />
+      </Harness>,
+    );
+    const chip = screen.getByTestId("role-chip");
+    expect(chip).not.toBeDisabled();
+    await ask("تدريب");
+    await waitFor(() => expect(document.querySelector("[data-practice-banner]")).not.toBeNull());
+    expect(chip).toBeDisabled();
+    expect(chip).toHaveAttribute("title", "Track is locked during practice. End practice first.");
+    await userEvent.type(screen.getByRole("textbox"), "{Escape}");
+    await waitFor(() => expect(chip).not.toBeDisabled());
   });
 });
 
