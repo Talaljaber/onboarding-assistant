@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import threading
 import time
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypeVar
@@ -30,7 +31,10 @@ from app.store.base import (
     quiz_record,
     resolve_alias,
     scenario_record,
-    summary_row,
+    empty_activity,
+    intern_changes,
+    intern_input,
+    intern_row,
     turn_log_record,
     valid_uuid,
 )
@@ -42,6 +46,9 @@ REST_PATH = "/rest/v1"
 CALL_TIMEOUT_S = 3.0
 PROBE_TIMEOUT_S = 2.0
 _KB_SELECT = ",".join(KB_COLUMNS)
+_INTERN_SELECT = "id,name_ar,name_en,role,active,created_at,updated_at"
+_PROFILE_SELECT = "id,alias,role,intern_id,created_at"
+_IN_CHUNK = 80  # profile ids per `in.(...)` filter, so URLs stay short
 
 
 class _Conflict(Exception):
@@ -396,33 +403,160 @@ class SupabaseStore:
             "add_turn_log", lambda: self._insert("turn_logs", rec), lambda s: s.add_turn_log(**fields), False
         )
 
-    def manager_summary(self) -> list[dict[str, Any]]:
-        def remote() -> list[dict[str, Any]]:
-            profiles = self._req("GET", "profiles", params={"select": "id,alias,role", "order": "created_at.asc"})
-            progress = self._req("GET", "progress", params={"select": "profile_id"})
-            quiz = self._req("GET", "quiz_attempts", params={"select": "profile_id,question_id"})
-            scen = self._req("GET", "scenario_attempts", params={"select": "profile_id,scenario_id"})
-            for name, data in (("profiles", profiles), ("progress", progress), ("quiz", quiz), ("scen", scen)):
-                if not isinstance(data, list):
-                    raise TypeError(f"{name}: expected a list")
-            done: dict[str, int] = {}
-            for r in progress:
-                done[r["profile_id"]] = done.get(r["profile_id"], 0) + 1
-            quiz_ids: dict[str, set[str]] = {}
-            for r in quiz:
-                quiz_ids.setdefault(r["profile_id"], set()).add(r["question_id"])
-            scen_ids: dict[str, set[str]] = {}
-            for r in scen:
-                scen_ids.setdefault(r["profile_id"], set()).add(r["scenario_id"])
-            return [
-                summary_row(
-                    p["alias"],
-                    p["role"],
-                    done.get(p["id"], 0),
-                    len(scen_ids.get(p["id"], ())),
-                    len(quiz_ids.get(p["id"], ())),
-                )
-                for p in profiles
-            ]
+    # Interns ------------------------------------------------------------------------------------
 
-        return self._call("manager_summary", remote, lambda s: s.manager_summary(), [])
+    def _list(self, table: str, params: dict[str, str]) -> list[dict[str, Any]]:
+        data = self._req("GET", table, params=params)
+        if not isinstance(data, list):
+            raise TypeError(f"{table}: expected a list")
+        return [dict(r) for r in data]
+
+    def _in_chunks(self, table: str, select: str, ids: list[str], order: str | None = None) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for n in range(0, len(ids), _IN_CHUNK):
+            params = {"select": select, "profile_id": f"in.{_in_list(ids[n:n + _IN_CHUNK])}"}
+            if order:
+                params["order"] = order
+            out += self._list(table, params)
+        return out
+
+    def list_interns(self) -> list[dict[str, Any]] | None:
+        def remote() -> list[dict[str, Any]]:
+            return [intern_row(r) for r in self._list("interns", {"select": _INTERN_SELECT, "order": "created_at.asc"})]
+
+        return self._call("list_interns", remote, lambda s: s.list_interns(), None)
+
+    def get_intern(self, intern_id: str) -> dict[str, Any] | None:
+        iid = valid_uuid(intern_id)
+        if iid is None:
+            return None
+
+        def remote() -> dict[str, Any] | None:
+            rows = self._list("interns", {"select": _INTERN_SELECT, "id": f"eq.{iid}"})
+            return intern_row(rows[0]) if rows else None
+
+        return self._call("get_intern", remote, lambda s: s.get_intern(iid), None)
+
+    def _post_interns(self, recs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        at = now_iso()
+        body = [{"id": str(uuid.uuid4()), **r, "active": True, "created_at": at, "updated_at": at} for r in recs]
+        created = self._req("POST", "interns", params={"select": _INTERN_SELECT}, json=body,
+                            prefer="return=representation")
+        if not isinstance(created, list) or len(created) != len(body):
+            raise TypeError("interns: expected the created rows")
+        return [intern_row(r) for r in created]
+
+    def create_intern(self, name_ar: str, name_en: str | None, role: str) -> dict[str, Any]:
+        rec = intern_input(name_ar, name_en, role)
+        if rec is None:
+            log_event("store_rejected", store="supabase", op="create_intern", reason="invalid_input")
+            return {}
+        return self._call("create_intern", lambda: self._post_interns([rec])[0],
+                          lambda s: s.create_intern(name_ar, name_en, role), {})
+
+    def update_intern(self, intern_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        iid = valid_uuid(intern_id)
+        clean = intern_changes(changes)
+        if iid is None or clean is None:
+            return None
+
+        def remote() -> dict[str, Any] | None:
+            if not clean:
+                rows = self._list("interns", {"select": _INTERN_SELECT, "id": f"eq.{iid}"})
+            else:
+                data = self._req("PATCH", "interns", params={"select": _INTERN_SELECT, "id": f"eq.{iid}"},
+                                 json={**clean, "updated_at": now_iso()}, prefer="return=representation")
+                if not isinstance(data, list):
+                    raise TypeError("interns: expected a list")
+                rows = data
+            return intern_row(rows[0]) if rows else None
+
+        return self._call("update_intern", remote, lambda s: s.update_intern(iid, changes), None)
+
+    def seed_interns(self, interns: list[dict[str, Any]]) -> int:
+        recs = [intern_input(i.get("name_ar"), i.get("name_en"), i.get("role")) for i in interns]
+        if any(r is None for r in recs):
+            return 0
+
+        def remote() -> int:
+            if self._list("interns", {"select": "id", "limit": "1"}):
+                return 0
+            return len(self._post_interns([r for r in recs if r is not None]))
+
+        return self._call("seed_interns", remote, lambda s: s.seed_interns(interns), 0)
+
+    def intern_profile(self, intern_id: str, role: str) -> dict[str, Any]:
+        iid = valid_uuid(intern_id)
+        if iid is None or role not in ROLES:
+            return {}
+
+        def find() -> dict[str, Any] | None:
+            rows = self._list("profiles", {"select": _PROFILE_SELECT, "intern_id": f"eq.{iid}", "role": f"eq.{role}"})
+            return rows[0] if rows else None
+
+        def remote() -> dict[str, Any]:
+            found = find()
+            if found:
+                return found
+            if not self._list("interns", {"select": "id", "id": f"eq.{iid}"}):
+                return {}
+            existing = self._list("profiles", {"select": "id"})
+            body = {"alias": resolve_alias(None, len(existing)), "role": role, "intern_id": iid}
+            try:
+                created = self._req("POST", "profiles", params={"select": _PROFILE_SELECT}, json=body,
+                                    prefer="return=representation")
+            except _Conflict:  # another request created it first (unique intern_id + role)
+                return find() or {}
+            if not isinstance(created, list) or not created:
+                raise TypeError("profiles: expected the created row")
+            return dict(created[0])
+
+        return self._call("intern_profile", remote, lambda s: s.intern_profile(iid, role), {})
+
+    def intern_profiles(self, intern_id: str | None = None) -> list[dict[str, Any]]:
+        def remote() -> list[dict[str, Any]]:
+            params = {"select": "id,intern_id,role,created_at", "order": "created_at.asc"}
+            params["intern_id"] = f"eq.{valid_uuid(intern_id) or ''}" if intern_id is not None else "not.is.null"
+            return self._list("profiles", params)
+
+        return self._call("intern_profiles", remote, lambda s: s.intern_profiles(intern_id), [])
+
+    def activity(self, profile_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        ids = [p for p in (valid_uuid(x) for x in profile_ids) if p]
+        if not ids:
+            return empty_activity()
+
+        def remote() -> dict[str, list[dict[str, Any]]]:
+            return {
+                "progress": self._in_chunks("progress", "profile_id,activity_id,completed_at", ids, "completed_at.asc"),
+                "quiz": self._in_chunks("quiz_attempts", "profile_id,question_id,at", ids, "at.asc"),
+                "scenarios": self._in_chunks("scenario_attempts", "profile_id,scenario_id,mode,value,at", ids, "at.asc"),
+                "turns": [{**t, "cited_ids": list(t.get("cited_ids") or [])}
+                          for t in self._in_chunks("turn_logs", "profile_id,tool,cited_ids,at", ids, "at.asc")],
+            }
+
+        return self._call("activity", remote, lambda s: s.activity(ids), empty_activity())
+
+    def purge_demo_profiles(self, apply: bool = False) -> dict[str, int]:
+        """Runs against Supabase only (no local fallback: purging the fallback file would be misleading).
+        {} when Supabase cannot be reached."""
+        if self._local is not None:
+            return self._local.purge_demo_profiles(apply)
+        try:
+            ids = [str(r["id"]) for r in self._list("profiles", {"select": "id", "intern_id": "is.null"})]
+            tables = ("progress", "quiz_attempts", "scenario_attempts", "turn_logs")
+            counts = {"profiles": len(ids)}
+            for t in tables:
+                counts[t] = len(self._in_chunks(t, "profile_id", ids)) if ids else 0
+            if apply and ids:
+                for n in range(0, len(ids), _IN_CHUNK):
+                    flt = {"profile_id": f"in.{_in_list(ids[n:n + _IN_CHUNK])}"}
+                    self._req("PATCH", "turn_logs", params=flt, json={"profile_id": None}, prefer="return=minimal")
+                    for t in tables[:3]:
+                        self._req("DELETE", t, params=flt, prefer="return=minimal")
+                    self._req("DELETE", "profiles", params={"id": f"in.{_in_list(ids[n:n + _IN_CHUNK])}"},
+                              prefer="return=minimal")
+            return counts
+        except Exception as exc:  # noqa: BLE001
+            log_event("store_error", store="supabase", op="purge_demo_profiles", error=failure_reason(exc))
+            return {}

@@ -58,6 +58,7 @@ AnswerStatus = Literal["answered", "partial", "unsupported"]
 Band = Literal["answer", "not_confirmed", "refuse"]
 KbStatus = Literal["official", "edited", "added"]
 ActivityKind = Literal["read", "scenario", "quiz", "summary"]
+TimelineKind = Literal["activity", "scenario", "quiz", "chat"]
 QuizOptionKey = Literal["A", "B", "C"]
 StoreKind = Literal["supabase", "local"]
 ToolName = Literal[
@@ -129,7 +130,7 @@ SCENARIO_LIST_LABEL_AR = "مواقف تدريبية افتراضية"
 PLAN_STATUS = "SUGGESTED_COMPETITION_PLAN_NOT_OFFICIAL_POLICY"
 PLAN_DISCLAIMER_AR = "خطة تعلم مقترحة للمسابقة، وليست جدول تقييم رسمياً"
 QUIZ_LABEL_AR = "اختبار تدريبي"
-MANAGER_LABEL_AR = "ملفات تجريبية، ليست موظفين حقيقيين — ليست تقييماً"
+INTERNS_LABEL_AR = "متدربون للعرض بأسماء افتراضية — أعداد الإكمال والتدريب فقط، ليست تقييماً"
 
 # --------------------------------------------------------------------------------------
 # Input limits and text cleaning
@@ -148,6 +149,7 @@ QUIZ_ID_RE = r"^Q\d{2}$"
 OOS_ID_RE = r"^OOS\d{2,3}$"
 REF_ID_RE = r"^(K\d{2,3}|S0[1-6]|Q\d{2})$"
 PROFILE_ID_RE = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+INTERN_ID_RE = PROFILE_ID_RE
 
 _CONTROL_EXCEPT_NL = re.compile(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]")
 _HSPACE = re.compile(r"[^\S\n]+")
@@ -190,6 +192,7 @@ QuizId = Annotated[str, Field(pattern=QUIZ_ID_RE)]
 OosId = Annotated[str, Field(pattern=OOS_ID_RE)]
 RefId = Annotated[str, Field(pattern=REF_ID_RE)]
 ProfileId = Annotated[str, Field(pattern=PROFILE_ID_RE)]
+InternId = Annotated[str, Field(pattern=INTERN_ID_RE)]
 Percent = Annotated[int, Field(ge=0, le=100)]
 NonNeg = Annotated[int, Field(ge=0)]
 Score = Annotated[float, Field(allow_inf_nan=False)]
@@ -752,19 +755,180 @@ class ProgressResponse(_Model):
     total: NonNeg
 
 
-class ManagerProfileRow(_Model):
-    """Completion and practice counts only: no correctness, no scores."""
+# --------------------------------------------------------------------------------------
+# Interns (P11.2): fictional demo interns the admin manages; the intern signs in by picking a name
+# --------------------------------------------------------------------------------------
 
-    alias: str
+
+class InternPublic(_Model):
+    """An active intern as the sign-in picker shows it (the track is set by the admin)."""
+
+    id: InternId
+    name_ar: str
+    name_en: str | None
     role: Role
+
+
+class InternsResponse(_Model):
+    interns: list[InternPublic]
+
+
+class InternSession(_Model):
+    """`POST /api/interns/{id}/session`: the intern's profile on their current track."""
+
+    intern: InternPublic
+    profile_id: ProfileId
+    role: Role
+
+
+class InternOut(_Model):
+    id: InternId
+    name_ar: str
+    name_en: str | None
+    role: Role
+    active: bool
+    created_at: str
+    updated_at: str
+
+
+InternName = Annotated[Line, Field(min_length=2, max_length=40)]
+
+
+class InternCreate(_Model):
+    name_ar: InternName
+    name_en: InternName | None = None
+    role: Role
+
+    @field_validator("name_ar", "name_en")
+    @classmethod
+    def _name_ok(cls, v: str | None) -> str | None:
+        return _reject_contact_like(v)
+
+
+class InternPatch(_Model):
+    """Partial update: absent = unchanged; `name_en: null` clears the English name. At least one field."""
+
+    name_ar: InternName | None = None
+    name_en: InternName | None = None
+    role: Role | None = None
+    active: bool | None = None
+
+    @field_validator("name_ar", "name_en")
+    @classmethod
+    def _name_ok(cls, v: str | None) -> str | None:
+        return _reject_contact_like(v)
+
+    @model_validator(mode="after")
+    def _some_change(self) -> InternPatch:
+        if not self.model_fields_set:
+            raise ValueError("send at least one field")
+        for key in ("name_ar", "role", "active"):
+            if key in self.model_fields_set and getattr(self, key) is None:
+                raise ValueError(f"{key} cannot be null")
+        return self
+
+    def changes(self) -> dict[str, Any]:
+        return {k: getattr(self, k) for k in self.model_fields_set}
+
+
+class InternSummary(_Model):
+    """One row of the admin's interns list. Completion and practice counts only: no correctness, no scores.
+    Completion is for the intern's current track; practice counts and `last_active` cover every track."""
+
+    id: InternId
+    name_ar: str
+    name_en: str | None
+    role: Role
+    active: bool
+    created_at: str
     percent: Percent
     activities_done: NonNeg
+    activities_total: NonNeg
     scenarios_practised: NonNeg
-    quiz_practised: NonNeg
+    quiz_attempts: NonNeg
+    questions_asked: NonNeg
+    last_active: str | None
 
 
-class ManagerSummaryResponse(_Model):
-    profiles: list[ManagerProfileRow]
+class AdminInternsResponse(_Model):
+    interns: list[InternSummary]
+    label_ar: str
+
+
+class DetailActivity(_Model):
+    id: ActivityId
+    kind: ActivityKind
+    title_ar: str
+    completed_at: str | None
+
+
+class DetailMilestone(_Model):
+    name: MilestoneKey
+    name_ar: str
+    done: NonNeg
+    total: NonNeg
+    activities: list[DetailActivity]
+
+
+class DetailProgress(_Model):
+    role: Role
+    percent: Percent
+    done: NonNeg
+    total: NonNeg
+    milestones: list[DetailMilestone]
+
+
+class DetailScenario(_Model):
+    """Practice only: how often and when, never a score."""
+
+    scenario_id: ScenarioId
+    value: CompanyValue | None
+    times: NonNeg
+    first_at: str
+    last_at: str
+
+
+class DetailQuizDay(_Model):
+    date: str
+    answered: NonNeg
+
+
+class DetailQuiz(_Model):
+    """Practice questions answered, per day (correctness is never shown to the admin)."""
+
+    answered: NonNeg
+    days: list[DetailQuizDay]
+
+
+class DetailCited(_Model):
+    id: KbId
+    topic: str
+    count: NonNeg
+
+
+class DetailChat(_Model):
+    """From turn logs (ids and labels only; the chat text is never stored)."""
+
+    questions: NonNeg
+    turns: NonNeg
+    cited: list[DetailCited]
+
+
+class TimelineEvent(_Model):
+    at: str
+    kind: TimelineKind
+    role: Role
+    ids: list[str]
+
+
+class InternDetail(_Model):
+    intern: InternOut
+    last_active: str | None
+    progress: DetailProgress
+    scenarios: list[DetailScenario]
+    quiz: DetailQuiz
+    chat: DetailChat
+    timeline: list[TimelineEvent]
     label_ar: str
 
 
@@ -880,15 +1044,32 @@ __all__ = [
     "ErrorBody",
     "ErrorDetail",
     "Feedback",
+    "AdminInternsResponse",
+    "DetailActivity",
+    "DetailChat",
+    "DetailCited",
+    "DetailMilestone",
+    "DetailProgress",
+    "DetailQuiz",
+    "DetailQuizDay",
+    "DetailScenario",
     "Health",
+    "INTERNS_LABEL_AR",
+    "InternCreate",
+    "InternDetail",
+    "InternOut",
+    "InternPatch",
+    "InternPublic",
+    "InternSession",
+    "InternSummary",
+    "InternsResponse",
+    "TimelineEvent",
     "KbListResponse",
     "KbNewRow",
     "KbPatch",
     "KbResetResponse",
     "KbRow",
     "KbWriteResponse",
-    "ManagerProfileRow",
-    "ManagerSummaryResponse",
     "Milestone",
     "Option",
     "PlanOut",

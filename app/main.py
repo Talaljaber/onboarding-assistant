@@ -28,6 +28,7 @@ from app.api import error_body, install_api
 from app.config import ROOT, Settings, get_settings, validate_startup
 from app.errors import StartupError
 from app.logging_setup import log_event, setup_logging
+from app.interns import SEED as SEED_INTERNS
 from app.store import get_store
 
 DIST = ROOT / "web" / "dist"
@@ -52,6 +53,10 @@ def create_app(settings: Settings | None = None, *, agent: Agent | None = None, 
     validate_startup(s)
     meta = json.loads((s.encoder_dir / "encoder_meta.json").read_text(encoding="utf-8"))
     st = store if store is not None else get_store(s)
+    # P11.2: the four fictional demo interns, only when the interns table is empty (idempotent).
+    seeded = st.seed_interns([dict(i) for i in SEED_INTERNS])
+    if seeded:
+        log_event("interns_seeded", count=seeded, store=st.name)
     if agent is None:
         agent = _build_agent(s, st)
     agent.probe_llm(3.0)  # no network call without a key or with OFFLINE=1

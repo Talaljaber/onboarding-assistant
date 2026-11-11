@@ -28,7 +28,10 @@ from app.store.base import (
     quiz_record,
     resolve_alias,
     scenario_record,
-    summary_row,
+    empty_activity,
+    intern_changes,
+    intern_input,
+    intern_row,
     turn_log_record,
     valid_uuid,
 )
@@ -108,7 +111,26 @@ create table if not exists turn_logs (
     model text
 );
 create index if not exists turn_logs_at_idx on turn_logs (at);
+create table if not exists interns (
+    id text primary key,
+    name_ar text not null,
+    name_en text,
+    role text not null check (role in ('Sales', 'Delivery')),
+    active integer not null default 1,
+    created_at text not null,
+    updated_at text not null
+);
 """
+
+# Applied on open after SCHEMA (the same change as supabase/migrations/0002_interns.sql).
+def _migrate(conn: sqlite3.Connection) -> None:
+    cols = {r[1] for r in conn.execute("pragma table_info(profiles)")}
+    if "intern_id" not in cols:
+        conn.execute("alter table profiles add column intern_id text references interns (id)")
+    conn.execute(
+        "create unique index if not exists profiles_intern_role_uidx on profiles (intern_id, role)"
+        " where intern_id is not null"
+    )
 
 
 def _jload(raw: Any) -> Any:
@@ -134,6 +156,7 @@ class LocalStore:
         try:
             conn.execute("pragma foreign_keys = on")
             conn.executescript(SCHEMA)
+            _migrate(conn)
             conn.commit()
         except sqlite3.Error as exc:
             log_event("store_error", store="local", op="schema", error=type(exc).__name__)
@@ -370,26 +393,160 @@ class LocalStore:
 
         return self._run("add_turn_log", False, op)
 
-    def manager_summary(self) -> list[dict[str, Any]]:
-        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
-            cur = c.execute(
-                """
-                select p.alias, p.role,
-                  (select count(*) from progress g where g.profile_id = p.id),
-                  (select count(distinct s.scenario_id) from scenario_attempts s where s.profile_id = p.id),
-                  (select count(distinct q.question_id) from quiz_attempts q where q.profile_id = p.id)
-                from profiles p order by p.created_at, p.rowid
-                """
-            )
-            return [summary_row(r[0], r[1], r[2], r[3], r[4]) for r in cur]
+    # Interns ------------------------------------------------------------------------------------
 
-        return self._run("manager_summary", [], op)
+    def list_interns(self) -> list[dict[str, Any]] | None:
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            cur = c.execute("select * from interns order by created_at, rowid")
+            return [intern_row(dict(r)) for r in cur]
+
+        return self._run("list_interns", None, op)
+
+    def get_intern(self, intern_id: str) -> dict[str, Any] | None:
+        iid = valid_uuid(intern_id)
+        if iid is None:
+            return None
+
+        def op(c: sqlite3.Connection) -> dict[str, Any] | None:
+            r = c.execute("select * from interns where id = ?", (iid,)).fetchone()
+            return intern_row(dict(r)) if r else None
+
+        return self._run("get_intern", None, op)
+
+    @staticmethod
+    def _insert_intern(c: sqlite3.Connection, rec: dict[str, Any]) -> dict[str, Any]:
+        at = now_iso()
+        row = {"id": str(uuid.uuid4()), **rec, "active": 1, "created_at": at, "updated_at": at}
+        c.execute(
+            "insert into interns (id, name_ar, name_en, role, active, created_at, updated_at)"
+            " values (:id, :name_ar, :name_en, :role, :active, :created_at, :updated_at)",
+            row,
+        )
+        return intern_row(row)
+
+    def create_intern(self, name_ar: str, name_en: str | None, role: str) -> dict[str, Any]:
+        rec = intern_input(name_ar, name_en, role)
+        if rec is None:
+            log_event("store_rejected", store="local", op="create_intern", reason="invalid_input")
+            return {}
+        return self._run("create_intern", {}, lambda c: self._insert_intern(c, rec))
+
+    def update_intern(self, intern_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        iid = valid_uuid(intern_id)
+        clean = intern_changes(changes)
+        if iid is None or clean is None:
+            return None
+
+        def op(c: sqlite3.Connection) -> dict[str, Any] | None:
+            if clean:
+                sets = {**clean, "updated_at": now_iso()}
+                if "active" in sets:
+                    sets["active"] = int(sets["active"])
+                cols = ", ".join(f"{k} = :{k}" for k in sets)
+                c.execute(f"update interns set {cols} where id = :id", {**sets, "id": iid})
+            r = c.execute("select * from interns where id = ?", (iid,)).fetchone()
+            return intern_row(dict(r)) if r else None
+
+        return self._run("update_intern", None, op)
+
+    def seed_interns(self, interns: list[dict[str, Any]]) -> int:
+        recs = [intern_input(i.get("name_ar"), i.get("name_en"), i.get("role")) for i in interns]
+        if any(r is None for r in recs):
+            return 0
+
+        def op(c: sqlite3.Connection) -> int:
+            if c.execute("select count(*) from interns").fetchone()[0]:
+                return 0
+            for r in recs:
+                assert r is not None
+                self._insert_intern(c, r)
+            return len(recs)
+
+        return self._run("seed_interns", 0, op)
+
+    def intern_profile(self, intern_id: str, role: str) -> dict[str, Any]:
+        iid = valid_uuid(intern_id)
+        if iid is None or role not in ROLES:
+            return {}
+        cols = "id, alias, role, intern_id, created_at"
+
+        def op(c: sqlite3.Connection) -> dict[str, Any]:
+            if not c.execute("select 1 from interns where id = ?", (iid,)).fetchone():
+                return {}
+            r = c.execute(f"select {cols} from profiles where intern_id = ? and role = ?", (iid, role)).fetchone()
+            if r:
+                return dict(r)
+            count = c.execute("select count(*) from profiles").fetchone()[0]
+            prof = {"id": str(uuid.uuid4()), "alias": resolve_alias(None, int(count)), "role": role,
+                    "intern_id": iid, "created_at": now_iso()}
+            c.execute(
+                "insert into profiles (id, alias, role, intern_id, created_at)"
+                " values (:id, :alias, :role, :intern_id, :created_at)",
+                prof,
+            )
+            return prof
+
+        return self._run("intern_profile", {}, op)
+
+    def intern_profiles(self, intern_id: str | None = None) -> list[dict[str, Any]]:
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            q = "select id, intern_id, role, created_at from profiles where intern_id is not null"
+            args: tuple[Any, ...] = ()
+            if intern_id is not None:
+                q += " and intern_id = ?"
+                args = (valid_uuid(intern_id) or "",)
+            return [dict(r) for r in c.execute(q + " order by created_at, rowid", args)]
+
+        return self._run("intern_profiles", [], op)
+
+    def activity(self, profile_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        ids = [p for p in (valid_uuid(x) for x in profile_ids) if p]
+        if not ids:
+            return empty_activity()
+        marks = ",".join("?" * len(ids))
+
+        def op(c: sqlite3.Connection) -> dict[str, list[dict[str, Any]]]:
+            def rows(q: str) -> list[dict[str, Any]]:
+                return [dict(r) for r in c.execute(q.format(marks=marks), ids)]
+
+            turns = rows("select profile_id, tool, cited_ids, at from turn_logs where profile_id in ({marks}) order by at")
+            return {
+                "progress": rows("select profile_id, activity_id, completed_at from progress"
+                                 " where profile_id in ({marks}) order by completed_at"),
+                "quiz": rows("select profile_id, question_id, at from quiz_attempts where profile_id in ({marks}) order by at"),
+                "scenarios": rows("select profile_id, scenario_id, mode, value, at from scenario_attempts"
+                                  " where profile_id in ({marks}) order by at"),
+                "turns": [{**t, "cited_ids": _jload(t["cited_ids"]) or []} for t in turns],
+            }
+
+        return self._run("activity", empty_activity(), op)
+
+    def purge_demo_profiles(self, apply: bool = False) -> dict[str, int]:
+        def op(c: sqlite3.Connection) -> dict[str, int]:
+            demo = "(select id from profiles where intern_id is null)"
+            counts = {
+                "profiles": c.execute("select count(*) from profiles where intern_id is null").fetchone()[0],
+                "progress": c.execute(f"select count(*) from progress where profile_id in {demo}").fetchone()[0],
+                "quiz_attempts": c.execute(f"select count(*) from quiz_attempts where profile_id in {demo}").fetchone()[0],
+                "scenario_attempts": c.execute(
+                    f"select count(*) from scenario_attempts where profile_id in {demo}").fetchone()[0],
+                "turn_logs": c.execute(f"select count(*) from turn_logs where profile_id in {demo}").fetchone()[0],
+            }
+            if apply:
+                c.execute(f"update turn_logs set profile_id = null where profile_id in {demo}")
+                for table in ("progress", "quiz_attempts", "scenario_attempts"):
+                    c.execute(f"delete from {table} where profile_id in {demo}")
+                c.execute("delete from profiles where intern_id is null")
+            return {k: int(v) for k, v in counts.items()}
+
+        return self._run("purge_demo_profiles", {}, op)
 
     # Used by tests and the integrator's smoke only.
     def table_rows(self, table: str) -> list[dict[str, Any]]:
         allowed = {
             "kb_rows",
             "kb_row_history",
+            "interns",
             "profiles",
             "progress",
             "quiz_attempts",
