@@ -309,11 +309,14 @@ class Retriever:
             kb.subscribe(self._on_kb_change)
 
     # -------------------------------------------------------------- index
-    def reindex(self, changed_id: str | None = None, *, reset: bool = False) -> list[str]:
+    def reindex(self, changed_id: str | tuple[str, ...] | None = None, *, reset: bool = False) -> list[str]:
         """Re-embed the rows, rebuild BM25 and recompute the OOS auto-disable set.
 
-        Returns the OOS ids disabled by this call. `reset=True` re-enables every OOS example first.
+        `changed_id` is the edited/added row id, or a tuple of ids for a batch add (P12.1: one reindex for
+        every approved passage). Returns the OOS ids disabled by this call. `reset=True` re-enables every
+        OOS example first.
         """
+        changed = (changed_id,) if isinstance(changed_id, str) else tuple(changed_id or ())
         with self._lock:
             rows = self.kb.rows()
             mat = self.encoder.encode_array([r.embed_text() for r in rows])
@@ -324,7 +327,7 @@ class Retriever:
                 for o in self.oos:
                     o.enabled = self._oos_enabled_initial.get(o.id, True)
             disabled: list[str] = []
-            if changed_id is not None and self.oos and len(rows):
+            if changed and self.oos and len(rows):
                 sims = self._oos_mat @ mat.T  # (n_oos, n_rows)
                 best = sims.max(axis=1)
                 top = sims.argmax(axis=1)
@@ -332,7 +335,7 @@ class Retriever:
                     if not o.enabled:
                         continue
                     if best[i] >= OOS_DISABLE_ANY or (
-                        self._ids[int(top[i])] == changed_id and best[i] >= OOS_DISABLE_EDITED
+                        self._ids[int(top[i])] in changed and best[i] >= OOS_DISABLE_EDITED
                     ):
                         o.enabled = False
                         disabled.append(o.id)
@@ -346,7 +349,7 @@ class Retriever:
         off = self._official_vecs.get(row_id)
         return off is not None and float(off @ vec) >= ANCHOR_KEEP_COS
 
-    def _on_kb_change(self, changed_id: str | None) -> None:
+    def _on_kb_change(self, changed_id: str | tuple[str, ...] | None) -> None:
         self.reindex(changed_id, reset=changed_id is None)
 
     def enabled_oos(self) -> list[str]:

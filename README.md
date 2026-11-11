@@ -33,7 +33,9 @@ password): **Interns** (the list with each intern's track, completion, activitie
 quiz questions answered, questions asked, last active and status; «إضافة متدرب» to add one; a detail page per
 intern with the plan and the date each activity was done, scenarios practised, quiz practice per day, the
 K-rows their questions cited and an activity timeline; edit name and track, deactivate) and the knowledge-base
-editor («قاعدة المعرفة») with a «جرّب الآن» box. Completion and practice counts only, never a score.
+editor («قاعدة المعرفة») with a «جرّب الآن» box and **document import** («استيراد مستند»: upload a
+company document, review its passages, approve them as knowledge rows; see "Import a document" below).
+Completion and practice counts only, never a score.
 **Demo admin password: `dada2026`** — set `ADMIN_PASSWORD` in `.env` to change it. On a phone, the intern
 header keeps the intern's name and track and
 puts the mode switch, model and storage badges, trace toggle and language in a settings dialog
@@ -126,6 +128,32 @@ Full timed script with expected screens: [`docs/demo_script.md`](docs/demo_scrip
 10. **Offline switch.** Set the header switch to «بلا اتصال» and repeat step 2: the same K01 row,
    mode chip «وضع بلا اتصال».
 
+### Import a document (admin, optional)
+
+In «قاعدة المعرفة» click «استيراد مستند» (`#/admin/kb/import`).
+
+1. **Upload.** Pick or drop a file: `.txt`, `.md`, `.csv` (UTF-8), `.docx`; `.pdf` only when the optional
+   `pypdf` package is installed on the server (otherwise the screen says so). Up to 2 MB and 200 passages.
+   The document name defaults to the file name and becomes the `source_document` of every row approved
+   from it. The file is read in memory and **never stored**; only its passages are.
+2. **Optional «التنظيم بالذكاء الاصطناعي».** Only in AI mode and only when ticked (off by default; the
+   screen warns: only for documents approved for release, the passages are sent to the AI model). The
+   pinned model suggests a topic, English keywords, a question per passage, the reading order, merges of
+   neighbouring halves and skips boilerplate. It never changes the passage text; every suggestion is
+   checked (no number, contact, link or row id the passage does not contain) and a rejected one falls back
+   to the automatic labels (topic from the nearest heading, keywords from Latin words).
+3. **Review** (`#/admin/kb/import/<id>`). Passages in document order with page, topic, keywords and the
+   suggested question. Edit the text, topic, keywords or page; discard (or restore); approve one, or select
+   several and «اعتماد المحدد». **Nothing is answerable until approved.**
+4. **Approved = a normal knowledge row.** Each approved passage becomes the next K-row (status «مضاف»,
+   cited word for word, same history and re-indexing as «إضافة صف»); the review screen links each new
+   K id to the editor. «استعادة النسخة الرسمية» removes these rows like any added row and puts their
+   passages back to review.
+
+Supabase needs `supabase/migrations/0003_kb_imports.sql` for this feature; without it the import screen
+says import is unavailable and the rest of the app works as before. The local SQLite store has the
+tables already.
+
 ## 4. Prove offline mode makes no network calls
 
 ```powershell
@@ -195,6 +223,10 @@ The web client is prebuilt in `web/dist`; judges do not need Node. To rebuild:
   confident answer.
 - **Offline answers are the row verbatim.** Offline mode cannot combine two rows or answer only part of
   a question (DEV multi-row questions: 0/3). The five-values list is the one server-built list.
+- **Imported documents are only as good as their text.** The chunker is rule based (headings, pages,
+  sentence ends, 120–600 characters); scanned PDFs without a text layer give no text, and a table in a
+  `.docx` becomes one passage per cell paragraph. The suggested question is shown for review only and is
+  not added to the row. PDF import needs the optional `pypdf` package.
 - **Rows added live are less confident offline.** Added rows, and rows rewritten beyond a small edit,
   have no anchor questions, so a question about them may show "not confirmed" offline.
 - **AI mode needs a key and the network.** Without them the app is offline-only. AI answers are checked,
@@ -252,7 +284,7 @@ Full note: [`docs/privacy_ai_note.md`](docs/privacy_ai_note.md).
   Never the role, the intern's name, progress or chat history.
 - **What is stored:** no chat text on any server. Supabase (or the local SQLite file) holds the
   knowledge base and its history, the interns (fictional names and tracks) and their profiles, progress,
-  attempt ids and turn metadata. The browser keeps the signed-in intern, progress, quiz results and the chat
+  attempt ids and turn metadata, and the passages of imported documents (never the uploaded file). The browser keeps the signed-in intern, progress, quiz results and the chat
   thread in local storage («امسح بيانات هذا
   المتصفح» on «حول والخصوصية» clears it).
 - **No real personal data:** no real employee or customer data is used.

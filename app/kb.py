@@ -19,7 +19,7 @@ import json
 import os
 import re
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Protocol
@@ -32,6 +32,8 @@ OFFICIAL_FILE = "knowledge_base.csv"
 SNAPSHOT_FILE = "kb_snapshot.json"
 _COLUMNS = ("id", "topic", "answer_ar", "keyword_en", "source_document", "source_page")
 _ID_RE = re.compile(r"^K(\d{2,3})$")
+#: What subscribers are told changed: one row id (edit/add), several (a batch add, P12.1) or None (reset).
+ChangedIds = str | tuple[str, ...] | None
 
 
 @dataclass(frozen=True)
@@ -151,7 +153,7 @@ class KnowledgeBase:
         self.snapshot_path = self.live_dir / SNAPSHOT_FILE
         self.store = store
         self.lock = threading.RLock()
-        self._subscribers: list[Callable[[str | None], None]] = []
+        self._subscribers: list[Callable[[ChangedIds], None]] = []
         self._official = load_official(self.official_path)
         self.official_sha256 = hashlib.sha256(self.official_path.read_bytes()).hexdigest()
         self._rows: dict[str, Row] = {}
@@ -211,14 +213,15 @@ class KnowledgeBase:
         except Exception as exc:  # noqa: BLE001 - never raise a store failure to the API
             log_event("kb_store_failed", op=op, error=type(exc).__name__)
 
-    def _changed(self, row_id: str | None) -> None:
+    def _changed(self, row_id: ChangedIds) -> None:
         self._write_snapshot()
         for cb in list(self._subscribers):
             cb(row_id)
 
     # ------------------------------------------------------------------ reads
-    def subscribe(self, callback: Callable[[str | None], None]) -> None:
-        """Call `callback(changed_row_id | None)` after every edit, add (id) and reset (None)."""
+    def subscribe(self, callback: Callable[[ChangedIds], None]) -> None:
+        """Call `callback(changed)` after every edit or add (the row id), batch add (a tuple of ids, one
+        call for the whole batch) and reset (None)."""
         self._subscribers.append(callback)
 
     def rows(self) -> list[Row]:
@@ -285,6 +288,24 @@ class KnowledgeBase:
             self._changed(rid)
             return row
 
+    def add_many(self, new_rows: Sequence[KbNewRow | Mapping[str, Any]]) -> list[Row]:
+        """Add rows with consecutive next free ids, in the given order, then notify once (one reindex).
+        All rows are validated before any is added (P12.1: approving imported passages)."""
+        parsed = [n if isinstance(n, KbNewRow) else KbNewRow.model_validate(dict(n)) for n in new_rows]
+        if not parsed:
+            return []
+        with self.lock:
+            next_num = max((_id_num(i) for i in self._rows), default=0) + 1
+            added: list[Row] = []
+            for offset, n in enumerate(parsed):
+                rid = f"K{next_num + offset:02d}"
+                row = Row(id=rid, status="added", **n.model_dump())
+                self._rows[rid] = row
+                added.append(row)
+                self._store_call("upsert", lambda r=row: self.store.kb_upsert(r.as_store_dict(), "editor"))  # type: ignore[misc,union-attr]
+            self._changed(tuple(r.id for r in added))
+            return added
+
     def reset(self) -> None:
         """Restore the official rows (the official CSV is only ever read)."""
         with self.lock:
@@ -296,4 +317,4 @@ class KnowledgeBase:
             self._changed(None)
 
 
-__all__ = ["KbStore", "KnowledgeBase", "Row", "load_official"]
+__all__ = ["ChangedIds", "KbStore", "KnowledgeBase", "Row", "load_official"]

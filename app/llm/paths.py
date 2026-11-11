@@ -27,7 +27,9 @@ from app.verify import (
     normalise_ids,
     parse_json_object,
     verify_answer,
+    OrganizeVerdict,
     verify_feedback,
+    verify_organize,
     verify_translation,
 )
 
@@ -35,10 +37,14 @@ ANSWER_PROMPT = "answer_v1"
 FEEDBACK_PROMPT = "feedback_v1"
 AGENT_PROMPT = "agent_v1"
 TRANSLATE_PROMPT = "translate_v1"
+ORGANIZE_PROMPT = "organize_v1"
 ANSWER_MAX_TOKENS = 500
 FEEDBACK_MAX_TOKENS = 200
 AGENT_MAX_TOKENS = 120
 TRANSLATE_MAX_TOKENS = 600
+#: P12.1 document import: at most this many passages per organize call, and its output budget.
+ORGANIZE_BATCH = 20
+ORGANIZE_MAX_TOKENS = 2400
 #: P11.1: the English helper translation gets its own short deadline after the answer is ready; a
 #: timeout only leaves `text_en` null.
 TRANSLATE_MAX_S = 2.5
@@ -354,6 +360,68 @@ def llm_translate(
         return result, None
     except Exception as exc:  # noqa: BLE001 - a translation must never fail the answer
         log_event("llm_path_error", prompt=TRANSLATE_PROMPT, error=type(exc).__name__)
+        return None, "internal_error"
+
+
+# -- document-import organizer (P12.1) ------------------------------------------------------------------------
+def render_organize_prompt(passages: Sequence[Mapping[str, Any]], topics: Sequence[str]) -> str:
+    """The rendered `organize_v1` prompt: batch-local ids (p1..pN), the nearest heading and the passage text
+    only (no file name, no document name, no import or draft id), plus the existing KB topic names."""
+    return _render(
+        ORGANIZE_PROMPT,
+        topics=list(topics),
+        passages=[{"id": p["id"], "heading": p.get("heading") or "", "text": p["text"]} for p in passages],
+    )
+
+
+def llm_organize(
+    passages: Sequence[Mapping[str, Any]],
+    topics: Sequence[str],
+    chat: CachedChat | None,
+    deadline_s: float,
+    *,
+    info: dict[str, Any] | None = None,
+) -> tuple[OrganizeVerdict | None, str | None]:
+    """A verified organize verdict for one batch (`{id, text, page, heading?}`, ≤ ORGANIZE_BATCH), or
+    `(None, reason)`. Never raises. A cache hit is re-verified; a fresh reply is stored only when it passed
+    with **no** rejected value (a partly rejected reply is used for the values that passed, never cached)."""
+    _fill(info, model=getattr(chat, "model_id", None), prompt=ORGANIZE_PROMPT, cached=False, latency_ms=0, calls=0,
+          rejected=0)
+    try:
+        if chat is None:
+            return None, "no_llm"
+        if not passages or len(passages) > ORGANIZE_BATCH:
+            return None, BAD_SHAPE
+        rendered = render_organize_prompt(passages, topics)
+        ex = _Exchange(chat, ORGANIZE_PROMPT, rendered, ORGANIZE_MAX_TOKENS)
+        hit = ex.cached()
+        if hit is not None:
+            verdict = verify_organize(parse_json_object(hit), passages)
+            if verdict.ok and verdict.rejected == 0:
+                _fill(info, cached=True)
+                return verdict, None
+            log_event("llm_cache_stale", prompt=ORGANIZE_PROMPT, key=ex.key[:12], reason=verdict.reason or "rejected")
+        if deadline_s < MIN_CALL_S:
+            return None, "no_time"
+        content, latency_ms, failure = ex.fresh(deadline_s)
+        _fill(info, latency_ms=latency_ms, calls=1)
+        if content is None:
+            return None, failure
+        parsed = parse_json_object(content)
+        verdict = verify_organize(parsed, passages) if parsed is not None else OrganizeVerdict(False, INVALID_JSON)
+        if not verdict.ok:
+            log_event("verifier_rejection", prompt=ORGANIZE_PROMPT, key=ex.key[:12], reason=verdict.reason,
+                      model=chat.model_id)
+            return None, verdict.reason
+        _fill(info, rejected=verdict.rejected)
+        if verdict.rejected == 0:
+            ex.store(content)
+        else:
+            log_event("verifier_rejection", prompt=ORGANIZE_PROMPT, key=ex.key[:12], reason="fields_rejected",
+                      model=chat.model_id, count=verdict.rejected)
+        return verdict, None
+    except Exception as exc:  # noqa: BLE001 - organizing must never fail the import
+        log_event("llm_path_error", prompt=ORGANIZE_PROMPT, error=type(exc).__name__)
         return None, "internal_error"
 
 

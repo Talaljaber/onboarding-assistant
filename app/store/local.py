@@ -1,6 +1,6 @@
 """LocalStore: the Store on a SQLite file (default `data/live/local.sqlite`).
 
-What it does: keeps the same tables as `supabase/migrations/0001_init.sql` (SQLite types; arrays and
+What it does: keeps the same tables as `supabase/migrations/0001`–`0003` (SQLite types; arrays and
 jsonb as JSON text) behind one lock, so the server works with no network and no Supabase.
 What it must never do: raise to the caller (every failure is logged and returns a safe default),
 store chat or answer text, or sync with Supabase (there is no sync; offline edits stay local).
@@ -34,6 +34,10 @@ from app.store.base import (
     intern_row,
     turn_log_record,
     valid_uuid,
+    DRAFT_COLUMNS,
+    IMPORT_COLUMNS,
+    draft_record,
+    import_record,
 )
 
 T = TypeVar("T")
@@ -120,6 +124,32 @@ create table if not exists interns (
     created_at text not null,
     updated_at text not null
 );
+create table if not exists kb_imports (
+    id text primary key,
+    filename text not null,
+    document_name text not null,
+    file_type text not null check (file_type in ('txt', 'md', 'csv', 'docx', 'pdf')),
+    pages integer not null default 0,
+    passages integer not null default 0,
+    organized integer not null default 0,
+    status text not null default 'open' check (status in ('open', 'done')),
+    created_at text not null
+);
+create table if not exists kb_drafts (
+    id text primary key,
+    import_id text not null references kb_imports (id) on delete cascade,
+    ord integer not null,
+    page integer not null default 1,
+    text_ar text not null,
+    topic text not null,
+    keyword_en text not null default '',
+    question_ar text,
+    status text not null default 'draft' check (status in ('draft', 'approved', 'discarded')),
+    row_id text,
+    created_at text not null,
+    updated_at text not null
+);
+create index if not exists kb_drafts_import_idx on kb_drafts (import_id, ord);
 """
 
 # Applied on open after SCHEMA (the same change as supabase/migrations/0002_interns.sql).
@@ -541,6 +571,103 @@ class LocalStore:
 
         return self._run("purge_demo_profiles", {}, op)
 
+    # Document import (P12.1) ------------------------------------------------------------------
+
+    @staticmethod
+    def _import_row(r: sqlite3.Row) -> dict[str, Any]:
+        return {**dict(r), "organized": bool(r["organized"])}
+
+    def kb_import_create(self, record: dict[str, Any], drafts: list[dict[str, Any]]) -> bool:
+        rec = import_record(record)
+        rows = [draft_record(d) for d in drafts]
+        if rec is None or any(d is None for d in rows):
+            log_event("store_rejected", store="local", op="kb_import_create", reason="invalid_input")
+            return False
+
+        def op(c: sqlite3.Connection) -> bool:
+            c.execute(f"insert into kb_imports ({', '.join(IMPORT_COLUMNS)}) values "
+                      f"({', '.join(':' + k for k in IMPORT_COLUMNS)})", {**rec, "organized": int(rec["organized"])})
+            self._upsert_drafts(c, [d for d in rows if d is not None])
+            return True
+
+        return self._run("kb_import_create", False, op)
+
+    @staticmethod
+    def _upsert_drafts(c: sqlite3.Connection, rows: list[dict[str, Any]]) -> None:
+        cols = ", ".join(DRAFT_COLUMNS)
+        marks = ", ".join(f":{k}" for k in DRAFT_COLUMNS)
+        updates = ", ".join(f"{k} = excluded.{k}" for k in DRAFT_COLUMNS if k not in ("id", "created_at"))
+        c.executemany(f"insert into kb_drafts ({cols}) values ({marks}) on conflict (id) do update set {updates}", rows)
+
+    def kb_import_update(self, import_id: str, changes: dict[str, Any]) -> bool:
+        iid = valid_uuid(import_id)
+        clean: dict[str, Any] = {}
+        if changes.get("status") in ("open", "done"):
+            clean["status"] = changes["status"]
+        if isinstance(changes.get("organized"), bool):
+            clean["organized"] = int(changes["organized"])
+        if iid is None or not clean:
+            return False
+
+        def op(c: sqlite3.Connection) -> bool:
+            sets = ", ".join(f"{k} = :{k}" for k in clean)
+            c.execute(f"update kb_imports set {sets} where id = :id", {**clean, "id": iid})
+            return True
+
+        return self._run("kb_import_update", False, op)
+
+    def kb_imports(self) -> list[dict[str, Any]] | None:
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            return [self._import_row(r) for r in c.execute("select * from kb_imports order by created_at desc, rowid desc")]
+
+        return self._run("kb_imports", None, op)
+
+    def kb_import_get(self, import_id: str) -> dict[str, Any] | None:
+        iid = valid_uuid(import_id)
+        if iid is None:
+            return {}
+
+        def op(c: sqlite3.Connection) -> dict[str, Any]:
+            r = c.execute("select * from kb_imports where id = ?", (iid,)).fetchone()
+            return self._import_row(r) if r else {}
+
+        return self._run("kb_import_get", None, op)
+
+    def kb_drafts(
+        self, *, import_id: str | None = None, status: str | None = None, ids: list[str] | None = None
+    ) -> list[dict[str, Any]] | None:
+        where: list[str] = []
+        args: list[Any] = []
+        if import_id is not None:
+            where.append("import_id = ?")
+            args.append(valid_uuid(import_id) or "")
+        if status is not None:
+            where.append("status = ?")
+            args.append(status)
+        if ids is not None:
+            clean = [i for i in (valid_uuid(x) for x in ids) if i]
+            if not clean:
+                return []
+            where.append(f"id in ({','.join('?' * len(clean))})")
+            args += clean
+        q = "select * from kb_drafts" + (" where " + " and ".join(where) if where else "")
+
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            return [dict(r) for r in c.execute(q + " order by import_id, ord, rowid", args)]
+
+        return self._run("kb_drafts", None, op)
+
+    def kb_drafts_save(self, drafts: list[dict[str, Any]]) -> bool:
+        rows = [draft_record(d) for d in drafts]
+        if any(d is None for d in rows):
+            log_event("store_rejected", store="local", op="kb_drafts_save", reason="invalid_input")
+            return False
+        def op(c: sqlite3.Connection) -> bool:
+            self._upsert_drafts(c, [d for d in rows if d is not None])
+            return True
+
+        return self._run("kb_drafts_save", False, op)
+
     # Used by tests and the integrator's smoke only.
     def table_rows(self, table: str) -> list[dict[str, Any]]:
         allowed = {
@@ -552,6 +679,8 @@ class LocalStore:
             "quiz_attempts",
             "scenario_attempts",
             "turn_logs",
+            "kb_imports",
+            "kb_drafts",
         }
         if table not in allowed:
             return []

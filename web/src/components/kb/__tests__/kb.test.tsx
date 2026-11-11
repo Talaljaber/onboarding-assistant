@@ -318,3 +318,23 @@ describe("try it now", () => {
     expect(await screen.findByText("Could not get an answer. Try again.")).toBeInTheDocument();
   });
 });
+
+describe("document import entry (P12.1)", () => {
+  it("has an Import a document button that opens the import screen", async () => {
+    backend();
+    mount();
+    await loaded();
+    await userEvent.click(screen.getByTestId("kb-import"));
+    expect(window.location.hash).toBe("#/admin/kb/import");
+  });
+
+  it("#/kb?row=K13 (a link from the review screen) opens that row once", async () => {
+    window.history.replaceState(null, "", "#/kb?row=K13");
+    backend();
+    mount();
+    const dlg = await screen.findByRole("dialog");
+    const k13 = kbList.rows.find((r) => r.id === "K13")!;
+    expect(within(dlg).getByLabelText("Keyword (English)")).toHaveValue(k13.keyword_en);
+    expect(window.location.hash).toBe("#/kb");
+  });
+});

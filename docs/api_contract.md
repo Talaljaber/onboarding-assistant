@@ -28,6 +28,8 @@ Part D §7.4 is superseded by this file.
   - refusal reasons `employment | contact | out_of_scope | injection`;
   - mode `llm | offline`; answer status `answered | partial | unsupported`; band `answer | not_confirmed | refuse`;
   - KB row status `official | edited | added`; store `supabase | local`;
+  - document import (P12.1): file type `txt | md | csv | docx | pdf`; import status `open | done`;
+    draft status `draft | approved | discarded`;
   - tools `search_knowledge | answer_from_rows | start_scenario | give_scenario_feedback | end_scenario | propose_progress | show_plan | start_quiz | greet | refuse`.
 - Percentages are integers 0–100, `round(100 * done / total)` (Python rounding: 1/8 → 12, 3/8 → 38).
 - No progress, quiz or manager shape ever carries a score, grade or rating. Scenario feedback is never a score.
@@ -44,12 +46,13 @@ Every non-2xx response has this body (`ErrorBody`):
 |---|---|---|
 | `validation_error` | 400 | any request validation failure; pydantic's 422 is remapped to 400 and `field` is the first error's location (dotted, e.g. `progress.completed_ids.3`), `null` for model-level rules |
 | `not_found` | 404 | unknown scenario id, KB id, quiz id or profile id |
-| `kb_conflict` | 409 | duplicate id on KB add |
-| `payload_too_large` | 413 | body larger than 32 KB (checked before parsing) |
+| `kb_conflict` | 409 | duplicate id on KB add; approving or editing a draft that is no longer pending (P12.1) |
+| `payload_too_large` | 413 | body larger than 32 KB (checked before parsing); `POST /api/admin/kb/imports` with a valid admin token: body > 3 MB or decoded file > 2 MB |
 | `unauthorized` | 401 | an admin endpoint without a valid admin token, or a wrong admin password (`field: "password"`) |
 | `kb_locked` | 423 | KB edit or chat while a reindex holds the lock > 2 s; the client retries once |
 | `too_many_requests` | 429 | admin sign-in after 5 wrong passwords inside 60 s (`field: "password"`) |
 | `internal_error` | 500 | anything else; the message is generic, details only in the log with the request id |
+| `imports_unavailable` | 503 | document import only (P12.1): the store has no `kb_imports`/`kb_drafts` tables (Supabase without migration 0003) or the import call failed; the rest of the app is unaffected |
 
 No 5xx is ever caused by the LLM or the store: LLM failures become `mode: "offline"` inside a 200,
 store failures switch the process to the local store.
@@ -79,7 +82,7 @@ Text fields are cleaned **before** the length check (server behaviour, implement
 | KB `source_document` | 1–80 |
 | KB `source_page` | integer 0–999 |
 | `alias` | 1–40, rejected if it contains `@` or 7+ digits (looks like an email or phone) |
-| body | ≤ 32 KB |
+| body | ≤ 32 KB (document upload: ≤ 3 MB, admin only, decoded file ≤ 2 MB) |
 
 ## 4. Card mapping (§A6.1)
 
@@ -254,7 +257,7 @@ was local and not synced).
 ### Admin sign-in (P10)
 
 The knowledge editor writes (`PUT /api/kb/{id}`, `POST /api/kb`, `POST /api/kb/reset`) and every
-`/api/admin/interns` endpoint are **admin only**: they need `Authorization: Bearer <token>` and answer 401
+`/api/admin/interns` and `/api/admin/kb/*` endpoint are **admin only**: they need `Authorization: Bearer <token>` and answer 401
 `unauthorized` without a valid one (checked before the body). Every other endpoint, `GET /api/kb` included,
 stays open to employees.
 
@@ -364,6 +367,67 @@ Body `InternPatch` `{name_ar?, name_en?, role?, active?}`: absent = unchanged, a
 
 404 unknown intern. `label_ar` = «متدربون للعرض بأسماء افتراضية — أعداد الإكمال والتدريب فقط، ليست تقييماً».
 
+## 6c. Document import (P12.1, admin only)
+
+The admin turns a company document into **draft passages**; nothing from the file is answerable until the
+admin approves a passage, which then becomes a normal added K-row (next free `K` id, `status: "added"`,
+`source_document` = the import's document name, `source_page` = the passage page, history `source=editor`,
+one reindex for the batch) and is cited verbatim like every other row. The uploaded bytes are parsed in
+memory and **never stored**; only the import record and its passages are (`kb_imports`, `kb_drafts`;
+Supabase migration `0003_kb_imports.sql`, same tables in the LocalStore). If the store cannot hold them the
+endpoints answer 503 `imports_unavailable` and the rest of the app is unaffected. Every endpoint below
+needs the admin token (401 without it, checked before the body).
+
+### GET /api/admin/kb/import/capabilities
+
+→ `ImportCapabilities` `{types[], pdf, max_bytes, max_passages, ai_available}`. `pdf` is true only when the
+optional `pypdf` package is installed (`types` then includes `"pdf"`); `ai_available` is true in LLM mode.
+
+### POST /api/admin/kb/imports
+
+Body `ImportCreate` `{filename (1–120), content_b64 (the file as base64), document_name (1–80, optional:
+default = file name without extension), organize (default false)}`. JSON only (no multipart). Steps:
+extract (stdlib: `.txt`/`.md`/`.csv` UTF-8, `.docx` via zip + XML, `.pdf` only with pypdf), chunk
+(deterministic: headings and pages respected, sentence ends `. ! ? ؟ ۔` and line breaks, 120–600 characters,
+page numbers / dot-leader TOC lines / headers and footers repeated on 3+ pages dropped, document order),
+label (offline: topic from the nearest heading, else «General»; keywords from Latin words), and — only when
+`organize` is true **and** the server is in LLM mode — the pinned answer model proposes topic, English
+keywords, a suggested Arabic question, keep/skip, reading order and merges with a neighbour
+(`prompts/organize_v1.md`, temperature 0, ≤ 20 passages per call, verified before use and before caching;
+it never supplies passage text). → **201** `ImportDetail` `{document: KbImport, drafts: KbDraft[],
+organize: OrganizeSummary}`; passages the model marked as boilerplate start as `discarded`.
+`KbImport` = `{id, filename, document_name, file_type, pages, passages, organized, status, created_at,
+approved, pending, discarded}`; `KbDraft` = `{id, import_id, ord, page, text_ar, topic, keyword_en,
+question_ar, status, row_id, created_at, updated_at}`; `OrganizeSummary` = `{requested, used, organized,
+fallback, merged, skipped, reason}` (`reason` e.g. `llm_off`, `timeout`, `invalid_json`).
+Errors: 400 `validation_error` with `field` `filename` (unsupported type, or PDF without pypdf),
+`content_b64` (not base64, not UTF-8, unreadable file, no text) or `passages` (more than 200 passages);
+413 file too large; 503 `imports_unavailable`.
+
+### GET /api/admin/kb/imports
+
+→ `ImportListResponse` `{imports: KbImport[]}`, newest first, with the draft counts per status.
+
+### GET /api/admin/kb/imports/{id}
+
+→ `ImportDetail` with `organize: null`; drafts in `ord` order. 404 unknown import.
+
+### PATCH /api/admin/kb/drafts/{id}
+
+Body `DraftPatch` `{text_ar?, topic?, keyword_en?, page?, ord?, status?: "draft"|"discarded"}` (null =
+unchanged, at least one; same limits as a K-row) → `KbDraft`. `status: "discarded"` discards, `"draft"`
+restores. 404 unknown draft, 409 `kb_conflict` when the draft is already approved (edit the K-row instead).
+The import's `status` becomes `done` when no draft is pending.
+
+### POST /api/admin/kb/imports/{id}/approve
+
+Body `ApproveRequest` `{draft_ids[]}` (1–200 draft ids of this import) → `ApproveResponse` `{rows: KbRow[],
+drafts: KbDraft[], version, reindex_ms, oos_disabled[]}`: one new added K-row per draft, in draft order, with
+consecutive next free ids, and the drafts now `approved` with their `row_id`. Same lock as the editor (423
+`kb_locked`). 404 unknown import or a draft of another import; 409 when a draft is not pending; 400 when a
+draft is not a valid row. `POST /api/kb/reset` removes these rows like every added row and puts their drafts
+back to `draft` with `row_id: null`.
+
 ### GET /api/health
 
 Always 200 once the app is up; `?probe=1` re-runs the LLM probe. → `Health`:
@@ -405,8 +469,10 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
   `progress.json`, `progress_update_request.json`, `interns.json`, `intern_session.json`, `admin_interns.json`,
   `intern_create_request.json`, `intern_patch_request.json`, `intern.json`, `intern_detail.json`, `health.json`, `health_llm.json`, `admin_login_request.json`,
   `admin_session.json`;
+- document import (P12.1): `import_capabilities.json`, `import_create_request.json`, `import_detail.json`,
+  `imports_list.json`, `draft_patch_request.json`, `draft.json`, `approve_request.json`, `approve.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,
-  `error_423.json`, `error_500.json`, `error_401.json`, `error_429.json`.
+  `error_423.json`, `error_500.json`, `error_401.json`, `error_429.json`, `error_503.json`.
 
 `tests/test_contract.py` checks that every fixture validates and is canonical, that every reply kind and
 refusal reason is covered, the request rules and limits, that no quiz GET carries the correct option, that

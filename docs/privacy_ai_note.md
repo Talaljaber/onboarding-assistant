@@ -12,6 +12,12 @@ repository.
 - **Live edits** (the knowledge-base screen) are stored separately from the official file. Edited rows
   carry the badge «معدّل مباشرة» and added rows «مضاف مباشرة» wherever they are cited.
   «استعادة النسخة الرسمية» restores the official rows.
+- **Imported documents (admin only, P12.1).** The admin may upload a company document (`.txt`, `.md`,
+  `.csv`, `.docx`; `.pdf` with the optional `pypdf`). The server reads it **in memory and never stores the
+  file**; it keeps only the extracted passages as drafts. **No passage is answerable until the admin
+  approves it**; an approved passage becomes an added K-row (badge «مضاف مباشرة», `source_document` = the
+  document name, page = the passage page) and is cited word for word like every row. Only documents the
+  company has approved for this use should be imported (the organizer rule on company documents applies).
 - **Files we wrote** (`data/ours/`): out-of-scope example questions, scenario checklists and reply
   options, plan activities, anchor questions per row and the DEV test set. Every row is marked
   `source=ours`. They are **fictional competition examples**, not Dada SOPs or policy.
@@ -75,6 +81,16 @@ With a key, per message, at most:
   Not the question, the row ids, the document names, the role, the alias or the profile. The
   translation is checked (numbers, contacts and links, ids, document and person names, Arabic left
   over, length) before it is shown or cached; a failure leaves only the Arabic;
+- **document import «التنظيم بالذكاء الاصطناعي» (admin only, only when the admin ticks it, off by
+  default, only in AI mode):** the text of the extracted passages and their nearest headings, at most 20
+  per call, with the knowledge base's topic names. Not the file, its name, the document name, ids or
+  anything about interns. The screen warns before upload: only for documents approved for release, the
+  passages are sent to the AI model. The model only labels passages (topic, English keywords, one
+  suggested Arabic question, keep or skip, reading order, merges with a neighbour); it never supplies
+  passage text. Each value is checked (no number, contact, link or row id that the passage does not
+  contain; lengths; merges only between neighbours on the same page within 600 characters) before use,
+  and a reply is cached only when every value passed. Without the tick nothing about the document leaves
+  the laptop;
 - **status probe:** one tiny fixed test message (`Reply with {"ping":true}`, at most 10 tokens) at
   start, on a throttled status re-check, and once after a failure.
 
@@ -101,6 +117,7 @@ policies for anonymous or signed-in clients.
 | Table | Contents |
 |---|---|
 | `kb_rows`, `kb_row_history` | the 18 rows and any live edits, with before/after and source (seed, editor, reset) |
+| `kb_imports`, `kb_drafts` | imported documents (P12.1): file name, document name, file type, page and passage counts, status; and their passages (text, page, topic, keywords, suggested question, draft/approved/discarded, the K id once approved). **The uploaded file itself is never stored** (migration `0003_kb_imports.sql`) |
 | `interns` | a fictional demo intern's Arabic and optional English name, track, active flag, created/updated time (added and edited by the admin; names that look like an email or phone are rejected) |
 | `profiles` | one per intern and track: the intern link, a generated label such as «متدرب ١» and the track. Older anonymous profiles (no intern) are removed by `scripts/purge_demo_profiles.py` |
 | `progress` | profile id, activity id, time |
@@ -176,6 +193,8 @@ invented a contact. The earlier held-out 1 run, before the panel, gave offline 2
   have no anchor questions).
 - One shared admin password for the knowledge editor and the interns screens; no per-person accounts.
   Interns sign in without a password (demo only).
+- Document import is rule based (headings, pages, sentence ends); scanned PDFs without text give nothing.
+  The suggested question is for review only and never becomes part of a row.
 - The verifier checks grounding, not style. A grounded but clumsy sentence can pass.
 - The English helper translation is checked for invented numbers, contacts, ids and names, not for
   meaning: a fluent but slightly off sentence can pass. The Arabic answer and rows remain the

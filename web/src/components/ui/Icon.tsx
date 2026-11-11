@@ -44,7 +44,9 @@ export type IconName =
   | "chevron-end"
   | "sparkle"
   | "calendar"
-  | "target";
+  | "target"
+  | "upload"
+  | "file";
 
 const PATHS: Record<IconName, string> = {
   check: "M5 12.5l4.5 4.5L19 7.5",
@@ -90,6 +92,8 @@ const PATHS: Record<IconName, string> = {
   sparkle: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z M18.5 15.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6.6-1.4z",
   calendar: "M4 6h16v14H4z M4 10.5h16 M8.5 3.5v4 M15.5 3.5v4",
   target: "M12 21a9 9 0 100-18 9 9 0 000 18z M12 16a4 4 0 100-8 4 4 0 000 8z M12 12v.01",
+  upload: "M12 15.5V4 M7 8.5L12 4l5 4.5 M4.5 15v4.5h15V15",
+  file: "M6.5 3h7.5l4.5 4.5V21h-12z M14 3v4.5h4.5 M9 12.5h6 M9 16h6",
 };
 
 /** Icons that point along the reading direction; they are mirrored in RTL. */

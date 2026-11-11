@@ -75,6 +75,7 @@ export const ERROR_CODES = [
   "unauthorized",
   "too_many_requests",
   "internal_error",
+  "imports_unavailable",
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
@@ -91,7 +92,17 @@ export const LIMITS = {
   kbPageMax: 999,
   aliasMax: 40,
   bodyMaxBytes: 32 * 1024,
+  importFileMaxBytes: 2 * 1024 * 1024,
+  importMaxPassages: 200,
+  importQuestionMax: 160,
 } as const;
+
+// P12.1 document import
+export const IMPORT_FILE_TYPES = ["txt", "md", "csv", "docx", "pdf"] as const;
+export type ImportFileType = (typeof IMPORT_FILE_TYPES)[number];
+export const DRAFT_STATUSES = ["draft", "approved", "discarded"] as const;
+export type DraftStatus = (typeof DRAFT_STATUSES)[number];
+export type ImportStatus = "open" | "done";
 
 // ---------------------------------------------------------------- shared pieces
 
@@ -489,6 +500,100 @@ export interface KbResetResponse {
   reindex_ms: number;
 }
 
+// ---------------------------------------------------------------- document import (P12.1, admin only)
+
+export interface ImportCapabilities {
+  types: ImportFileType[];
+  /** true only when the optional pypdf package is installed on the server */
+  pdf: boolean;
+  max_bytes: number;
+  max_passages: number;
+  /** LLM mode: the "Organize with AI" option can be used */
+  ai_available: boolean;
+}
+
+/** POST /api/admin/kb/imports: the file as base64 inside JSON (no multipart). */
+export interface ImportCreate {
+  filename: string;
+  content_b64: string;
+  document_name: string | null;
+  organize: boolean;
+}
+
+export interface KbImport {
+  id: string;
+  filename: string;
+  document_name: string;
+  file_type: ImportFileType;
+  pages: number;
+  passages: number;
+  organized: boolean;
+  status: ImportStatus;
+  created_at: string;
+  approved: number;
+  pending: number;
+  discarded: number;
+}
+
+/** One extracted passage. `text_ar` is the document's own text; `question_ar` is a review hint only. */
+export interface KbDraft {
+  id: string;
+  import_id: string;
+  ord: number;
+  page: number;
+  text_ar: string;
+  topic: string;
+  keyword_en: string;
+  question_ar: string | null;
+  status: DraftStatus;
+  row_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrganizeSummary {
+  requested: boolean;
+  used: boolean;
+  organized: number;
+  fallback: number;
+  merged: number;
+  skipped: number;
+  reason: string | null;
+}
+
+export interface ImportDetail {
+  document: KbImport;
+  drafts: KbDraft[];
+  /** set on upload, null on GET */
+  organize: OrganizeSummary | null;
+}
+
+export interface ImportListResponse {
+  imports: KbImport[];
+}
+
+/** PATCH /api/admin/kb/drafts/{id}: null or absent = unchanged; at least one. */
+export interface DraftPatch {
+  text_ar?: string | null;
+  topic?: string | null;
+  keyword_en?: string | null;
+  page?: number | null;
+  ord?: number | null;
+  status?: "draft" | "discarded" | null;
+}
+
+export interface ApproveRequest {
+  draft_ids: string[];
+}
+
+export interface ApproveResponse {
+  rows: KbRow[];
+  drafts: KbDraft[];
+  version: string;
+  reindex_ms: number;
+  oos_disabled: string[];
+}
+
 // ---------------------------------------------------------------- profiles, progress, manager
 
 export interface ProfileCreate {
@@ -875,6 +980,75 @@ export function isKbWriteResponse(x: unknown): x is KbWriteResponse {
 
 export function isKbResetResponse(x: unknown): x is KbResetResponse {
   return isObj(x) && isNum(x.rows) && isStr(x.version) && isNum(x.reindex_ms);
+}
+
+export function isImportCapabilities(x: unknown): x is ImportCapabilities {
+  return (
+    isObj(x) &&
+    isArrayOf(x.types, (v): v is ImportFileType => isOneOf(IMPORT_FILE_TYPES, v)) &&
+    isBool(x.pdf) &&
+    isNum(x.max_bytes) &&
+    isNum(x.max_passages) &&
+    isBool(x.ai_available)
+  );
+}
+
+export function isKbImport(x: unknown): x is KbImport {
+  return (
+    isObj(x) &&
+    isStr(x.id) &&
+    isStr(x.filename) &&
+    isStr(x.document_name) &&
+    isOneOf(IMPORT_FILE_TYPES, x.file_type) &&
+    isNum(x.pages) &&
+    isNum(x.passages) &&
+    isBool(x.organized) &&
+    isOneOf(["open", "done"] as const, x.status) &&
+    isStr(x.created_at) &&
+    isNum(x.approved) &&
+    isNum(x.pending) &&
+    isNum(x.discarded)
+  );
+}
+
+export function isKbDraft(x: unknown): x is KbDraft {
+  return (
+    isObj(x) &&
+    isStr(x.id) &&
+    isStr(x.import_id) &&
+    isNum(x.ord) &&
+    isNum(x.page) &&
+    isStr(x.text_ar) &&
+    isStr(x.topic) &&
+    isStr(x.keyword_en) &&
+    isStrOrNull(x.question_ar) &&
+    isOneOf(DRAFT_STATUSES, x.status) &&
+    isStrOrNull(x.row_id)
+  );
+}
+
+export function isImportDetail(x: unknown): x is ImportDetail {
+  return (
+    isObj(x) &&
+    isKbImport(x.document) &&
+    isArrayOf(x.drafts, isKbDraft) &&
+    (x.organize === null || (isObj(x.organize) && isBool(x.organize.used) && isNum(x.organize.organized)))
+  );
+}
+
+export function isImportListResponse(x: unknown): x is ImportListResponse {
+  return isObj(x) && isArrayOf(x.imports, isKbImport);
+}
+
+export function isApproveResponse(x: unknown): x is ApproveResponse {
+  return (
+    isObj(x) &&
+    isArrayOf(x.rows, isKbRow) &&
+    isArrayOf(x.drafts, isKbDraft) &&
+    isStr(x.version) &&
+    isNum(x.reindex_ms) &&
+    isArrayOf(x.oos_disabled, isStr)
+  );
 }
 
 export function isProfile(x: unknown): x is Profile {

@@ -2,11 +2,12 @@
 // the admin sign-in screen and the server refuses the writes without the admin token). Rows + edit /
 // add / reset + "try it now". Interns' progress lives on the admin Interns screens; sign-out is in the
 // admin shell header.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { type Result } from "@/api/client";
 import type { KbRow } from "@/api/types";
 import { useT } from "@/i18n";
 import { nextKId } from "@/lib/ids";
+import { navigate, replace } from "@/router";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
@@ -75,6 +76,15 @@ export default function KbScreen() {
   const topics = useMemo(() => [...new Set(rows.map((r) => r.topic))], [rows]);
   const nextId = nextKId(rows.map((r) => r.id));
 
+  // `#/kb?row=K19` (a link from the import review screen) opens that row's edit dialog once.
+  useEffect(() => {
+    const wanted = /[?&]row=(K\d{2,3})(?!\d)/.exec(window.location.hash)?.[1];
+    if (!wanted || rows.length === 0) return;
+    const row = rows.find((r) => r.id === wanted);
+    replace("/kb");
+    if (row) setEditing({ kind: "edit", row });
+  }, [rows]);
+
   const errorText = (r: Extract<Result<unknown>, { ok: false }>): string => {
     const { status, code } = errorInfo(r.error);
     if (status === 423 || code === "kb_locked") return t("extra.kbLocked");
@@ -141,6 +151,9 @@ export default function KbScreen() {
                   <div className="grid grid-cols-1 gap-2 min-[400px]:flex min-[400px]:flex-wrap min-[400px]:items-center">
                     <Button variant="accent" icon="plus" onClick={() => setEditing({ kind: "add" })} disabled={kb.status !== "ready"}>
                       {t("kb.add")}
+                    </Button>
+                    <Button variant="secondary" icon="upload" onClick={() => navigate("/admin/kb/import")} data-testid="kb-import">
+                      {t("kbImport.open")}
                     </Button>
                     <Button variant="secondary" icon="refresh" onClick={() => setConfirmReset(true)} disabled={kb.status !== "ready"}>
                       {t("kb.reset")}

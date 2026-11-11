@@ -16,7 +16,7 @@ interface Item {
 
 const ITEMS: Item[] = [
   { href: "#/admin/interns", key: "uiIntern.navInterns", icon: "user", current: (p) => p.startsWith("/admin/interns") },
-  { href: "#/kb", key: "nav.kb", icon: "book", current: (p) => p === "/kb" },
+  { href: "#/kb", key: "nav.kb", icon: "book", current: (p) => p === "/kb" || p.startsWith("/admin/kb/") },
 ];
 
 const roundBtn =

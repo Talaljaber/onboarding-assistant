@@ -79,6 +79,15 @@ FIXTURES: dict[str, type[BaseModel]] = {
     "progress_update_request.json": s.ProgressUpdate,
     "admin_session.json": s.AdminSession,
     "error_500.json": s.ErrorBody,
+    "error_503.json": s.ErrorBody,
+    "import_capabilities.json": s.ImportCapabilities,
+    "import_create_request.json": s.ImportCreate,
+    "import_detail.json": s.ImportDetail,
+    "imports_list.json": s.ImportListResponse,
+    "draft_patch_request.json": s.DraftPatch,
+    "draft.json": s.KbDraft,
+    "approve_request.json": s.ApproveRequest,
+    "approve.json": s.ApproveResponse,
 }
 
 # One response fixture per endpoint (the request fixtures are listed in FIXTURES above).
@@ -105,6 +114,12 @@ ENDPOINT_FIXTURES = {
     "GET /api/health": "health.json",
     "POST /api/admin/login": "admin_session.json",
     "GET /api/admin/session": "admin_session.json",
+    "GET /api/admin/kb/import/capabilities": "import_capabilities.json",
+    "POST /api/admin/kb/imports": "import_detail.json",
+    "GET /api/admin/kb/imports": "imports_list.json",
+    "GET /api/admin/kb/imports/{id}": "import_detail.json",
+    "PATCH /api/admin/kb/drafts/{id}": "draft.json",
+    "POST /api/admin/kb/imports/{id}/approve": "approve.json",
 }
 
 REQUEST_MODELS: dict[type[BaseModel], str] = {
@@ -118,6 +133,9 @@ REQUEST_MODELS: dict[type[BaseModel], str] = {
     s.ProgressUpdate: "progress_update_request.json",
     s.InternCreate: "intern_create_request.json",
     s.InternPatch: "intern_patch_request.json",
+    s.ImportCreate: "import_create_request.json",
+    s.DraftPatch: "draft_patch_request.json",
+    s.ApproveRequest: "approve_request.json",
 }
 
 
@@ -428,3 +446,34 @@ def test_contract_doc_mentions_every_fixture_and_endpoint() -> None:
         method, path = endpoint.split(" ", 1)
         assert f"{method} {path}" in doc, endpoint
     assert "frozen" in doc.lower()
+
+
+def test_import_requests_validate() -> None:
+    """P12.1: draft edits follow the K-row limits; approval needs 1..200 draft ids; the upload is JSON."""
+    with pytest.raises(ValidationError):
+        s.DraftPatch.model_validate({})
+    with pytest.raises(ValidationError):
+        s.DraftPatch.model_validate({"text_ar": "ا" * 601})
+    with pytest.raises(ValidationError):
+        s.DraftPatch.model_validate({"topic": "t" * 41})
+    with pytest.raises(ValidationError):
+        s.DraftPatch.model_validate({"status": "approved"})
+    with pytest.raises(ValidationError):
+        s.ApproveRequest.model_validate({"draft_ids": []})
+    with pytest.raises(ValidationError):
+        s.ApproveRequest.model_validate({"draft_ids": ["K19"]})
+    req = load("import_create_request.json")
+    with pytest.raises(ValidationError):
+        s.ImportCreate.model_validate({**req, "document_name": "d" * 81})
+    assert s.ImportCreate.model_validate({k: v for k, v in req.items() if k != "organize"}).organize is False
+    assert s.ERROR_STATUS["imports_unavailable"] == 503
+
+
+def test_imported_rows_are_added_rows_and_drafts_carry_no_score() -> None:
+    approve = load("approve.json")
+    assert all(r["status"] == "added" and r["edited"] for r in approve["rows"])
+    assert [d["row_id"] for d in approve["drafts"]] == [r["id"] for r in approve["rows"]]
+    assert [d["text_ar"] for d in approve["drafts"]] == [r["answer_ar"] for r in approve["rows"]]
+    banned = re.compile(r"score|grade|rating|confidence")
+    keys = all_keys(load("import_detail.json")) | all_keys(approve)
+    assert not [k for k in keys if banned.search(k)]

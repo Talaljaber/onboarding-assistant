@@ -157,6 +157,37 @@ class Store(Protocol):
         progress and attempts are deleted and the turn logs are kept with `profile_id` cleared."""
         ...
 
+    # Document import (P12.1) ------------------------------------------------------------------
+    # The original file is never stored: only the import record and its passage drafts. These methods
+    # never flip the store and never raise: None (or False) means "the import tables cannot be used now"
+    # (e.g. Supabase without migration 0003), and the API answers 503 `imports_unavailable`.
+
+    def kb_import_create(self, record: dict[str, Any], drafts: list[dict[str, Any]]) -> bool:
+        """Insert one import record and its drafts (all or nothing as far as the store allows)."""
+        ...
+
+    def kb_import_update(self, import_id: str, changes: dict[str, Any]) -> bool:
+        """Set {status?, organized?} of one import."""
+        ...
+
+    def kb_imports(self) -> list[dict[str, Any]] | None:
+        """Every import record, newest first; None when unavailable."""
+        ...
+
+    def kb_import_get(self, import_id: str) -> dict[str, Any] | None:
+        """One import record; {} when unknown; None when unavailable."""
+        ...
+
+    def kb_drafts(
+        self, *, import_id: str | None = None, status: str | None = None, ids: list[str] | None = None
+    ) -> list[dict[str, Any]] | None:
+        """Drafts matching every given filter, ordered by import then `ord`; None when unavailable."""
+        ...
+
+    def kb_drafts_save(self, drafts: list[dict[str, Any]]) -> bool:
+        """Upsert whole draft records (validated with `draft_record`)."""
+        ...
+
     def close(self) -> None: ...
 
 
@@ -429,3 +460,69 @@ def scenario_record(
 
 def empty_activity() -> dict[str, list[dict[str, Any]]]:
     return {"progress": [], "quiz": [], "scenarios": [], "turns": []}
+
+
+# Document import (P12.1) ---------------------------------------------------------------------------
+IMPORT_COLUMNS = ("id", "filename", "document_name", "file_type", "pages", "passages", "organized", "status",
+                  "created_at")
+DRAFT_COLUMNS = ("id", "import_id", "ord", "page", "text_ar", "topic", "keyword_en", "question_ar", "status",
+                 "row_id", "created_at", "updated_at")
+IMPORT_FILE_TYPES = frozenset({"txt", "md", "csv", "docx", "pdf"})
+IMPORT_STATUSES = frozenset({"open", "done"})
+DRAFT_STATUSES = frozenset({"draft", "approved", "discarded"})
+
+
+def _int_in(value: object, lo: int, hi: int) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value if lo <= value <= hi else None
+
+
+def import_record(rec: object) -> dict[str, Any] | None:
+    """The import record to store (exactly IMPORT_COLUMNS), or None when invalid."""
+    if not isinstance(rec, dict):
+        return None
+    out = {k: rec.get(k) for k in IMPORT_COLUMNS}
+    if valid_uuid(out["id"]) is None or out["file_type"] not in IMPORT_FILE_TYPES:
+        return None
+    if out["status"] not in IMPORT_STATUSES or not isinstance(out["organized"], bool):
+        return None
+    for key, hi in (("filename", 120), ("document_name", 80)):
+        v = out[key]
+        if not isinstance(v, str) or not v.strip() or len(v) > hi:
+            return None
+    if _int_in(out["pages"], 0, 100000) is None or _int_in(out["passages"], 0, 200) is None:
+        return None
+    if not isinstance(out["created_at"], str) or not out["created_at"]:
+        out["created_at"] = now_iso()
+    return out
+
+
+def draft_record(rec: object) -> dict[str, Any] | None:
+    """The draft record to store (exactly DRAFT_COLUMNS), or None when invalid (same limits as a K-row)."""
+    if not isinstance(rec, dict):
+        return None
+    out = {k: rec.get(k) for k in DRAFT_COLUMNS}
+    if valid_uuid(out["id"]) is None or valid_uuid(out["import_id"]) is None:
+        return None
+    if out["status"] not in DRAFT_STATUSES or _int_in(out["ord"], 0, 9999) is None:
+        return None
+    if _int_in(out["page"], 0, 999) is None:
+        return None
+    text, topic, kw, q = out["text_ar"], out["topic"], out["keyword_en"] or "", out["question_ar"]
+    if not isinstance(text, str) or not 5 <= len(text.strip()) <= 600:
+        return None
+    if not isinstance(topic, str) or not 1 <= len(topic.strip()) <= 40 or not isinstance(kw, str) or len(kw) > 60:
+        return None
+    if q is not None and (not isinstance(q, str) or len(q) > 160):
+        return None
+    row_id = out["row_id"]
+    if row_id is not None and (not isinstance(row_id, str) or not KB_ID_RE.match(row_id)):
+        return None
+    if (out["status"] == "approved") != (row_id is not None):
+        return None
+    out["keyword_en"] = kw
+    at = now_iso()
+    out["created_at"] = out["created_at"] if isinstance(out["created_at"], str) and out["created_at"] else at
+    out["updated_at"] = out["updated_at"] if isinstance(out["updated_at"], str) and out["updated_at"] else at
+    return out
