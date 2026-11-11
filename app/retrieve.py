@@ -28,7 +28,7 @@ from numpy.typing import NDArray
 
 from app.kb import KnowledgeBase, Row
 from app.logging_setup import log_event
-from app.textnorm import normalize, tokens
+from app.textnorm import ascii_digits, normalize, tokens
 
 BandName = Literal["answer", "not_confirmed", "refuse"]
 RRF_K = 60
@@ -55,6 +55,7 @@ class Hit:
     bm25: float
     rrf: float
     rank: int
+    named: bool = False  # the user named this row's id in the message (F6)
 
 
 @dataclass(frozen=True)
@@ -191,6 +192,27 @@ def is_list_question(text: str) -> bool:
     if not LIST_Q.search(t):
         return False
     return len(named_values(text)) != 1
+
+
+# ---------------------------------------------------------------------------------- K-ids in the message
+#: A K-row id typed by the user («K14», «k 14», «K-14», Arabic-Indic digits after `ascii_digits`).
+KID_IN_QUERY = re.compile(r"(?<![A-Za-z0-9])[Kk] ?-?(\d{1,3})(?![0-9])")
+
+
+def split_named_ids(query: str, live_ids: list[str]) -> tuple[str, list[str]]:
+    """(query without any K-id, the named ids that exist in `live_ids` in message order).
+
+    Every K-id is stripped from the text that is embedded and BM25-scored, so an unknown id («K99») adds
+    no noise and a known one is used only through the returned list (red team F6).
+    """
+    q = ascii_digits(query)
+    found = KID_IN_QUERY.findall(q)
+    if not found:
+        return query, []
+    by_num = {int(rid[1:]): rid for rid in live_ids if rid[:1] == "K" and rid[1:].isdigit()}
+    named = list(dict.fromkeys(by_num[int(n)] for n in found if int(n) in by_num))
+    clean = " ".join(KID_IN_QUERY.sub(" ", q).split())
+    return clean, named
 
 
 # ---------------------------------------------------------------------------------- BM25 and RRF
@@ -345,16 +367,25 @@ class Retriever:
         return v
 
     def search(self, query: str, *, k: int = 18) -> list[Hit]:
-        """Every row (up to k) sorted by RRF, with its dense cosine and BM25 score."""
+        """Every row (up to k) sorted by RRF, with its dense cosine and BM25 score.
+
+        K-ids in the query are stripped before scoring; a named id that exists in the live KB is ranked
+        first (`Hit.named`), unknown ids are ignored (F6).
+        """
         with self._lock:
-            rows, mat, bm = self._rows, self._row_mat, self._bm25
+            rows, mat, bm, ids = self._rows, self._row_mat, self._bm25, self._ids
         if not rows:
             return []
+        query, named = split_named_ids(query, ids)
         q = self._qvec(query)
         dense = mat @ q
         b = bm.scores(tokens(query))
         fused = rrf(dense, b)
         order = sorted(range(len(rows)), key=lambda i: (-fused[i], -dense[i]))
+        if named:
+            first = [ids.index(rid) for rid in named]
+            order = first + [i for i in order if i not in first]
+        named_set = set(named)
         return [
             Hit(
                 id=rows[i].id,
@@ -363,6 +394,7 @@ class Retriever:
                 bm25=float(b[i]),
                 rrf=float(fused[i]),
                 rank=n + 1,
+                named=rows[i].id in named_set,
             )
             for n, i in enumerate(order[:k])
         ]
@@ -372,6 +404,7 @@ class Retriever:
         with self._lock:
             rows, mat = self._rows, self._row_mat
             enabled = [i for i, o in enumerate(self.oos) if o.enabled]
+        query, _ = split_named_ids(query, self._ids)
         q = self._qvec(query)
         dense = mat @ q
         if len(self._anchor_ids):
@@ -409,6 +442,7 @@ class Retriever:
 
 __all__ = [
     "BM25",
+    "KID_IN_QUERY",
     "LIST_Q",
     "VALUE_NAMES",
     "Bands",
@@ -422,4 +456,5 @@ __all__ = [
     "named_values",
     "read_bands",
     "rrf",
+    "split_named_ids",
 ]
