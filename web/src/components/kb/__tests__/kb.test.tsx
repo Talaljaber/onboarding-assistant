@@ -6,7 +6,6 @@ import kbPut from "@fixtures/kb_put.json";
 import kbPost from "@fixtures/kb_post.json";
 import kbReset from "@fixtures/kb_reset.json";
 import answerLlm from "@fixtures/chat_answer_llm.json";
-import manager from "@fixtures/manager_summary.json";
 import err409 from "@fixtures/error_409.json";
 import { LangScope } from "@/i18n";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -41,7 +40,6 @@ function backend(over: Record<string, (c: Call) => Response> = {}) {
     if (key === "POST /api/kb") return json(kbPost, 201);
     if (key === "POST /api/kb/reset") return json(kbReset);
     if (key === "POST /api/chat") return json(answerLlm);
-    if (key === "GET /api/manager/summary") return json(manager);
     return json({}, 404);
   });
   vi.stubGlobal("fetch", fn);
@@ -318,31 +316,5 @@ describe("try it now", () => {
     await loaded();
     await userEvent.type(screen.getByRole("textbox", { name: "Try it now" }), "hi{Enter}");
     expect(await screen.findByText("Could not get an answer. Try again.")).toBeInTheDocument();
-  });
-});
-
-describe("manager tab", () => {
-  it("shows the server label verbatim, counts only and no score columns", async () => {
-    backend();
-    mount();
-    await userEvent.click(screen.getByRole("tab", { name: "Manager view (demo)" }));
-    // English UI: the label's English equivalent (labels follow the UI language), the h1 follows the tab
-    const label = await screen.findByText("Demo profiles, not real employees — not an evaluation");
-    expect(label).toHaveAttribute("data-manager-label");
-    expect(label).toHaveAttribute("dir", "ltr");
-    expect(screen.getByRole("heading", { level: 1, name: "Manager view" })).toBeInTheDocument();
-    const view = document.querySelector("[data-manager-view]") as HTMLElement;
-    expect(within(view).getByText("متدرب ١")).toBeInTheDocument();
-    expect(within(view).getByText("38%")).toBeInTheDocument();
-    const heads = within(view).getAllByRole("columnheader").map((h) => h.textContent ?? "");
-    expect(heads.join("|")).not.toMatch(/score|correct/i);
-    expect(heads).toHaveLength(6);
-  });
-
-  it("shows a retry on failure", async () => {
-    backend({ "GET /api/manager/summary": () => json({}, 500) });
-    mount();
-    await userEvent.click(screen.getByRole("tab", { name: "Manager view (demo)" }));
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
   });
 });

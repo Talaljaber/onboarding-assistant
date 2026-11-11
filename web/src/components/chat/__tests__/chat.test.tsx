@@ -423,7 +423,7 @@ describe("quiz hand-off and role lock", () => {
     expect(window.location.hash).toBe("#/chat");
   });
 
-  it("locks the header role chip while practice mode is active", async () => {
+  it("the header track chip is a label, not a switcher (the admin sets the track)", async () => {
     backend([scenarioStart]);
     render(
       <Harness initial={seed()}>
@@ -432,13 +432,8 @@ describe("quiz hand-off and role lock", () => {
       </Harness>,
     );
     const chip = screen.getByTestId("role-chip");
-    expect(chip).not.toBeDisabled();
-    await ask("تدريب");
-    await waitFor(() => expect(document.querySelector("[data-practice-banner]")).not.toBeNull());
-    expect(chip).toBeDisabled();
-    expect(chip).toHaveAttribute("title", "Track is locked during practice. End practice first.");
-    await userEvent.type(screen.getByRole("textbox"), "{Escape}");
-    await waitFor(() => expect(chip).not.toBeDisabled());
+    expect(chip.tagName).toBe("P");
+    expect(screen.queryByRole("button", { name: /track/i })).toBeNull();
   });
 });
 

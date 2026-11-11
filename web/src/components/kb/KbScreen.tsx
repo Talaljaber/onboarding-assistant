@@ -1,13 +1,12 @@
-﻿// `#/kb`: the content owner's screen, admin only (P10: the route guard sends everyone else to the
-// sign-in screen and the server refuses the writes and the manager summary without the admin token).
-// Rows tab = rows + edit / add / reset + "try it now"; manager tab = demo-profile counts.
+﻿// `#/kb`: the knowledge editor inside the admin shell (P10/P11.2: the route guard sends everyone else to
+// the admin sign-in screen and the server refuses the writes without the admin token). Rows + edit /
+// add / reset + "try it now". Interns' progress lives on the admin Interns screens; sign-out is in the
+// admin shell header.
 import { useMemo, useState } from "react";
-import { adminLogout, type Result } from "@/api/client";
+import { type Result } from "@/api/client";
 import type { KbRow } from "@/api/types";
 import { useT } from "@/i18n";
 import { nextKId } from "@/lib/ids";
-import { replace } from "@/router";
-import { useAppState } from "@/state/useAppState";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
@@ -15,15 +14,11 @@ import { Dialog } from "../ui/Dialog";
 import { Loadable } from "../ui/Loadable";
 import { Notice } from "../ui/Notice";
 import { Page, PageHeader } from "../ui/Page";
-import { TabPanel, Tabs } from "../ui/Tabs";
 import { useToast } from "../ui/Toast";
-import { ManagerView } from "../manager/ManagerView";
 import { KbTable } from "./KbTable";
 import { RowDialog, type RowDialogProps } from "./RowDialog";
 import { TryPanel } from "./TryPanel";
 import { errorInfo, useKb } from "./useKb";
-
-const ID_BASE = "kb";
 
 /** Server field name (last dotted part) -> the dialog's field label key. */
 const FIELD_LABEL = {
@@ -68,9 +63,7 @@ function RowFilter({ value, onChange, all, changed }: { value: Filter; onChange:
 export default function KbScreen() {
   const t = useT();
   const toast = useToast();
-  const { role } = useAppState();
   const kb = useKb();
-  const [tab, setTab] = useState("rows");
   const [filter, setFilter] = useState<Filter>("all");
   const [editing, setEditing] = useState<Editing>(null);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -122,49 +115,21 @@ export default function KbScreen() {
     } else toast.show(errorText(r), "danger");
   }
 
-  function signOut() {
-    // Leave the admin route first, so the guard does not bounce to the sign-in screen.
-    replace(role ? "/chat" : "/");
-    adminLogout();
-    toast.show(t("uiAuth.signedOut"), "ok");
-  }
-
-  const tabs = [
-    { id: "rows", label: t("extra.kbTabRows") },
-    { id: "manager", label: t("extra.kbTabManager") },
-  ];
-
   return (
     <section data-screen="kb" className="min-w-0">
       <Page width="wide">
         <PageHeader
           icon="book"
-          // The h1 follows the tab; "demo" is in the manager tab label, storage is in About.
-          title={tab === "manager" ? t("uiCalm.managerHeading") : t("kb.title")}
+          title={t("kb.title")}
           description={t("kb.intro")}
           badges={
             <Badge tone="neutral" icon="lock">
               {t("uiAdmin.staffMode")}
             </Badge>
           }
-          actions={
-            <>
-              {!role && (
-                <a href="#/" className="inline-flex min-h-11 items-center px-2 text-sm font-semibold text-accent hover:underline">
-                  {t("uiAuth.back")}
-                </a>
-              )}
-              <Button variant="secondary" icon="logout" onClick={signOut}>
-                {t("uiAuth.signOut")}
-              </Button>
-            </>
-          }
         />
 
         <div className="min-w-0">
-          <Tabs items={tabs} value={tab} onChange={setTab} label={t("extra.kbTabsLabel")} idBase={ID_BASE} />
-
-          <TabPanel idBase={ID_BASE} id="rows" value={tab}>
             {/* One column on every width: the page is at most 72rem, so a side "try" panel would
                 squeeze the table below the width it needs and hide its Edit column. */}
             <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:gap-6">
@@ -206,11 +171,6 @@ export default function KbScreen() {
                 </Loadable>
               </div>
             </div>
-          </TabPanel>
-
-          <TabPanel idBase={ID_BASE} id="manager" value={tab}>
-            <ManagerView />
-          </TabPanel>
         </div>
       </Page>
 

@@ -58,6 +58,11 @@ h1, h2, h3, h4 {
   outline: 2px solid var(--da-focus);
   outline-offset: 2px;
 }
+/* Radio tiles hide the native radio: its keyboard focus ring is drawn on the tile. */
+.da-radio-tile:has(:focus-visible) {
+  outline: 2px solid var(--da-focus);
+  outline-offset: 2px;
+}
 /* Focus moved by code (route change, skip link) lands on a heading or <main>: no ring there. */
 #main:focus,
 #main h1[tabindex="-1"]:focus {

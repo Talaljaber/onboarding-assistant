@@ -2,7 +2,8 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import health from "@fixtures/health.json";
 import plan from "@fixtures/plan.json";
-import profile from "@fixtures/profile.json";
+import interns from "@fixtures/interns.json";
+import session from "@fixtures/intern_session.json";
 import App from "@/App";
 import { setAdminToken } from "@/api/adminToken";
 import { RtlProvider } from "@/components/ui/RtlProvider";
@@ -12,7 +13,7 @@ import { STORAGE_KEY, defaultState, type StoredState } from "@/state/storage";
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-let profileCalls = 0;
+let sessionCalls: string[] = [];
 
 function setHash(h: string) {
   window.history.replaceState(null, "", h);
@@ -22,8 +23,12 @@ function stored(): StoredState {
   return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as StoredState;
 }
 
-function seed(mutate: (s: StoredState) => void) {
+/** Seeds a signed-in intern (Sara, Sales); `mutate` adjusts it. */
+function seed(mutate: (s: StoredState) => void = () => {}) {
   const s = defaultState();
+  s.role = "Sales";
+  s.intern = session.intern.id;
+  s.internName = { name_ar: session.intern.name_ar, name_en: session.intern.name_en };
   mutate(s);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
 }
@@ -39,15 +44,16 @@ function renderApp() {
 const ar = (k: Parameters<typeof translate>[1]) => translate("ar", k);
 
 beforeEach(() => {
-  profileCalls = 0;
+  sessionCalls = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       if (url.startsWith("/api/plan")) return json(plan);
       if (url.startsWith("/api/health")) return json(health);
-      if (url.startsWith("/api/profiles") && init?.method === "POST") {
-        profileCalls += 1;
-        return json(profile);
+      if (url === "/api/interns") return json(interns);
+      if (url.startsWith("/api/interns/") && init?.method === "POST") {
+        sessionCalls.push(url);
+        return json(session);
       }
       return Promise.reject(new TypeError("offline"));
     }),
@@ -61,39 +67,69 @@ afterEach(() => {
 });
 
 describe("shell and role choice", () => {
-  it("role choice persists, routes to #/chat and creates one profile", async () => {
+  it("sign-in first: the intern picks a name (no track picker), lands in the assistant with their name and track", async () => {
     renderApp();
-    fireEvent.click(await screen.findByTestId("role-sales"));
+    const start = await screen.findByTestId("intern-signin");
+    expect(start).toBeDisabled(); // a name is required
+    expect(screen.queryByTestId("role-sales")).toBeNull();
+    expect(document.querySelector("[data-interns-fictional]")?.textContent).toContain(ar("uiIntern.fictional"));
+    const options = await screen.findAllByTestId("intern-option");
+    expect(options.map((o) => o.textContent)).toEqual(
+      interns.interns.map((i) => `${i.name_ar.charAt(0)}${i.name_ar}${ar(i.role === "Sales" ? "role.sales" : "role.delivery")}`),
+    );
+    fireEvent.click(options[0]!);
+    expect(start).not.toBeDisabled();
+    fireEvent.click(start);
     await waitFor(() => expect(window.location.hash).toBe("#/chat"));
-    await waitFor(() => expect(profileCalls).toBe(1));
-    await waitFor(() => expect(stored()?.role).toBe("Sales"));
-    expect(screen.getByTestId("role-chip").textContent).toContain(ar("uiUat.roleShortSales"));
-    expect(screen.getByTestId("role-chip").getAttribute("aria-label")).toContain(ar("role.sales"));
+    expect(sessionCalls).toEqual([`/api/interns/${interns.interns[0]!.id}/session`]);
+    await waitFor(() => expect(stored()?.intern).toBe(session.intern.id));
+    expect(stored()?.role).toBe("Sales");
+    const chip = screen.getByTestId("role-chip");
+    expect(chip.textContent).toContain("سارة");
+    expect(chip.textContent).toContain(ar("uiUat.roleShortSales"));
+    expect(chip.getAttribute("aria-label")).toContain("سارة الخطيب");
   });
 
-  it("the role dialog switches role and keeps per-role progress", async () => {
+  it("names follow the UI language on the sign-in screen", async () => {
+    renderApp();
+    await screen.findAllByTestId("intern-option");
+    fireEvent.click(screen.getByTestId("lang-toggle"));
+    await waitFor(() => expect(screen.getAllByTestId("intern-option")[0]!.textContent).toContain("Sara Al-Khatib"));
+  });
+
+  it("the admin choice leads to the admin password screen", async () => {
+    renderApp();
+    fireEvent.click(await screen.findByTestId("signin-admin"));
+    expect(screen.queryByTestId("intern-signin")).toBeNull();
+    expect(screen.getByTestId("admin-continue").getAttribute("href")).toBe("#/admin");
+  });
+
+  it("a stored session is refreshed on load: the track the admin set wins", async () => {
     seed((s) => {
-      s.role = "Sales";
-      s.perRole.Sales.progress = { "SA-X": "2026-11-01" };
-      s.perRole.Sales.profile_id = "p-sales";
-      s.perRole.Delivery.profile_id = "p-del";
+      s.role = "Delivery"; // stale: the server says Sales
     });
     setHash("#/chat");
     renderApp();
-    fireEvent.click(await screen.findByTestId("role-chip"));
+    await waitFor(() => expect(sessionCalls).toHaveLength(1));
+    await waitFor(() => expect(stored()?.role).toBe("Sales"));
+    expect(screen.getByTestId("role-chip").textContent).toContain(ar("uiUat.roleShortSales"));
+  });
+
+  it("sign out from the settings sheet returns to the sign-in screen", async () => {
+    seed();
+    setHash("#/chat");
+    renderApp();
+    await act(async () => {});
+    fireEvent.click(screen.getByTestId("header-more"));
     const dlg = await screen.findByRole("dialog");
-    fireEvent.click(within(dlg).getByTestId("role-delivery"));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    await waitFor(() => expect(stored()?.role).toBe("Delivery"));
-    expect(stored()?.perRole.Sales.progress).toEqual({ "SA-X": "2026-11-01" });
-    expect(screen.getByTestId("role-chip").textContent).toContain(ar("uiUat.roleShortDelivery"));
-    expect(window.location.hash).toBe("#/chat");
+    fireEvent.click(within(dlg).getByTestId("sign-out"));
+    await waitFor(() => expect(window.location.hash).toBe("#/"));
+    await waitFor(() => expect(stored()?.intern).toBeNull());
+    expect(await screen.findByTestId("intern-signin")).toBeTruthy();
   });
 
   it("the mode switch persists", async () => {
-    seed((s) => {
-      s.role = "Sales";
-    });
+    seed();
     setHash("#/chat");
     renderApp();
     fireEvent.click(await screen.findByTestId("header-more"));
@@ -105,9 +141,7 @@ describe("shell and role choice", () => {
   });
 
   it("the header stays calm: no prototype badge or status, which live in the footer and the settings sheet", async () => {
-    seed((s) => {
-      s.role = "Sales";
-    });
+    seed();
     setHash("#/chat");
     renderApp();
     await act(async () => {});
@@ -129,49 +163,32 @@ describe("shell and role choice", () => {
   });
 
   it("the bottom bar has the five screens and no more button", async () => {
-    seed((s) => {
-      s.role = "Sales";
-    });
+    seed();
     setHash("#/chat");
     renderApp();
     await act(async () => {});
     expect(screen.queryByRole("button", { name: ar("nav.more") })).toBeNull();
   });
 
-  it("the settings sheet shows the admin sign-in (not the editor) to employees, and the about link", async () => {
-    seed((s) => {
-      s.role = "Sales";
-    });
+  it("interns get no admin links: the settings sheet has About and sign out only", async () => {
+    setAdminToken("4102444800.sig"); // even with an admin token in this browser
+    seed();
     setHash("#/chat");
     renderApp();
     await act(async () => {});
     fireEvent.click(screen.getByTestId("header-more"));
     const dlg = await screen.findByRole("dialog");
-    expect(within(dlg).getByRole("link", { name: ar("uiAuth.navSignIn") })).toBeTruthy();
+    expect(within(dlg).queryByRole("link", { name: ar("uiAuth.navSignIn") })).toBeNull();
     expect(within(dlg).queryByRole("link", { name: ar("nav.kb") })).toBeNull();
+    expect(within(dlg).getByTestId("sign-out")).toBeTruthy();
+    expect(document.querySelector('nav a[href="#/kb"]')).toBeNull();
     fireEvent.click(within(dlg).getByRole("link", { name: ar("nav.about") }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  });
-
-  it("the settings sheet shows the knowledge editor to the signed-in admin", async () => {
-    setAdminToken("4102444800.sig");
-    seed((s) => {
-      s.role = "Sales";
-    });
-    setHash("#/chat");
-    renderApp();
-    await act(async () => {});
-    fireEvent.click(screen.getByTestId("header-more"));
-    const dlg = await screen.findByRole("dialog");
-    expect(within(dlg).getByRole("link", { name: ar("nav.kb") })).toBeTruthy();
-    expect(within(dlg).queryByRole("link", { name: ar("uiAuth.navSignIn") })).toBeNull();
     setAdminToken(null);
   });
 
   it("marks the current nav item with aria-current", async () => {
-    seed((s) => {
-      s.role = "Sales";
-    });
+    seed();
     setHash("#/plan");
     renderApp();
     await act(async () => {});

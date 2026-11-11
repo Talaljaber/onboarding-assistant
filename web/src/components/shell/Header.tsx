@@ -1,15 +1,17 @@
 ﻿import { useState, type ReactNode } from "react";
-import { useIsAdmin } from "@/api/adminToken";
 import type { Health } from "@/api/types";
 import { cn } from "@/components/ui/cn";
 import { Dialog } from "@/components/ui/Dialog";
 import { Icon, type IconName } from "@/components/ui/Icon";
 import { LanguageSwitch } from "@/components/ui/LanguageSwitch";
 import { segmented } from "@/components/ui/recipes";
+import { Button } from "@/components/ui/Button";
+import { useToast } from "@/components/ui/Toast";
 import { translate, useLang, useT } from "@/i18n";
+import { internFirstName, internName, internNameLang } from "@/lib/intern";
+import { replace } from "@/router";
 import { useAppState } from "@/state/useAppState";
 import { BrandMark } from "./BrandMark";
-import { RoleDialog } from "./RoleDialog";
 
 /** Segmented buttons in the settings sheet: 44px tall for touch. */
 const SEG_SHEET = "min-h-11 px-5";
@@ -30,7 +32,7 @@ function SettingRow({ label, children }: { label: string; children: ReactNode })
   );
 }
 
-/** A navigation row at the bottom of the settings sheet (about, admin sign-in or knowledge base). */
+/** A navigation row at the bottom of the settings sheet (about). */
 function SheetLink({ href, icon, label, onGo }: { href: string; icon: IconName; label: string; onGo: () => void }) {
   return (
     <li>
@@ -48,16 +50,17 @@ function SheetLink({ href, icon, label, onGo }: { href: string; icon: IconName; 
 }
 
 /**
- * Sticky header: brand, role chip, a one-tap language toggle and the settings button. Everything
- * else (answer mode, trace, service status, about, admin sign-in) lives in the settings sheet so the
- * header stays calm at every width. A small dot on the settings button shows a forced offline mode.
+ * Intern header: brand, the signed-in intern's chip (first name and track; the track is set by the
+ * admin, so the chip is not a switcher), a one-tap language toggle and the settings button. Everything
+ * else (answer mode, trace, service status, about, sign out) lives in the settings sheet so the header
+ * stays calm at every width. A small dot on the settings button shows a forced offline mode. Interns get
+ * no admin links: the admin signs in from the sign-in screen.
  */
 export function Header({ health }: { health: Health | null }) {
   const t = useT();
   const { lang, setLang } = useLang();
-  const { role, mode, setMode, forceOffline, trace, setTrace, practiceActive } = useAppState();
-  const isAdmin = useIsAdmin();
-  const [roleOpen, setRoleOpen] = useState(false);
+  const { role, intern, mode, setMode, forceOffline, trace, setTrace, signOut } = useAppState();
+  const toast = useToast();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const llmOn = !forceOffline && health?.llm_available === true;
   const roleName = role ? t(role === "Sales" ? "role.sales" : "role.delivery") : "";
@@ -65,29 +68,38 @@ export function Header({ health }: { health: Health | null }) {
   const other = lang === "ar" ? "en" : "ar";
   const close = () => setSettingsOpen(false);
 
+  const chipLabel = [intern ? t("uiIntern.current", { name: internName(intern, lang) }) : null, t("role.current", { role: roleName })]
+    .filter(Boolean)
+    .join(". ");
+  // Who is signed in and on which track: a label, not a control (the admin sets the track).
   const roleChip = role && (
-    <button
-      type="button"
-      aria-haspopup="dialog"
-      disabled={practiceActive}
-      title={practiceActive ? t("extra.roleLocked") : undefined}
-      aria-description={practiceActive ? t("extra.roleLocked") : undefined}
-      aria-label={`${t("role.current", { role: roleName })}. ${t("role.switch")}`}
-      onClick={() => setRoleOpen(true)}
-      className={cn(
-        pill,
-        "min-w-0 border-line bg-surface-0 ps-1.5 pe-3 text-fg-1 shadow-1 hover:border-accent-line hover:bg-accent-soft",
-        "disabled:cursor-not-allowed disabled:opacity-55",
-      )}
+    <p
+      role="note"
+      aria-label={chipLabel}
+      title={chipLabel}
+      className={cn(pill, "m-0 min-w-0 border-line bg-surface-0 ps-1.5 pe-3 text-fg-1 shadow-1")}
       data-testid="role-chip"
     >
       <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-soft text-accent">
         <Icon name={role === "Sales" ? "briefcase" : "map"} size={16} />
       </span>
-      <span className="truncate">{roleShort}</span>
-      <Icon name="chevron-down" size={14} className="shrink-0 text-fg-3" />
-    </button>
+      <span aria-hidden="true" className="truncate">
+        {intern && (
+          <>
+            <span lang={internNameLang(intern, lang)}>{internFirstName(intern, lang)}</span>
+            <span className="text-fg-3">{" · "}</span>
+          </>
+        )}
+        {roleShort}
+      </span>
+    </p>
   );
+  const doSignOut = () => {
+    setSettingsOpen(false);
+    signOut();
+    replace("/");
+    toast.show(t("uiIntern.signedOut"), "ok");
+  };
   const modeSwitch = role && (
     <div role="group" aria-label={t("mode.label")} className={segmented.track}>
       {(["auto", "offline"] as const).map((m) => (
@@ -202,15 +214,23 @@ export function Header({ health }: { health: Health | null }) {
           )}
           <ul className="flex flex-col pt-2">
             <SheetLink href="#/about" icon="info" label={t("nav.about")} onGo={close} />
-            {isAdmin ? (
-              <SheetLink href="#/kb" icon="book" label={t("nav.kb")} onGo={close} />
-            ) : (
-              <SheetLink href="#/admin" icon="lock" label={t("uiAuth.navSignIn")} onGo={close} />
-            )}
           </ul>
+          {intern && (
+            <div className="mt-3 flex flex-col gap-2 border-t border-line pt-4">
+              <p className="m-0 text-sm text-fg-2">
+                <span lang={internNameLang(intern, lang)} className="font-semibold text-fg-1">
+                  {internName(intern, lang)}
+                </span>
+                {" · "}
+                {roleName}
+              </p>
+              <Button variant="secondary" icon="logout" block onClick={doSignOut} data-testid="sign-out">
+                {t("uiIntern.signOut")}
+              </Button>
+            </div>
+          )}
         </div>
       </Dialog>
-      <RoleDialog open={roleOpen} onClose={() => setRoleOpen(false)} />
     </>
   );
 }

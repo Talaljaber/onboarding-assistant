@@ -1,4 +1,3 @@
-import { useIsAdmin } from "@/api/adminToken";
 import { cn } from "@/components/ui/cn";
 import { Icon, type IconName } from "@/components/ui/Icon";
 import { useT, type DictKey } from "@/i18n";
@@ -20,13 +19,11 @@ const MAIN: Item[] = [
   { path: "/quiz", key: "nav.quiz", icon: "help" },
   { path: "/progress", key: "nav.progress", icon: "chart" },
 ];
-const KB: Item = { path: "/kb", key: "nav.kb", icon: "book" };
-const SIGN_IN: Item = { path: "/admin", key: "uiAuth.navSignIn", icon: "lock" };
 const ABOUT: Item = { path: "/about", key: "nav.about", icon: "info" };
 
-/** The tools group: the knowledge editor for the signed-in admin, else the admin sign-in link (P10). */
+/** The tools group of the intern app: About only (the admin has its own shell, P11.2). */
 function useMore(): Item[] {
-  return [useIsAdmin() ? KB : SIGN_IN, ABOUT];
+  return [ABOUT];
 }
 
 /** One sidebar link: a rail tile (icon over label) at md, a full row from lg. */

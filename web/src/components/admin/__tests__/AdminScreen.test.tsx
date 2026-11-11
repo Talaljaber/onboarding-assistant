@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import session from "@fixtures/admin_session.json";
 import err401 from "@fixtures/error_401.json";
 import err429 from "@fixtures/error_429.json";
-import manager from "@fixtures/manager_summary.json";
-import { adminLogout, getManagerSummary, resetKb } from "@/api/client";
+import adminInterns from "@fixtures/admin_interns.json";
+import { adminLogout, getAdminInterns, resetKb } from "@/api/client";
 import { getAdminToken, setAdminToken } from "@/api/adminToken";
 import { LangScope } from "@/i18n";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -52,7 +52,7 @@ describe("admin sign-in screen", () => {
     mount();
     await userEvent.type(screen.getByLabelText("Admin password"), "dada2026");
     await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
-    await waitFor(() => expect(window.location.hash).toBe("#/kb"));
+    await waitFor(() => expect(window.location.hash).toBe("#/admin/interns"));
     expect(getAdminToken()).toBe(session.token);
     const [url, init] = fetch.mock.calls[0]!;
     expect(url).toBe("/api/admin/login");
@@ -99,8 +99,8 @@ describe("admin sign-in screen", () => {
 describe("admin token in the API client", () => {
   it("admin calls send the Bearer token; employee calls never do", async () => {
     setAdminToken("4102444800.sig");
-    const fetch = stubFetch(() => json(manager));
-    await getManagerSummary();
+    const fetch = stubFetch(() => json(adminInterns));
+    await getAdminInterns();
     expect(authHeader(fetch.mock.calls[0]![1])).toBe("Bearer 4102444800.sig");
     const { getKb } = await import("@/api/client");
     await getKb();
