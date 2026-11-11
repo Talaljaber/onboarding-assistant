@@ -1,10 +1,13 @@
-﻿// `#/kb`: the content owner's mock screen. Rows tab = rows + edit / add / reset + "try it now";
-// manager tab = demo-profile counts. No sign-in (plan D1.8), labelled as staff mode.
+﻿// `#/kb`: the content owner's screen, admin only (P10: the route guard sends everyone else to the
+// sign-in screen and the server refuses the writes and the manager summary without the admin token).
+// Rows tab = rows + edit / add / reset + "try it now"; manager tab = demo-profile counts.
 import { useMemo, useState } from "react";
-import type { Result } from "@/api/client";
+import { adminLogout, type Result } from "@/api/client";
 import type { KbRow } from "@/api/types";
 import { useT } from "@/i18n";
 import { nextKId } from "@/lib/ids";
+import { replace } from "@/router";
+import { useAppState } from "@/state/useAppState";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
@@ -65,6 +68,7 @@ function RowFilter({ value, onChange, all, changed }: { value: Filter; onChange:
 export default function KbScreen() {
   const t = useT();
   const toast = useToast();
+  const { role } = useAppState();
   const kb = useKb();
   const [tab, setTab] = useState("rows");
   const [filter, setFilter] = useState<Filter>("all");
@@ -118,6 +122,13 @@ export default function KbScreen() {
     } else toast.show(errorText(r), "danger");
   }
 
+  function signOut() {
+    // Leave the admin route first, so the guard does not bounce to the sign-in screen.
+    replace(role ? "/chat" : "/");
+    adminLogout();
+    toast.show(t("uiAuth.signedOut"), "ok");
+  }
+
   const tabs = [
     { id: "rows", label: t("extra.kbTabRows") },
     { id: "manager", label: t("extra.kbTabManager") },
@@ -141,6 +152,18 @@ export default function KbScreen() {
                   {kb.data.store === "supabase" ? t("extra.storeSupabase") : t("extra.storeLocal")}
                 </Badge>
               )}
+            </>
+          }
+          actions={
+            <>
+              {!role && (
+                <a href="#/" className="inline-flex min-h-11 items-center px-2 text-sm font-semibold text-accent hover:underline">
+                  {t("uiAuth.back")}
+                </a>
+              )}
+              <Button variant="secondary" icon="logout" onClick={signOut}>
+                {t("uiAuth.signOut")}
+              </Button>
             </>
           }
         />

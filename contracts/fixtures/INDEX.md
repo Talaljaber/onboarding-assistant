@@ -63,7 +63,9 @@ the not-confirmed / out-of-scope questions are illustrative placeholders until
 | `profile_create_request.json` | `POST /api/profiles` body | `ProfileCreate` |
 | `profile.json` | `POST /api/profiles` (201) | `Profile` |
 | `progress.json` | `GET /api/progress?profile_id=` | `ProgressResponse` |
-| `manager_summary.json` | `GET /api/manager/summary` | `ManagerSummaryResponse` |
+| `manager_summary.json` | `GET /api/manager/summary` (admin) | `ManagerSummaryResponse` |
+| `admin_login_request.json` | `POST /api/admin/login` body | `AdminLogin` |
+| `admin_session.json` | `POST /api/admin/login`, `GET /api/admin/session` | `AdminSession` |
 | `health.json` | `GET /api/health` (offline, local store) | `Health` |
 | `health_llm.json` | `GET /api/health` (llm, supabase store) | `Health` |
 
@@ -75,5 +77,7 @@ the not-confirmed / out-of-scope questions are illustrative placeholders until
 | `error_404.json` | 404 | `not_found` |
 | `error_409.json` | 409 | `kb_conflict` |
 | `error_413.json` | 413 | `payload_too_large` |
+| `error_401.json` | 401 | `unauthorized` (admin endpoint without a valid token, or a wrong password) |
 | `error_423.json` | 423 | `kb_locked` |
+| `error_429.json` | 429 | `too_many_requests` (5 wrong admin passwords inside 60 s) |
 | `error_500.json` | 500 | `internal_error` |

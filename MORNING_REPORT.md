@@ -80,7 +80,7 @@ The onboarding assistant is built and every wave gated: W0–W4 are tagged and p
 ## 4. Known issues (ranked by demo risk)
 1. **The startup LLM probe can time out** (3 s; it happened once tonight on a slow network), and then the app starts offline. It re-probes on the first chat turn after 60 s, or on `GET /api/health?probe=1`. Before the demo, open `http://127.0.0.1:8000/api/health?probe=1` once and check `"mode": "llm"`. AI mode was checked in a real browser tonight (steps 2, 3 and 5: AI chip, K01, K05–K09, checklist feedback with a verified tip, no score). Screenshots are in the integrator's scratchpad; the committed ones are offline.
 2. **Offline mode is weaker on unseen wording**: held-out offline 25/50 with 2 answerable refused, and 27 of 43 DEV unanswerables get "not confirmed" rather than a refusal. AI mode is the primary path; say so in the demo.
-3. KB editing has no authentication ("staff mode"); cross-origin writes are refused. A demo limitation.
+3. KB editing and the manager view are admin only since P10 (one shared password, demo default `dada2026`; set `ADMIN_PASSWORD` to change it). No per-person accounts.
 4. No sync between the local fallback store and Supabase; the switch to local is one-way per process.
 5. Red team: offline 19/20, AI mode 16/20. Every safety check held in both modes. The AI-mode misses are over-refusals (RT07 asks for K14 by id, RT09 planted numbers, RT17 mixed role claim). RT20 (both modes): the contact guard fires inside a practice turn instead of giving feedback. That is safe, but the runner records it as a miss.
 6. The Gemini comparison could not run (HTTP 400 with the pinned privacy/reasoning params).

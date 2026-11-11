@@ -72,6 +72,8 @@ export const ERROR_CODES = [
   "payload_too_large",
   "kb_conflict",
   "kb_locked",
+  "unauthorized",
+  "too_many_requests",
   "internal_error",
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -544,6 +546,18 @@ export interface Health {
   uptime_s: number;
 }
 
+// ---------------------------------------------------------------- admin sign-in (P10)
+
+export interface AdminLogin {
+  password: string;
+}
+
+/** Signed admin token for `Authorization: Bearer <token>`, and its remaining lifetime. */
+export interface AdminSession {
+  token: string;
+  expires_in_s: number;
+}
+
 export interface ErrorDetail {
   code: ErrorCode;
   message: string;
@@ -829,4 +843,8 @@ export function isErrorBody(x: unknown): x is ErrorBody {
     isStr(x.error.request_id) &&
     isStrOrNull(x.error.field)
   );
+}
+
+export function isAdminSession(x: unknown): x is AdminSession {
+  return isObj(x) && isStr(x.token) && x.token.length > 0 && typeof x.expires_in_s === "number";
 }

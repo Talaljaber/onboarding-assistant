@@ -15,7 +15,8 @@ row; the cited rows, the checks and the sources panel are the same.
 1. Run `start.bat` with a key in `.env` (AI mode). Check the header chip shows «متصل بالنموذج».
    If there is no key, record the whole demo offline and skip the AI remarks.
 2. Open «حول والخصوصية» → «امسح بيانات هذا المتصفح» (fresh role, progress and thread).
-3. Open «قاعدة المعرفة» → «استعادة النسخة الرسمية» (K02 back to 17).
+3. Open «دخول المسؤول», enter the admin password (`dada2026` unless `ADMIN_PASSWORD` is set), then
+   «قاعدة المعرفة» → «استعادة النسخة الرسمية» (K02 back to 17). The admin stays signed in for 8 h in this tab.
 4. Turn on «عرض التتبع» in the header, mode «تلقائي».
 5. Rehearse once end to end, so verified AI replies are cached and fast.
 
@@ -31,7 +32,7 @@ row; the cited rows, the checks and the sources panel are the same.
 | 5 | 2:25–3:30 | Type `أنا موظف مبيعات وعميل يسأل عن ميزة غير مؤكدة`. Then type `بقوله إني رح أتأكد من المواصفات من المصدر الرسمي وبرجع له`. Then click «إنهاء التدريب» | Scenario card S02, value النزاهة, banner «وضع التدريب: S02 — …»; offline it also shows three reply options. Feedback card «ملاحظات تدريبية، وليست تقييماً»; offline it shows «الرد المقترح في المادة التدريبية»: «لا تخترع مواصفات؛ تحقق من مصدر موثوق أو اسأل المسؤول.» (offline: checked). With AI: «ما أحسنت فيه» / «أضف هذا» from the scenario checklist, plus at most one short checked tip. On end: toast «تم تحديث التقدم: …%» and the line «انتهى التدريب.» | "Feedback is linked to a company value. It is learning feedback, never a score." |
 | 6 | 3:30–4:10 | Type `أكملت نشاط اليوم 30`. Click «تأكيد». Click «عرض لوحة التقدم» | Proposal «هل تريد تسجيل أنشطة «اليوم 30» كمكتملة؟» with «اختبار قصير» and «موقف عملي: زبون يسأل عن ثلاجة» (offline: checked). After confirm: «تم. التقدم الآن …%». Dashboard ring and lists updated | "Nothing changes until you confirm. The percentage is completion, not a performance score." |
 | 7 | 4:10–4:50 | Role chip → «مسار التوصيل». Open «المواقف» → «ابدأ التدريب» on S04. Pick the first reply option | S04 card, value محورية العميل, situation «تأخر موعد التسليم والعميل منزعج.» Fixed feedback for the chosen option, linked to the value | "The other track has its own scenarios." |
-| 8 | 4:50–5:45 | Open «قاعدة المعرفة». On K02 click «تعديل», change 17 to 18, «حفظ». In «جرّب الآن» type `كم عدد المعارض؟` | Toast «تم الحفظ وإعادة الفهرسة (… مللي ثانية)». Answer with 18 and the K02 row badged «معدّل مباشرة» (offline: checked, screenshot 15) | "A content owner can fix a fact. The next answer uses it at once, with a visible badge." |
+| 8 | 4:50–5:45 | Open «قاعدة المعرفة» (signed in as admin before the demo). On K02 click «تعديل», change 17 to 18, «حفظ». In «جرّب الآن» type `كم عدد المعارض؟` | Toast «تم الحفظ وإعادة الفهرسة (… مللي ثانية)». Answer with 18 and the K02 row badged «معدّل مباشرة» (offline: checked, screenshot 15) | "A content owner can fix a fact. The next answer uses it at once, with a visible badge." |
 | 9 | 5:45–6:25 | Header switch → «بلا اتصال». Back to «المساعد», type `متى تأسست مجموعة الدادا؟` | Same K01 row verbatim, mode chip «وضع بلا اتصال». Trace: no model call, margin and band «إجابة» (offline: checked) | "No key, no network: it still answers, from the knowledge-base rows only." |
 | 10 | 6:25–6:50 | Open «حول والخصوصية» | What leaves the laptop, what is stored, limits | "With a key only the question (and the previous one for short follow-ups), the rows and practice replies go out, with data collection denied. No chat text is stored on a server." |
 
@@ -56,7 +57,8 @@ Total: about 6:50.
 - If the network drops mid-demo, each answer falls back to the offline result in the same request (its
   chip reads «وضع بلا اتصال»); the header chip changes to «بلا اتصال بالنموذج» at its next status check
   (every 30 s). Continue offline and say so.
-- Knowledge-base editing has no login in this prototype ("staff mode"); say so if asked.
+- Only the admin reaches the knowledge editor and the manager view (one shared password, no accounts).
+  If the server restarted, sign in again at «دخول المسؤول».
 - After the demo, restore the official rows («استعادة النسخة الرسمية»).
 
 ## Recording tips

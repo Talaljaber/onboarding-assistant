@@ -49,6 +49,9 @@ def env(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[TestClient, 
     store = LocalStore(live)
     agent = build_agent(s, store=store)
     client = TestClient(create_app(s, agent=agent, store=store))
+    # The knowledge editor and the manager view are admin only (tests/test_admin.py covers the 401s).
+    login = client.post("/api/admin/login", json={"password": s.admin_password.get_secret_value()})
+    client.headers["Authorization"] = f"Bearer {login.json()['token']}"
     yield client, agent, store
     store.close()
 

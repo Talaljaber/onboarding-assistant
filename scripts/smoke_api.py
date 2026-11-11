@@ -55,11 +55,14 @@ class Api:
     def __init__(self, base: str, force_offline: bool) -> None:
         self.base = base.rstrip("/")
         self.force_offline = force_offline
+        self.token: str | None = None  # admin token after sign-in (knowledge editor writes)
 
     def call(self, method: str, path: str, body: Any = None, *, expect: int = 200) -> Any:
         data = None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
-        req = urllib.request.Request(self.base + path, data=data, method=method,
-                                     headers={"Content-Type": "application/json"})
+        headers = {"Content-Type": "application/json"}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        req = urllib.request.Request(self.base + path, data=data, method=method, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=20) as r:
                 status, raw, rid = r.status, r.read(), r.headers.get("X-Request-Id")
@@ -154,7 +157,10 @@ def run_storyboard(api: Api) -> str:
     r = api.chat("إنهاء التدريب", role="Delivery", state={"active_scenario": "S04"})
     check(kind(r) == "scenario_end", "7 end practice")
 
-    # 8. jury "modify an answer": K02 17 → 18, then ask again; always reset
+    # 8. jury "modify an answer": K02 17 → 18, then ask again; always reset. The editor is admin only.
+    api.call("PUT", "/api/kb/K02", {"topic": "x"}, expect=401)
+    api.token = api.call("POST", "/api/admin/login",
+                         {"password": os.environ.get("ADMIN_PASSWORD") or "dada2026"})["token"]
     rows = {row["id"]: row for row in api.call("GET", "/api/kb")["rows"]}
     k02 = rows["K02"]["answer_ar"]
     check("17" in k02, "8 K02 holds 17")

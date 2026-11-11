@@ -21,7 +21,7 @@ from collections.abc import Callable
 from typing import Any
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, BackgroundTasks, FastAPI, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.datastructures import MutableHeaders
@@ -36,6 +36,8 @@ from app.logging_setup import log_event
 from app.plan import percent_of
 from app.schemas import (
     BODY_MAX_BYTES,
+    AdminLogin,
+    AdminSession,
     KB_ID_RE,
     MANAGER_LABEL_AR,
     PROFILE_ID_RE,
@@ -158,7 +160,7 @@ class RequestContextMiddleware:
 
         app_receive: Receive = receive
         if scope.get("method", "GET") in _BODY_METHODS:
-            # No CORS and no auth: refuse writes a page on another origin makes from the user's browser.
+            # No CORS: refuse writes a page on another origin makes from the user's browser.
             if cross_origin(headers.get(b"origin"), headers.get(b"host")):
                 await self._json(send, 400, error_body("validation_error", "cross-origin request refused", rid,
                                                        "origin"), rid)
@@ -242,6 +244,15 @@ def _agent(request: Request) -> Agent:
 
 def _store(request: Request) -> Any:
     return request.app.state.store
+
+
+def _admin(request: Request) -> None:
+    """401 unless the request carries a valid admin token (knowledge editor and manager view).
+    Used as a route dependency, so it runs before the body is validated."""
+    request.app.state.admin.require(request)
+
+
+ADMIN_ONLY = [Depends(_admin)]
 
 
 def _json(model: Any, status: int = 200) -> JSONResponse:
@@ -388,7 +399,7 @@ def build_router() -> APIRouter:
                                     edited_ids=kb.edited_ids(), official_sha256=kb.official_sha256,
                                     store=_store(request).name))
 
-    @r.put("/kb/{row_id}")
+    @r.put("/kb/{row_id}", dependencies=ADMIN_ONLY)
     def kb_put(row_id: str, body: KbPatch, request: Request) -> JSONResponse:
         agent = _agent(request)
         if not re.match(KB_ID_RE, row_id) or agent.kb.get(row_id) is None:
@@ -397,18 +408,33 @@ def build_router() -> APIRouter:
         return _json(KbWriteResponse(row=_kb_row(row), version=agent.kb.version(), reindex_ms=ms,
                                      oos_disabled=list(agent.retriever.last_disabled)))
 
-    @r.post("/kb", status_code=201)
+    @r.post("/kb", status_code=201, dependencies=ADMIN_ONLY)
     def kb_add(body: KbNewRow, request: Request) -> JSONResponse:
         agent = _agent(request)
         row, ms = _timed_kb_write(agent, lambda: agent.kb.add(body))
         return _json(KbWriteResponse(row=_kb_row(row), version=agent.kb.version(), reindex_ms=ms,
                                      oos_disabled=list(agent.retriever.last_disabled)), 201)
 
-    @r.post("/kb/reset")
+    @r.post("/kb/reset", dependencies=ADMIN_ONLY)
     def kb_reset(request: Request) -> JSONResponse:
         agent = _agent(request)
         _, ms = _timed_kb_write(agent, agent.kb.reset)
         return _json(KbResetResponse(rows=len(agent.kb.rows()), version=agent.kb.version(), reindex_ms=ms))
+
+    # -------------------------------------------------------------------------- admin sign-in
+    @r.post("/admin/login")
+    def admin_login(body: AdminLogin, request: Request) -> JSONResponse:
+        auth = request.app.state.admin
+        token = auth.login(body.password)
+        log_event("admin_login", request_id=_rid(request))
+        return _json(AdminSession(token=token, expires_in_s=auth.session_s))
+
+    @r.get("/admin/session", dependencies=ADMIN_ONLY)
+    def admin_session(request: Request) -> JSONResponse:
+        """200 with the same token while it is valid (the client checks a stored token on load), else 401."""
+        token = (request.headers.get("authorization") or "").removeprefix("Bearer ").strip()
+        expiry = int(token.partition(".")[0])
+        return _json(AdminSession(token=token, expires_in_s=max(0, expiry - int(time.time()))))
 
     # -------------------------------------------------------------------------- profiles and progress
     @r.post("/profiles", status_code=201)
@@ -438,7 +464,7 @@ def build_router() -> APIRouter:
         return _json(ProgressResponse(completed_ids=completed, percent=summary.percent, done=summary.done,
                                       total=summary.total))
 
-    @r.get("/manager/summary")
+    @r.get("/manager/summary", dependencies=ADMIN_ONLY)
     def manager_summary(request: Request) -> JSONResponse:
         plan = _agent(request).features.plan
         rows: list[ManagerProfileRow] = []

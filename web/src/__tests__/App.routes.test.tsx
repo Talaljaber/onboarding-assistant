@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import plan from "@fixtures/plan.json";
 import App, { ROUTES } from "@/App";
+import { setAdminToken } from "@/api/adminToken";
 import { RtlProvider } from "@/components/ui/RtlProvider";
 import { STORAGE_KEY, defaultState, type StoredState } from "@/state/storage";
 
@@ -39,12 +40,14 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  setAdminToken(null);
   setHash("#/");
 });
 
 describe("App routes", () => {
-  it("registers all 8 routes", () => {
-    expect(ROUTES.map((r) => r.path)).toEqual(["/", "/chat", "/scenarios", "/plan", "/quiz", "/progress", "/kb", "/about"]);
+  it("registers all 9 routes, with the knowledge editor admin only", () => {
+    expect(ROUTES.map((r) => r.path)).toEqual(["/", "/chat", "/scenarios", "/plan", "/quiz", "/progress", "/kb", "/admin", "/about"]);
+    expect(ROUTES.filter((r) => r.needsAdmin).map((r) => r.path)).toEqual(["/kb"]);
   });
 
   it("no role: shows the welcome screen at #/", async () => {
@@ -70,12 +73,28 @@ describe("App routes", () => {
   it("every guarded route renders its screen with a role", async () => {
     seed("Delivery");
     renderApp();
-    for (const name of ["scenarios", "plan", "quiz", "progress", "kb", "chat"]) {
+    for (const name of ["scenarios", "plan", "quiz", "progress", "chat"]) {
       act(() => {
         window.location.hash = `#/${name}`;
       });
       await waitFor(() => expect(screens()).toEqual([name]));
     }
+  });
+
+  it("#/kb without the admin token goes to the admin sign-in, even with a role", async () => {
+    seed("Sales");
+    setHash("#/kb");
+    renderApp();
+    await waitFor(() => expect(screens()).toEqual(["admin"]));
+    expect(window.location.hash).toBe("#/admin");
+  });
+
+  it("the signed-in admin opens #/kb without a role, and #/admin forwards to it", async () => {
+    setAdminToken("4102444800.sig");
+    setHash("#/admin");
+    renderApp();
+    await waitFor(() => expect(screens()).toEqual(["kb"]));
+    expect(window.location.hash).toBe("#/kb");
   });
 
   it("#/about is open without a role", async () => {

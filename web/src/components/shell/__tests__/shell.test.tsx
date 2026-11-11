@@ -4,6 +4,7 @@ import health from "@fixtures/health.json";
 import plan from "@fixtures/plan.json";
 import profile from "@fixtures/profile.json";
 import App from "@/App";
+import { setAdminToken } from "@/api/adminToken";
 import { RtlProvider } from "@/components/ui/RtlProvider";
 import { translate } from "@/i18n";
 import { STORAGE_KEY, defaultState, type StoredState } from "@/state/storage";
@@ -107,7 +108,22 @@ describe("shell and role choice", () => {
     await waitFor(() => expect(screen.getByRole("banner").textContent).toMatch(/Supabase|محلي/));
   });
 
-  it("the more dialog opens from the bottom nav and shows the knowledge editor and about links", async () => {
+  it("the more dialog shows the admin sign-in (not the editor) to employees, and the about link", async () => {
+    seed((s) => {
+      s.role = "Sales";
+    });
+    setHash("#/chat");
+    renderApp();
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: ar("nav.more") }));
+    const dlg = await screen.findByRole("dialog");
+    expect(within(dlg).getByRole("link", { name: ar("uiAuth.navSignIn") })).toBeTruthy();
+    expect(within(dlg).queryByRole("link", { name: ar("nav.kb") })).toBeNull();
+    expect(within(dlg).getByRole("link", { name: ar("nav.about") })).toBeTruthy();
+  });
+
+  it("the more dialog shows the knowledge editor to the signed-in admin", async () => {
+    setAdminToken("4102444800.sig");
     seed((s) => {
       s.role = "Sales";
     });
@@ -117,7 +133,8 @@ describe("shell and role choice", () => {
     fireEvent.click(screen.getByRole("button", { name: ar("nav.more") }));
     const dlg = await screen.findByRole("dialog");
     expect(within(dlg).getByRole("link", { name: ar("nav.kb") })).toBeTruthy();
-    expect(within(dlg).getByRole("link", { name: ar("nav.about") })).toBeTruthy();
+    expect(within(dlg).queryByRole("link", { name: ar("uiAuth.navSignIn") })).toBeNull();
+    setAdminToken(null);
   });
 
   it("marks the current nav item with aria-current", async () => {

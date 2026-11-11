@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "too_many_requests",
+    "message": "too many wrong passwords; wait a minute and retry",
+    "request_id": "7f3a9c2e41b0",
+    "field": "password"
+  }
+}

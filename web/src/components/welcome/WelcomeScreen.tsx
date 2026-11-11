@@ -46,10 +46,16 @@ export default function WelcomeScreen() {
               <Icon name="info" size={16} className="mt-1 shrink-0 text-fg-3" />
               {t("app.disclaimer")}
             </p>
-            <a href="#/about" className={`inline-flex min-h-11 items-center gap-2 self-start text-sm ${link}`}>
-              <Icon name="lock" size={16} className="shrink-0" />
-              {t("welcome.privacyLink")}
-            </a>
+            <div className="flex flex-wrap items-center gap-x-6">
+              <a href="#/about" className={`inline-flex min-h-11 items-center gap-2 text-sm ${link}`}>
+                <Icon name="info" size={16} className="shrink-0" />
+                {t("welcome.privacyLink")}
+              </a>
+              <a href="#/admin" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-fg-2 hover:text-accent">
+                <Icon name="lock" size={16} className="shrink-0" />
+                {t("uiAuth.navSignIn")}
+              </a>
+            </div>
           </div>
         </div>
 

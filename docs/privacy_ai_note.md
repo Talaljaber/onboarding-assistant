@@ -125,9 +125,10 @@ chat thread. «امسح بيانات هذا المتصفح» on the «حول و�
 - The manager view («عرض المدير», a tab of the knowledge-base screen) shows each demo alias with its
   track, completion percentage and practice counts only, no correctness or scores, under the label
   «ملفات تجريبية، ليست موظفين حقيقيين — ليست تقييماً».
-- Knowledge-base editing and the manager view have no login ("staff mode", a demo limitation). The
-  server listens on `127.0.0.1` only and refuses write requests that come from another website
-  (cross-origin), but anyone using this laptop's browser can edit rows.
+- Knowledge-base editing and the manager view are admin only: one shared admin password
+  (`ADMIN_PASSWORD`, demo default `dada2026`) gives a signed token that expires (8 h) and dies with a
+  server restart. Employees never sign in and no account or personal data is stored for the admin.
+  The server listens on `127.0.0.1` only and refuses write requests that come from another website.
 - The assistant does not make or predict employment decisions (probation outcome, pay, firing,
   promotion). Those questions get a fixed reply that points to HR when the guard patterns match them
   (each held-out set: 5 of 7 guard questions handled as expected).
@@ -161,7 +162,7 @@ invented a contact. The earlier held-out 1 run, before the panel, gave offline 2
   the server.
 - Rows added live, and rows rewritten beyond a small edit, are matched less confidently offline (they
   have no anchor questions).
-- Knowledge-base editing has no authentication (demo staff mode).
+- One shared admin password for the knowledge editor and the manager view; no per-person accounts.
 - The verifier checks grounding, not style. A grounded but clumsy sentence can pass.
 - The AI layer depends on a third-party service; its availability and retention follow OpenRouter's and
   the provider's terms, limited by `data_collection: deny`.

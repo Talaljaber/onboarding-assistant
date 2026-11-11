@@ -1,7 +1,9 @@
-// Typed API client for the frozen contract (docs/api_contract.md). Same origin, no credentials,
-// no keys. Never throws: every call resolves to a Result. Responses pass the runtime guards from
-// types.ts before use, so an unexpected shape becomes a `parse` error, not a crash.
+// Typed API client for the frozen contract (docs/api_contract.md). Same origin, no cookies, no
+// keys; admin calls carry the admin token (adminToken.ts) as a Bearer header. Never throws: every
+// call resolves to a Result. Responses pass the runtime guards from types.ts before use, so an unexpected shape becomes a `parse` error, not a crash.
+import { getAdminToken, setAdminToken } from "./adminToken";
 import {
+  isAdminSession,
   isChatResponse,
   isErrorBody,
   isHealth,
@@ -16,6 +18,7 @@ import {
   isQuizResponse,
   isScenarioFeedbackResponse,
   isScenarioListResponse,
+  type AdminSession,
   type ChatRequest,
   type ChatResponse,
   type ErrorDetail,
@@ -60,6 +63,8 @@ export interface RequestOptions<T> {
   guard?: (x: unknown) => x is T;
   /** Wait before the single retry after a 423 `kb_locked` (ms). */
   lockedRetryMs?: number;
+  /** Send the admin token; a 401 then forgets it (expired, or the server restarted). */
+  admin?: boolean;
 }
 
 export const DEFAULT_TIMEOUT_MS = 15000;
@@ -81,11 +86,15 @@ async function once<T>(path: string, o: RequestOptions<T>): Promise<Result<T> & 
   o.signal?.addEventListener("abort", onAbort);
   try {
     let res: Response;
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (o.body !== undefined) headers["Content-Type"] = "application/json";
+    const token = o.admin ? getAdminToken() : null;
+    if (token) headers.Authorization = `Bearer ${token}`;
     try {
       res = await fetch(`${base()}${path}`, {
         method: o.method ?? "GET",
         credentials: "omit",
-        headers: o.body === undefined ? { Accept: "application/json" } : { Accept: "application/json", "Content-Type": "application/json" },
+        headers,
         body: o.body === undefined ? undefined : JSON.stringify(o.body),
         signal: ctl.signal,
       });
@@ -108,6 +117,7 @@ async function once<T>(path: string, o: RequestOptions<T>): Promise<Result<T> & 
       parsed = false;
     }
     if (!res.ok) {
+      if (res.status === 401 && token && getAdminToken() === token) setAdminToken(null);
       const detail: ErrorDetail | string = parsed && isErrorBody(json) ? json.error : text.slice(0, 200);
       return { ...fail<T>({ kind: "http", status: res.status, detail }), status: res.status };
     }
@@ -179,13 +189,13 @@ export const getKb = (signal?: AbortSignal) =>
   request<KbListResponse>("/api/kb", { guard: isKbListResponse, signal });
 
 export const putKb = (id: string, patch: KbPatch, signal?: AbortSignal) =>
-  request<KbWriteResponse>(`/api/kb/${q(id)}`, { method: "PUT", body: patch, guard: isKbWriteResponse, signal });
+  request<KbWriteResponse>(`/api/kb/${q(id)}`, { method: "PUT", body: patch, guard: isKbWriteResponse, signal, admin: true });
 
 export const postKb = (row: KbNewRow, signal?: AbortSignal) =>
-  request<KbWriteResponse>("/api/kb", { method: "POST", body: row, guard: isKbWriteResponse, signal });
+  request<KbWriteResponse>("/api/kb", { method: "POST", body: row, guard: isKbWriteResponse, signal, admin: true });
 
 export const resetKb = (signal?: AbortSignal) =>
-  request<KbResetResponse>("/api/kb/reset", { method: "POST", body: {}, guard: isKbResetResponse, signal });
+  request<KbResetResponse>("/api/kb/reset", { method: "POST", body: {}, guard: isKbResetResponse, signal, admin: true });
 
 export const createProfile = (body: ProfileCreate, signal?: AbortSignal) =>
   request<Profile>("/api/profiles", { method: "POST", body, guard: isProfile, signal });
@@ -194,7 +204,24 @@ export const getProgress = (profileId: string, signal?: AbortSignal) =>
   request<ProgressResponse>(`/api/progress?profile_id=${q(profileId)}`, { guard: isProgressResponse, signal });
 
 export const getManagerSummary = (signal?: AbortSignal) =>
-  request<ManagerSummaryResponse>("/api/manager/summary", { guard: isManagerSummaryResponse, signal });
+  request<ManagerSummaryResponse>("/api/manager/summary", { guard: isManagerSummaryResponse, signal, admin: true });
+
+// ---------------------------------------------------------------- admin sign-in
+
+/** Sign in; on success the token is stored (sessionStorage) and admin screens open. */
+export async function adminLogin(password: string, signal?: AbortSignal): Promise<Result<AdminSession>> {
+  const r = await request<AdminSession>("/api/admin/login", { method: "POST", body: { password }, guard: isAdminSession, signal });
+  if (r.ok) setAdminToken(r.value.token);
+  return r;
+}
+
+/** Check the stored token with the server; a 401 forgets it (handled in `once`). */
+export const getAdminSession = (signal?: AbortSignal) =>
+  request<AdminSession>("/api/admin/session", { guard: isAdminSession, signal, admin: true });
+
+export function adminLogout(): void {
+  setAdminToken(null);
+}
 
 export const getHealth = (probe = false, signal?: AbortSignal) =>
   request<Health>(`/api/health${probe ? "?probe=1" : ""}`, { guard: isHealth, signal, timeoutMs: 8000 });

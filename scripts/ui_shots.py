@@ -20,6 +20,7 @@ says so in its setup (prefer self-contained setups that navigate by hash).
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -64,9 +65,29 @@ def screen(name: str) -> Callable[[Page], None]:
 
 # --- Worker D (kb, manager, about) setup helpers ---
 KB_EXHIBITS_Q = "كم عدد المعارض؟"  # "how many showrooms?"
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD") or "dada2026"  # the README demo default
+ADMIN_HEADER = "{Authorization: 'Bearer ' + sessionStorage.getItem('dada.v1.admin')}"
+
+
+def admin_form(page: Page) -> None:
+    """The admin sign-in screen (signed out)."""
+    page.evaluate("sessionStorage.removeItem('dada.v1.admin')")
+    page.reload()
+    go(page, "#/admin", '[data-screen="admin"] input[type="password"]')
+
+
+def admin_sign_in(page: Page) -> None:
+    """Sign in through the form unless this tab already holds the admin token."""
+    if page.evaluate("sessionStorage.getItem('dada.v1.admin')"):
+        return
+    go(page, "#/admin", '[data-screen="admin"] input[type="password"]')
+    page.locator('[data-screen="admin"] input[type="password"]').fill(ADMIN_PASSWORD)
+    page.locator('[data-screen="admin"] button[type="submit"]').click()
+    page.wait_for_selector('[data-screen="kb"]', state="visible")
 
 
 def kb_list(page: Page) -> None:
+    admin_sign_in(page)
     go(page, "#/kb", '[data-screen="kb"] .font-id')
     page.wait_for_load_state("networkidle")
 
@@ -79,7 +100,8 @@ def kb_edit_dialog(page: Page) -> None:
 
 def kb_edited(page: Page) -> None:
     """Restore the official rows, edit K02 (17 -> 18) through the dialog, show only the changed rows."""
-    page.evaluate("fetch('/api/kb/reset', {method: 'POST'})")
+    admin_sign_in(page)
+    page.evaluate(f"fetch('/api/kb/reset', {{method: 'POST', headers: {ADMIN_HEADER}}})")
     page.evaluate("location.hash = '#/'")
     kb_edit_dialog(page)
     area = page.locator('[data-kb-form="edit"] textarea')
@@ -209,7 +231,8 @@ SHOTS: list[Shot] = [
     Shot("plan_empty", screen("plan")),
     Shot("quiz_empty", screen("quiz")),
     Shot("progress_empty", screen("progress")),
-    Shot("kb", screen("kb")),
+    Shot("admin_sign_in", admin_form),
+    Shot("kb", kb_list),
     # --- C "learning" (P9.3) ---
     Shot("learning_plan", lambda page: learning_plan(page)),
     Shot("learning_day90", lambda page: learning_day90(page)),

@@ -3,6 +3,9 @@
 // components/shell/AppShell.tsx.
 import { useEffect, useRef, type ComponentType } from "react";
 import AboutScreen from "@/components/about/AboutScreen";
+import AdminScreen from "@/components/admin/AdminScreen";
+import { getAdminSession } from "@/api/client";
+import { getAdminToken, useIsAdmin } from "@/api/adminToken";
 import ChatScreen from "@/components/chat/ChatScreen";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import KbScreen from "@/components/kb/KbScreen";
@@ -21,6 +24,8 @@ interface RouteDef {
   Screen: ComponentType;
   /** Redirects to "#/" while no role is stored (plan D1.1: every route except "#/" and "#/about"). */
   needsRole: boolean;
+  /** Admin only (P10): redirects to the sign-in screen "#/admin" without an admin token. */
+  needsAdmin?: boolean;
 }
 
 export const ROUTES: readonly RouteDef[] = [
@@ -30,7 +35,8 @@ export const ROUTES: readonly RouteDef[] = [
   { path: "/plan", Screen: PlanScreen, needsRole: true },
   { path: "/quiz", Screen: QuizScreen, needsRole: true },
   { path: "/progress", Screen: ProgressScreen, needsRole: true },
-  { path: "/kb", Screen: KbScreen, needsRole: true },
+  { path: "/kb", Screen: KbScreen, needsRole: false, needsAdmin: true },
+  { path: "/admin", Screen: AdminScreen, needsRole: false },
   { path: "/about", Screen: AboutScreen, needsRole: false },
 ];
 
@@ -54,9 +60,21 @@ function focusScreen() {
 function Routes() {
   const path = usePath();
   const { role } = useAppState();
+  const admin = useIsAdmin();
   const route = ROUTES.find((r) => r.path === path);
-  // "#/" with a stored role goes to the assistant; unknown paths and role-less guarded paths go to "#/".
-  const target = !route ? "/" : route.path === "/" && role ? "/chat" : route.needsRole && !role ? "/" : null;
+  // "#/" with a stored role goes to the assistant; unknown paths and role-less guarded paths go to "#/";
+  // admin screens go to the sign-in screen without an admin token, and the signed-in admin skips it.
+  const target = !route
+    ? "/"
+    : route.path === "/" && role
+      ? "/chat"
+      : route.needsRole && !role
+        ? "/"
+        : route.needsAdmin && !admin
+          ? "/admin"
+          : route.path === "/admin" && admin
+            ? "/kb"
+            : null;
   const redirect = target !== null && target !== path ? target : null;
   useEffect(() => {
     if (redirect) replace(redirect);
@@ -79,10 +97,22 @@ function Routes() {
   return <Screen key={route.path} />;
 }
 
+/** On load, check a stored admin token with the server (a restart or expiry forgets it). */
+function AdminCheck() {
+  useEffect(() => {
+    if (!getAdminToken()) return;
+    const ctl = new AbortController();
+    void getAdminSession(ctl.signal);
+    return () => ctl.abort();
+  }, []);
+  return null;
+}
+
 export default function App() {
   return (
     <ToastProvider>
       <AppStateProvider>
+        <AdminCheck />
         <AppShell>
           <ErrorBoundary>
             <Routes />

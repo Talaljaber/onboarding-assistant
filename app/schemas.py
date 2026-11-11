@@ -78,6 +78,8 @@ ErrorCode = Literal[
     "payload_too_large",
     "kb_conflict",
     "kb_locked",
+    "unauthorized",
+    "too_many_requests",
     "internal_error",
 ]
 
@@ -100,6 +102,8 @@ ERROR_STATUS: dict[str, int] = {
     "kb_conflict": 409,
     "payload_too_large": 413,
     "kb_locked": 423,
+    "unauthorized": 401,
+    "too_many_requests": 429,
     "internal_error": 500,
 }
 
@@ -756,6 +760,24 @@ class ManagerSummaryResponse(_Model):
 
 
 # --------------------------------------------------------------------------------------
+# Admin sign-in (the knowledge editor and the manager view are admin only)
+# --------------------------------------------------------------------------------------
+
+ADMIN_PASSWORD_MAX = 64
+
+
+class AdminLogin(_Model):
+    password: Annotated[str, Field(min_length=1, max_length=ADMIN_PASSWORD_MAX)]
+
+
+class AdminSession(_Model):
+    """A signed admin token (sent back as `Authorization: Bearer <token>`) and its lifetime."""
+
+    token: str
+    expires_in_s: NonNeg
+
+
+# --------------------------------------------------------------------------------------
 # Health and errors
 # --------------------------------------------------------------------------------------
 
@@ -825,6 +847,9 @@ class ErrorBody(_Model):
 
 
 __all__ = [
+    "ADMIN_PASSWORD_MAX",
+    "AdminLogin",
+    "AdminSession",
     "ANSWER_STATUSES",
     "BANDS",
     "ERROR_CODES",

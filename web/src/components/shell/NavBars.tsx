@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useIsAdmin } from "@/api/adminToken";
 import { cn } from "@/components/ui/cn";
 import { Dialog } from "@/components/ui/Dialog";
 import { Icon, type IconName } from "@/components/ui/Icon";
@@ -21,10 +22,14 @@ const MAIN: Item[] = [
   { path: "/quiz", key: "nav.quiz", icon: "help" },
   { path: "/progress", key: "nav.progress", icon: "chart" },
 ];
-const MORE: Item[] = [
-  { path: "/kb", key: "nav.kb", icon: "book" },
-  { path: "/about", key: "nav.about", icon: "info" },
-];
+const KB: Item = { path: "/kb", key: "nav.kb", icon: "book" };
+const SIGN_IN: Item = { path: "/admin", key: "uiAuth.navSignIn", icon: "lock" };
+const ABOUT: Item = { path: "/about", key: "nav.about", icon: "info" };
+
+/** The tools group: the knowledge editor for the signed-in admin, else the admin sign-in link (P10). */
+function useMore(): Item[] {
+  return [useIsAdmin() ? KB : SIGN_IN, ABOUT];
+}
 
 /** One sidebar link: a rail tile (icon over label) at md, a full row from lg. */
 function SideLink({ item, current }: { item: Item; current: boolean }) {
@@ -58,6 +63,7 @@ function SideLink({ item, current }: { item: Item; current: boolean }) {
 export function NavTabs() {
   const t = useT();
   const path = usePath();
+  const MORE = useMore();
   return (
     <nav
       data-shell
@@ -84,10 +90,11 @@ export function NavTabs() {
   );
 }
 
-/** Fixed bottom bar below 768 px: five screens plus a "more" sheet (knowledge editor, about). */
+/** Fixed bottom bar below 768 px: five screens plus a "more" sheet (knowledge editor or admin sign-in, about). */
 export function BottomNav() {
   const t = useT();
   const path = usePath();
+  const MORE = useMore();
   const [more, setMore] = useState(false);
   const moreCurrent = MORE.some((i) => i.path === path);
   const cls = "flex h-16 flex-1 flex-col items-center justify-center gap-1 px-0.5 text-xs leading-none";

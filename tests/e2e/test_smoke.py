@@ -6,6 +6,8 @@ view first). Run: python -m pytest tests/e2e -q   (needs web/dist built and the 
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import urllib.request
 from collections.abc import Iterator
@@ -31,6 +33,7 @@ Q_PROGRESS = "أكملت نشاط اليوم 30"
 Q_DELIVERY = "أنا موظف توصيل والعميل غاضب بسبب التأخير"
 Q_EXHIBITS = "كم عدد المعارض؟"
 END_PRACTICE = "إنهاء التدريب"
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD") or "dada2026"  # the README demo default
 
 
 @pytest.fixture(scope="module")
@@ -53,11 +56,17 @@ class Run:
         self.page.set_default_timeout(10000)
         self.errors: list[str] = []
         self.foreign: list[str] = []
-        self.page.on("console", lambda m: self.errors.append(m.text) if m.type == "error" else None)
+        self.page.on("console", self._console)
         self.page.on("pageerror", lambda e: self.errors.append(f"pageerror: {e}"))
         self.page.on("request", self._request)
         self.shots: list[str] = []
         self.overflows: list[str] = []
+
+    def _console(self, m: Any) -> None:
+        # Step 14 types a wrong admin password on purpose: Chromium logs that one 401 as a console error.
+        url = (m.location or {}).get("url", "")
+        if m.type == "error" and not (url.endswith("/api/admin/login") and "401" in m.text):
+            self.errors.append(m.text)
 
     def _request(self, req: Any) -> None:
         url: str = req.url
@@ -215,8 +224,16 @@ def storyboard(r: Run) -> None:
     r.no_overflow("13")
     r.shot("13_quiz_explanation")
 
-    # 14. KB edit: K02 17 -> 18
+    # 14. KB edit: K02 17 -> 18. Employees do not see the editor: #/kb asks for the admin password.
     r.go("/kb")
+    form_in = page.locator('[data-screen="admin"]')
+    expect(form_in).to_be_visible()
+    form_in.get_by_label("كلمة مرور المسؤول").fill("wrong-password")
+    form_in.get_by_role("button", name="دخول", exact=True).click()
+    expect(form_in.get_by_text("كلمة المرور غير صحيحة.")).to_be_visible()
+    r.shot("14a_admin_sign_in")
+    form_in.get_by_label("كلمة مرور المسؤول").fill(ADMIN_PASSWORD)
+    form_in.get_by_role("button", name="دخول", exact=True).click()
     kb = page.locator('[data-screen="kb"]')
     expect(kb).to_be_visible()
     kb.get_by_role("button", name="تعديل K02").first.click()
@@ -242,7 +259,11 @@ def storyboard(r: Run) -> None:
     expect(card.locator('[data-source-id="K02"]')).to_contain_text("معدّل مباشرة")
     r.no_overflow("15")
     r.shot("15_kb_edited_answer", card)
-    reset = urllib.request.Request(r.base + "/api/kb/reset", data=b"", method="POST")
+    login = urllib.request.Request(r.base + "/api/admin/login", data=json.dumps({"password": ADMIN_PASSWORD}).encode(),
+                                   method="POST", headers={"Content-Type": "application/json"})
+    token = json.loads(urllib.request.urlopen(login, timeout=20).read())["token"]
+    reset = urllib.request.Request(r.base + "/api/kb/reset", data=b"", method="POST",
+                                   headers={"Authorization": f"Bearer {token}"})
     urllib.request.urlopen(reset, timeout=20).read()
 
     # 16. about
@@ -304,6 +325,6 @@ def test_storyboard(server: str, browser: Browser, vp: str) -> None:
         assert run.errors == [], f"console errors: {run.errors}"
         assert run.overflows == [], f"horizontal overflow at 360: {run.overflows}"
         assert run.foreign == [], f"non-same-origin requests: {run.foreign}"
-        assert len(run.shots) == 20
+        assert len(run.shots) == 21  # the 20 storyboard steps plus 14a (admin sign-in)
     finally:
         run.ctx.close()

@@ -29,6 +29,9 @@ OFFICIAL_SHA256 = {
 
 # A pinned OpenRouter model id: "vendor/name" (lowercase, optional ":variant"). OpenRouter auto-routing
 # ("openrouter/auto" and every other "openrouter/..." id) is never allowed (plan §A4).
+#: Admin password used when ADMIN_PASSWORD is not set (a demo default, written in the README).
+DEMO_ADMIN_PASSWORD = "dada2026"
+
 MODEL_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*(?::[a-z0-9._-]+)?$")
 
 
@@ -69,6 +72,10 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = Field(default=8000, ge=1, le=65535)
     offline: bool = False
+    # Admin sign-in for the knowledge editor and the manager view. Unset = the documented demo
+    # password (README); set ADMIN_PASSWORD in .env for anything beyond a demo.
+    admin_password: SecretStr = SecretStr(DEMO_ADMIN_PASSWORD)
+    admin_session_hours: float = Field(default=8.0, gt=0, le=72)
 
     store: Literal["auto", "local"] = "auto"
     supabase_url: str | None = None
@@ -80,6 +87,16 @@ class Settings(BaseSettings):
     @classmethod
     def _model(cls, v: str) -> str:
         return check_model_id(v)
+
+    @field_validator("admin_password", mode="before")
+    @classmethod
+    def _admin_password(cls, v: object) -> object:
+        raw = v.get_secret_value() if isinstance(v, SecretStr) else v
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            return SecretStr(DEMO_ADMIN_PASSWORD)  # empty in .env = the demo default
+        if isinstance(raw, str) and not 4 <= len(raw.strip()) <= 64:
+            raise ValueError("use 4 to 64 characters")
+        return v
 
     @field_validator("log_level")
     @classmethod

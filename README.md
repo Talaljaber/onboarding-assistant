@@ -23,9 +23,11 @@ It covers the five required features:
 Every chat reply has a «كيف أجبت؟» ("How I answered") panel: guards, tool chosen, retrieval scores,
 the answer band or verifier verdict, mode and latency.
 
-Also included: a knowledge-base editor («قاعدة المعرفة») with a «جرّب الآن» box and a manager tab
-(«عرض المدير») that shows completion and practice counts for demo profiles only, labelled
-«ملفات تجريبية، ليست موظفين حقيقيين — ليست تقييماً». On a phone, the header keeps the role chip and
+Also included, **for the admin only**: a knowledge-base editor («قاعدة المعرفة») with a «جرّب الآن» box
+and a manager tab («عرض المدير») that shows completion and practice counts for demo profiles only,
+labelled «ملفات تجريبية، ليست موظفين حقيقيين — ليست تقييماً». Employees never sign in; the admin opens
+«دخول المسؤول» (welcome screen or the tools menu) and enters the admin password. **Demo admin password:
+`dada2026`** — set `ADMIN_PASSWORD` in `.env` to change it. On a phone, the header keeps the role chip and
 puts the mode switch, model and storage badges, trace toggle and language in a settings dialog
 («الإعدادات»). The server exposes a JSON HTTP API (`docs/api_contract.md`).
 
@@ -106,7 +108,8 @@ Full timed script with expected screens: [`docs/demo_script.md`](docs/demo_scrip
    percentage. Open «التقدم» to see the dashboard.
 7. **Other role's scenario.** Switch the role chip to «مسار التوصيل», open «المواقف» and click
    «ابدأ التدريب» on S04 (or type `أنا موظف توصيل والعميل غاضب بسبب التأخير`).
-8. **Modify an answer live.** Open «قاعدة المعرفة», edit K02 (17 → 18), save, and ask `كم عدد المعارض؟`
+8. **Modify an answer live.** Open «دخول المسؤول», enter the admin password (`dada2026` unless
+   `ADMIN_PASSWORD` is set), then in «قاعدة المعرفة» edit K02 (17 → 18), save, and ask `كم عدد المعارض؟`
    in «جرّب الآن». The answer cites the edited K02 row with 18 and the badge «معدّل مباشرة».
 9. **Offline switch.** Set the header switch to «بلا اتصال» and repeat step 2: the same K01 row,
    mode chip «وضع بلا اتصال».
@@ -189,9 +192,11 @@ The web client is prebuilt in `web/dist`; judges do not need Node. To rebuild:
   approval before any external release.
 - **Fictional examples.** The scenarios (with our reply options and checklists), the 90-day plan, the
   activities and the quiz are fictional competition examples, not Dada SOPs or evaluations.
-- **No authentication on knowledge-base editing.** «قاعدة المعرفة» is a "staff mode" for the demo:
-  anyone who can open the app on this laptop can edit rows. The server listens on `127.0.0.1` only and
-  refuses writes from other websites (cross-origin requests), but a real deployment needs staff login.
+- **One shared admin password, no accounts.** The knowledge editor and the manager view need the admin
+  password (`ADMIN_PASSWORD`, demo default `dada2026`); the server checks a signed, expiring token on
+  every editor write and on the manager summary, and slows down repeated wrong passwords. There are no
+  per-person accounts: a real deployment would use the company's single sign-on with named admins.
+  The server listens on `127.0.0.1` only and refuses writes from other websites.
 - **No sync.** If Supabase drops during a session, later writes go to the local file and are not
   copied back.
 - **Supabase region to be confirmed.** The database is a Supabase-hosted project; its region is still

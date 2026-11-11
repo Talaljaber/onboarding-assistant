@@ -46,7 +46,9 @@ Every non-2xx response has this body (`ErrorBody`):
 | `not_found` | 404 | unknown scenario id, KB id, quiz id or profile id |
 | `kb_conflict` | 409 | duplicate id on KB add |
 | `payload_too_large` | 413 | body larger than 32 KB (checked before parsing) |
+| `unauthorized` | 401 | an admin endpoint without a valid admin token, or a wrong admin password (`field: "password"`) |
 | `kb_locked` | 423 | KB edit or chat while a reindex holds the lock > 2 s; the client retries once |
+| `too_many_requests` | 429 | admin sign-in after 5 wrong passwords inside 60 s (`field: "password"`) |
 | `internal_error` | 500 | anything else; the message is generic, details only in the log with the request id |
 
 No 5xx is ever caused by the LLM or the store: LLM failures become `mode: "offline"` inside a 200,
@@ -238,6 +240,25 @@ The result is practice feedback; with a `profile_id` the server records only tha
 `KbRow` = `Source` fields + `keyword_en` + `offline_edit` (`true` when the edit was made while the store
 was local and not synced).
 
+### Admin sign-in (P10)
+
+The knowledge editor writes (`PUT /api/kb/{id}`, `POST /api/kb`, `POST /api/kb/reset`) and
+`GET /api/manager/summary` are **admin only**: they need `Authorization: Bearer <token>` and answer 401
+`unauthorized` without a valid one (checked before the body). Every other endpoint, `GET /api/kb` included,
+stays open to employees.
+
+### POST /api/admin/login
+
+Body `AdminLogin` `{password}` (1–64 characters; compared with `ADMIN_PASSWORD`, surrounding spaces ignored)
+→ `AdminSession` `{token, expires_in_s}`. The token is `<expiry>.<hmac>` signed with a per-process random
+secret, so a server restart signs the admin out. 401 wrong password, 429 after 5 wrong passwords inside 60 s.
+There are no admin accounts and nothing about the admin is stored.
+
+### GET /api/admin/session
+
+Admin only. → `AdminSession` with the same token and its remaining lifetime; 401 when it is missing,
+altered or expired. The client calls it on load to check a stored token.
+
 ### PUT /api/kb/{id}
 
 Body `KbPatch` `{topic?, answer_ar?, keyword_en?, source_document?, source_page?}` (null or absent =
@@ -263,7 +284,7 @@ server generates «متدرب N». Aliases are demo labels, never real names, em
 
 → `ProgressResponse` `{completed_ids[], percent, done, total}`. 404 unknown profile, 400 missing id.
 
-### GET /api/manager/summary
+### GET /api/manager/summary (admin)
 
 → `ManagerSummaryResponse` `{profiles: [{alias, role, percent, activities_done, scenarios_practised,
 quiz_practised}], label_ar}`. **Completion and practice counts only — no correctness, no scores.**
@@ -307,9 +328,10 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
   `scenario_feedback_request_option.json`, `scenario_feedback.json`, `plan.json`, `quiz.json`,
   `quiz_check_request.json`, `quiz_check.json`, `kb_list.json`, `kb_patch_request.json`, `kb_put.json`,
   `kb_new_request.json`, `kb_post.json`, `kb_reset.json`, `profile_create_request.json`, `profile.json`,
-  `progress.json`, `manager_summary.json`, `health.json`, `health_llm.json`;
+  `progress.json`, `manager_summary.json`, `health.json`, `health_llm.json`, `admin_login_request.json`,
+  `admin_session.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,
-  `error_423.json`, `error_500.json`.
+  `error_423.json`, `error_500.json`, `error_401.json`, `error_429.json`.
 
 `tests/test_contract.py` checks that every fixture validates and is canonical, that every reply kind and
 refusal reason is covered, the request rules and limits, that no quiz GET carries the correct option, that

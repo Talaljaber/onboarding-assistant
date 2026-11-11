@@ -95,7 +95,7 @@ over-refusals (RT07, RT09, RT20). Browser e2e 2/2, AI API smoke OK, 683 Python t
 - Offline answers cannot combine rows or answer part of a question (DEV multi-row 0/3).
 - Rows added live are matched less confidently offline.
 - The verifier checks grounding, not quality of wording.
-- Knowledge-base editing has no authentication (demo staff mode).
+- The knowledge editor and the manager view use one shared admin password, not per-person accounts.
 - 18 rows only; no HR procedures or employment decisions.
 
 ## 6. AI use, knowledge sources and privacy

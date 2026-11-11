@@ -258,7 +258,7 @@ export const en: Dict = {
   kb: {
     title: "Knowledge base",
     managerBadge: "Manager view (mock)",
-    intro: "A mock of the content owner's screen; no sign-in in the prototype. Edits are re-indexed immediately and carry an \"edited live\" badge.",
+    intro: "The content owner's screen, admin only. Edits are re-indexed immediately and carry an \"edited live\" badge.",
     official: "Official",
     edit: "Edit",
     add: "Add row",
@@ -433,7 +433,7 @@ export const en: Dict = {
   },
   uiAdmin: {
     // Worker D (kb, manager, about) appends here.
-    staffMode: "Staff mode: no sign-in",
+    staffMode: "Admin mode",
     filterLabel: "Show rows",
     filterAll: "All ({n})",
     filterChanged: "Changed live ({n})",
@@ -479,5 +479,23 @@ export const en: Dict = {
     kbCounter: "{n} / {max}",
     kbInvalidField: "Could not save: the “{field}” value was not accepted.",
     kbInvalid: "Could not save: some values were not accepted. Check the fields and try again.",
+  },
+  uiAuth: {
+    navSignIn: "Admin sign-in",
+    title: "Admin sign-in",
+    intro: "The knowledge editor and the manager view are for the admin only. Enter the admin password to continue.",
+    password: "Admin password",
+    submit: "Sign in",
+    wrong: "Wrong password.",
+    tooMany: "Too many wrong attempts. Wait a minute and try again.",
+    failed: "Could not reach the server. Try again.",
+    required: "Enter the password.",
+    expired: "The admin session ended. Sign in again.",
+    signOut: "Sign out",
+    signedOut: "The admin is signed out.",
+    back: "Back to the app",
+    employeeNote: "New employees do not sign in: they choose their track and start right away.",
+    show: "Show password",
+    hide: "Hide password",
   },
 };

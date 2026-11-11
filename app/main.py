@@ -22,6 +22,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app import __version__
+from app.admin import AdminAuth
 from app.agent import Agent, build_agent, build_default_agent
 from app.api import error_body, install_api
 from app.config import ROOT, Settings, get_settings, validate_startup
@@ -66,6 +67,7 @@ def create_app(settings: Settings | None = None, *, agent: Agent | None = None, 
     app.state.build = git_build()
     app.state.store_checked_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     app.state.encoder = {"model_id": meta["model_id"], "dim": meta["dim"], "sha_ok": True}
+    app.state.admin = AdminAuth(s.admin_password.get_secret_value(), s.admin_session_hours * 3600)
 
     install_api(app)
     # Every API router is included above this line: the catch-all and the web mount must stay last.
