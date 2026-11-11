@@ -19,7 +19,7 @@
 - **Decision needing you — D-P8-heldout2:** accept 45/50 as the reported number (recommended; it is an honest one-time result), or ask for a third sealed set.
   Tuning against held-out 2 now would make it meaningless.
 - **Stale files:** `docs/report.docx` and `docs/slides.pptx` predate P8. The .md versions are current; re-export them before submitting.
-- **The app is running now:** http://127.0.0.1:8000 in AI mode on the Supabase store, build `804e74e`.
+- **The app is running now:** http://127.0.0.1:8000 in AI mode on the Supabase store, build `0a30109` (tag `p8-gate`). Release zip rebuilt: `releaseonboarding-assistant-0a30109.zip` (54 MB, local only, not uploaded).
   - The server runs in a minimized python window; close that window to stop it.
   - To start it again later, run `start.bat`.
 - **Spend:** $0.31 of $3.00 in total (`.cacheudget.json`).
