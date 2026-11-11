@@ -89,7 +89,8 @@ SITUATION = re.compile(
 _VALUE_PHRASE = re.compile(r"محوريه (?:ال)?عميل|customer centricity")
 SMALL_TALK = re.compile(
     _W + r"(?:مرحبا|مرحبتين|اهلا|اهلين|هلا|السلام عليكم|سلام|صباح الخير|مساء الخير|هاي|hi|hello|hey|شكرا|مشكور"
-    r"|يعطيك العافيه|تسلم|thanks|thank you|good morning|كيفك|كيف حالك)" + _E
+    r"|يعطيك العافيه|تسلم|thanks|thank you|thx|good morning|good afternoon|good evening|كيفك|كيف حالك"
+    r"|how are (?:you|u|ya)|how r (?:you|u)|hru|what'?s up|whats up)" + _E
 )
 THANKS = re.compile(_W + r"(?:شكرا|مشكور|يعطيك العافيه|تسلم|thanks|thank you)" + _E)
 INTERROGATIVE = re.compile(
@@ -97,7 +98,7 @@ INTERROGATIVE = re.compile(
 )
 ROLE_SALES = re.compile(_W + r"(?:(?:ال|بال|لل)?مبيعات|sales)" + _E)
 ROLE_DELIVERY = re.compile(_W + r"(?:(?:ال|بال|لل)?توصيل|سايق|delivery|driver)" + _E)
-_HOW_ARE_YOU = re.compile(r"كيف (?:حالك|الحال|حالكم)|how are you")
+_HOW_ARE_YOU = re.compile(r"كيف (?:حالك|الحال|حالكم)|how (?:are|r) (?:you|u|ya)|what'?s up")
 _SMALL_TALK_MAX_WORDS = 6
 _PRACTICE_MAX_WORDS = 4
 
@@ -129,11 +130,12 @@ def detect_quiz_request(text_norm: str) -> bool:
 
 def detect_small_talk(text_norm: str) -> bool:
     """A greeting / thanks cue in a short message with no question word."""
-    if not SMALL_TALK.search(text_norm) or "?" in text_norm:
+    if not SMALL_TALK.search(text_norm) or len(text_norm.split()) > _SMALL_TALK_MAX_WORDS:
         return False
-    if len(text_norm.split()) > _SMALL_TALK_MAX_WORDS:
+    rest = _HOW_ARE_YOU.sub(" ", text_norm)  # "how are you?" is small talk, its "?" and "how" included
+    if "?" in rest or "؟" in rest:
         return False
-    return not INTERROGATIVE.search(_HOW_ARE_YOU.sub(" ", text_norm))
+    return not INTERROGATIVE.search(rest)
 
 
 def detect_role(text_norm: str) -> str | None:

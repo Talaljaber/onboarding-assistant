@@ -568,8 +568,8 @@ describe("English helper translation (P11.1)", () => {
     expect(card("refusal")!.querySelector("[data-en-helper]")).toHaveTextContent(/not in my approved knowledge base/);
   });
 
-  it("the Arabic UI sends lang ar and shows no English lines", async () => {
-    const be = backend([withEn("should not show")]);
+  it("the Arabic UI sends lang ar; a server translation (English question) still shows", async () => {
+    const be = backend([withEn("Shown for an English question")]);
     render(
       <LangScope lang="ar">
         <ToastProvider>
@@ -582,8 +582,8 @@ describe("English helper translation (P11.1)", () => {
     await ask("إجازة؟");
     await waitFor(() => expect(card("answer")).not.toBeNull());
     expect(be.chat()[0]!.body).toMatchObject({ lang: "ar" });
-    expect(card("answer")!.querySelector("[data-text-en]")).toBeNull();
+    expect(card("answer")!.querySelector("[data-text-en]")).not.toBeNull();
     expect(card("answer")!.querySelector("[data-no-translation]")).toBeNull();
-    expect(screen.queryByText("should not show")).toBeNull();
+    expect(screen.getByText("Shown for an English question")).toBeInTheDocument();
   });
 });

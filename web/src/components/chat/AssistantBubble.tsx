@@ -102,8 +102,8 @@ export function AssistantFrame({ mode, cached, fixed, material, hasTrace, traceS
   );
 }
 
-/** A plain assistant message: greeting, small talk, plan answers. */
-export function AssistantBubble({ text, badge }: { text: string; badge?: ReactNode }) {
+/** A plain assistant message: greeting, small talk, plan answers. `textEn`: the server's fixed English line, shown first. */
+export function AssistantBubble({ text, badge, textEn }: { text: string; badge?: ReactNode; textEn?: string | null }) {
   const dir = textDir(text);
   return (
     <div
@@ -111,7 +111,16 @@ export function AssistantBubble({ text, badge }: { text: string; badge?: ReactNo
       className="w-fit max-w-full rounded-xl rounded-ss-sm border border-line bg-surface-0 px-4 py-3 shadow-card sm:max-w-[92%] sm:px-5 sm:py-3.5"
     >
       {badge && <div className="mb-2">{badge}</div>}
-      <p lang={dir === "rtl" ? "ar" : "en"} dir={dir} className="whitespace-pre-line text-base leading-[1.8] text-fg-1">
+      {textEn && (
+        <p data-text-en lang="en" dir="ltr" className="mb-2 whitespace-pre-line text-base leading-7 text-fg-1">
+          {textEn}
+        </p>
+      )}
+      <p
+        lang={dir === "rtl" ? "ar" : "en"}
+        dir={dir}
+        className={`whitespace-pre-line leading-[1.8] ${textEn ? "text-sm text-fg-2" : "text-base text-fg-1"}`}
+      >
         {text}
       </p>
     </div>

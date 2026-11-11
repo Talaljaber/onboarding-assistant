@@ -106,7 +106,7 @@ export function ChatMessage(p: ChatMessageProps) {
       card = <QuizCard reply={r as QuizReply} />;
       break;
     default:
-      card = <AssistantBubble text={r.text_ar} />;
+      card = <AssistantBubble text={r.text_ar} textEn={r.text_en} />;
   }
 
   // A picked option's feedback comes from the official checklist, not from "offline mode": label it so

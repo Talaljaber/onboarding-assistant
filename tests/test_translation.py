@@ -266,6 +266,30 @@ def test_lang_ar_makes_no_translation_call(agent: Agent, fake: Any) -> None:
     assert not any(s.startswith("translate") or s == "cache:translate" for s in r.trace.steps)
 
 
+def test_english_question_in_the_arabic_ui_is_translated(agent: Agent, fake: Any) -> None:
+    client = fake(LEAVE_CHOICE, content("answer_k16_ok"), tr(K16_EN))
+    r = ask(agent, "How many days of annual leave do I get?", role="Sales")  # lang defaults to "ar"
+    if r.reply.kind == "answer":
+        assert r.reply.text_en == K16_EN and len(client.calls) == 3
+
+
+@pytest.mark.parametrize(
+    ("message", "english"),
+    [
+        ("When was the group founded?", True),
+        ("what are the values", True),
+        ("متى تأسست المجموعة؟", False),
+        ("شو هي قيم الشركة K05", False),
+        ("ok", False),
+        ("", False),
+    ],
+)
+def test_asked_in_english(message: str, english: bool) -> None:
+    from app.translate import asked_in_english
+
+    assert asked_in_english(message) is english
+
+
 def test_force_offline_and_offline_agent_give_null(agent: Agent, fake: Any) -> None:
     client = fake(tr(K16_EN))
     r = ask(agent, LEAVE_Q, lang="en", force_offline=True)
@@ -376,3 +400,15 @@ def test_eval_summary_counts() -> None:
     line = et.summarise(rows, 0.0123)
     assert line.startswith("translated=2 (fresh=1 cached=1) rejected={foreign_number: 1, no_answer:refusal: 1}")
     assert "null=3" in line and "cost_usd=0.0123" in line
+
+
+@pytest.mark.parametrize("lang", ["en", "ar"])
+def test_english_greeting_gets_a_fixed_english_line(agent: Agent, lang: str) -> None:
+    from app.translate import GREETING_EN, THANKS_EN
+
+    r = ask(agent, "how are u", role="Sales", lang=lang)
+    assert r.reply.kind == "text" and r.reply.text_en is not None
+    assert r.reply.text_en.startswith(GREETING_EN["Sales"]) and r.reply.text_ar  # the Arabic stays
+    t = ask(agent, "thanks", lang=lang)
+    assert t.reply.text_en == THANKS_EN
+    assert ask(agent, "مرحبا", lang="ar").reply.text_en is None

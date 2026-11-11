@@ -29,7 +29,10 @@ const REFUSAL_EN: Partial<Record<RefusalReason, DictKey>> = {
   injection: "chatEn.refusalInjection",
 };
 
-/** An answer from K-rows. `partial` adds the fixed trailer; in English the helper translation shows above, never instead of, the Arabic. */
+/**
+ * An answer from K-rows. `partial` adds the fixed trailer. The English helper translation (English UI, or a
+ * question asked in English) shows above, never instead of, the Arabic.
+ */
 export function AnswerCard({ reply, partial, mode = null }: { reply: AnswerReply; partial: boolean; mode?: Mode | null }) {
   const t = useT();
   const { lang } = useLang();
@@ -39,7 +42,7 @@ export function AnswerCard({ reply, partial, mode = null }: { reply: AnswerReply
   const body = noteAt >= 0 ? reply.text_ar.slice(0, noteAt).trimEnd() : reply.text_ar;
   return (
     <article data-kind={partial ? "partial" : "answer"} className={`${surface.card} w-full min-w-0 p-4 sm:p-5`}>
-      {lang === "en" && reply.text_en && (
+      {reply.text_en && (
         <div data-text-en className="mb-3 rounded-md bg-surface-1 p-3">
           <p lang="en" dir="ltr" className="whitespace-pre-line text-base leading-7 text-fg-1">
             {reply.text_en}
