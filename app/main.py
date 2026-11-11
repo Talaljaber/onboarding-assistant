@@ -1,7 +1,8 @@
-"""FastAPI app: /api/health (filled from the live KB and encoder) and the built web client served at /.
+"""FastAPI app: the `/api` routes (app/api.py) and the built web client served at /.
 
-What it does: validates startup, builds the offline agent once (KB, encoder, retriever), serves health.
-W3-A includes the API routers (`app/api.py`) above `_mount_web`.
+What it does: validates startup, builds the agent once (KB, encoder, retriever, LLM layer) over the
+process-wide store, probes the LLM once (3 s; no call without a key or with OFFLINE=1), installs the
+API (middleware, error handlers, routers) and then mounts the web client.
 
 What it must never do: log a key, or let the web catch-all shadow an API route (routers go above it).
 """
@@ -9,105 +10,63 @@ What it must never do: log a key, or let the web catch-all shadow an API route (
 from __future__ import annotations
 
 import json
+import subprocess
 import time
-import uuid
+from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
 from app.agent import Agent, build_agent, build_default_agent
+from app.api import error_body, install_api
 from app.config import ROOT, Settings, get_settings, validate_startup
-from app.errors import ApiError
 from app.logging_setup import log_event, setup_logging
-from app.store import store_status
-from app.schemas import Health, HealthBudget, HealthCache, HealthEncoder, HealthKb, Probe
+from app.store import get_store
 
 DIST = ROOT / "web" / "dist"
 
 
-def _error(code: str, status: int, message: str, request: Request, field: str | None = None) -> JSONResponse:
-    body: dict[str, Any] = {
-        "code": code,
-        "message": message,
-        "request_id": getattr(request.state, "request_id", ""),
-    }
-    if field:
-        body["field"] = field
-    return JSONResponse({"error": body}, status_code=status)
+@lru_cache(maxsize=1)
+def git_build() -> str | None:
+    """The short git sha of the running code, or None (no git, not a checkout)."""
+    try:
+        out = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True,
+                             timeout=2, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    sha = out.stdout.strip()
+    return sha if out.returncode == 0 and sha else None
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, *, agent: Agent | None = None, store: Any | None = None) -> FastAPI:
+    """Build the app. `agent`/`store` are injected by tests; by default the process-wide ones are used."""
     s = settings or get_settings()
     setup_logging(s.log_level)
     validate_startup(s)
     meta = json.loads((s.encoder_dir / "encoder_meta.json").read_text(encoding="utf-8"))
-    agent: Agent = build_default_agent() if s == get_settings() else build_agent(s)
-    started = time.monotonic()
-    app = FastAPI(title="Dada Academy", version=__version__, docs_url=None, redoc_url=None)
+    st = store if store is not None else get_store(s)
+    if agent is None:
+        agent = build_default_agent() if s == get_settings() else build_agent(s, store=st)
+    agent.probe_llm(3.0)  # no network call without a key or with OFFLINE=1
+
+    app = FastAPI(title="Dada Academy", version=__version__, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.settings = s
     app.state.agent = agent
+    app.state.store = st
+    app.state.started = time.monotonic()
+    app.state.build = git_build()
+    app.state.store_checked_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    app.state.encoder = {"model_id": meta["model_id"], "dim": meta["dim"], "sha_ok": True}
 
-    @app.middleware("http")
-    async def request_id_mw(request: Request, call_next: Any) -> Any:
-        rid = uuid.uuid4().hex[:12]
-        request.state.request_id = rid
-        try:
-            response = await call_next(request)
-        except Exception as exc:  # noqa: BLE001
-            log_event("unhandled_error", request_id=rid, error=type(exc).__name__, path=request.url.path)
-            response = _error("internal_error", 500, "Internal error", request)
-        response.headers["X-Request-Id"] = rid
-        return response
-
-    @app.exception_handler(ApiError)
-    async def _api_error(request: Request, exc: ApiError) -> JSONResponse:
-        return _error(exc.code, exc.status, exc.message, request, exc.field)
-
-    @app.exception_handler(StarletteHTTPException)
-    async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-        if exc.status_code == 404:
-            return _error("not_found", 404, "Not found", request)
-        code = "internal_error" if exc.status_code >= 500 else "validation_error"
-        return _error(code, exc.status_code, "Request failed", request)
-
-    @app.exception_handler(RequestValidationError)
-    async def _validation(request: Request, exc: RequestValidationError) -> JSONResponse:
-        errs = exc.errors()
-        loc = errs[0].get("loc", ()) if errs else ()
-        field = str(loc[-1]) if loc else None
-        return _error("validation_error", 400, "Invalid request", request, field)
-
-    @app.get("/api/health")
-    def health() -> dict[str, Any]:
-        st = store_status(s)
-        kb = agent.kb
-        body = Health(
-            status="ok",
-            version=__version__,
-            build=None,
-            mode="offline",
-            llm_available=False,
-            model=None,
-            llm_probe=Probe(ok=False, reason="offline"),
-            encoder=HealthEncoder(model_id=meta["model_id"], dim=meta["dim"], sha_ok=True),
-            kb=HealthKb(rows=len(kb.rows()), version=kb.version(), edited=len(kb.edited_ids())),
-            budget=HealthBudget(spent_usd=0.0, cap_usd=s.llm_budget_usd),
-            cache=HealthCache(hits=0, calls=0, failures=0),
-            store=st["store"],
-            store_probe=Probe(ok=bool(st["store_probe"].get("ok")), latency_ms=st["store_probe"].get("latency_ms"),
-                              reason=st["store_probe"].get("reason")),
-            uptime_s=int(time.monotonic() - started),
-        )
-        return body.model_dump()
-
-    # Include every API router above this line: the catch-all and the web mount must stay last.
+    install_api(app)
+    # Every API router is included above this line: the catch-all and the web mount must stay last.
     _mount_web(app, DIST)
-    log_event("startup", version=__version__, mode="offline", store=store_status(s)["store"])
+    log_event("startup", version=__version__, mode="llm" if agent.llm_on() else "offline",
+              llm_reason=agent.llm_probe.reason, store=st.name)
     return app
 
 
@@ -118,7 +77,8 @@ def _mount_web(app: FastAPI, dist: Path) -> None:
         include_in_schema=False,
     )
     async def api_not_found(rest: str, request: Request) -> JSONResponse:
-        return _error("not_found", 404, "Not found", request)
+        rid = str(getattr(request.state, "request_id", "") or "")
+        return JSONResponse(error_body("not_found", "Not found", rid), status_code=404)
 
     if (dist / "index.html").exists():
         app.frontend("/", directory=dist, fallback="index.html")

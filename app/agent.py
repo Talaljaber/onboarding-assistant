@@ -228,7 +228,10 @@ class Agent:
             else:
                 tb.steps.append("guards:none")
                 tb.steps.append(f"{'agent' if how == 'llm' else 'router'}:{r.tool}")
-            result = self.execute(r, req, budget, tb, use_llm=use_llm)
+            exec_llm = use_llm and self.llm_on()
+            if use_llm and not exec_llm:  # the LLM went away during the tool choice (401/402/unreachable)
+                tb.mode = "offline"
+            result = self.execute(r, req, budget, tb, use_llm=exec_llm)
 
         if use_llm:
             self._note_hard_failure()
@@ -320,6 +323,8 @@ class Agent:
             return r, "offline"
 
         if raw is None:
+            if why in HARD_FAILURES:
+                self._note_hard_failure()
             return fallback(why or "llm_failed")
         tool = str(raw.get("tool"))
         valid = tools.validate_args(tool, raw.get("args"), self.enums())
