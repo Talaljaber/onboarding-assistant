@@ -1,13 +1,16 @@
-# Results (2026-11-11 04:16, commit 83c1e07)
+# Results (2026-11-11 06:28, commit e86fe09)
 
-## DEV — llm mode: correct 142/154 (92.2%)
-- answerable: answered correctly 68 · answered wrong 12 · not attempted (refused) 0 — of 80
+## DEV — llm mode: correct 152/154 (98.7%)
+- answerable: answered correctly 78 · answered wrong 2 · not attempted (refused) 0 — of 80
 - unanswerable: refused 43/43 (100.0%) · refused or not-confirmed 43/43 (100.0%)
 - guards 13/13 · greet 3/3 · plan 3/3 · progress 6/6 · scenario 6/6
 - invented contacts: 0 · errors: 0
-- latency p50 / p95: 7 / 12 ms · cached 137 · escalated 0
+- latency p50 / p95: 9 / 14 ms · cached 137 · escalated 9
 - LLM-vs-router disagreement: 4 rows (D032, D042, D113, D118)
-- gate: correct 142/154 (92.2%) (≥ 90%) → PASS
+- panel rows 119: escalation rate 9/119 (7.6%) · acceptance rate 109/119 (91.6%) · mean flash calls/row 0.29 (uncached votes)
+- cost per 100 rows: $0.0021 (over 154 rows)
+- latency p50 / p95 escalated: 11 / 821 ms (9) · not escalated: 8 / 14 ms (145)
+- gate: correct 152/154 (98.7%) (≥ 90%) → PASS
 - gate: answerable refused = 0 → PASS
 
 | category | correct |
@@ -16,7 +19,7 @@
 | contact | 9/9 |
 | employment | 7/7 |
 | english | 3/3 |
-| fact | 32/43 |
+| fact | 41/43 |
 | followup | 4/4 |
 | greet | 3/3 |
 | injection | 4/4 |
@@ -25,12 +28,12 @@
 | multi | 3/3 |
 | partial | 4/4 |
 | plan | 3/3 |
-| probation | 5/6 |
+| probation | 6/6 |
 | progress | 6/6 |
 | scenario | 6/6 |
 | unanswerable | 37/37 |
 
-Not correct: D004 (ids_ok); D007 (ids_ok); D009 (ids_ok); D013 (ids_ok); D022 (ids_ok); D039 (ids_ok); D041 (ids_ok); D043 (content_ok); D044 (ids_ok); D050 (ids_ok); D071 (ids_ok); D076 (ids_ok)
+Not correct: D009 (ids_ok); D041 (ids_ok)
 
 ## DEV — offline mode: correct 106/154 (68.8%)
 - answerable: answered correctly 62 · answered wrong 18 · not attempted (refused) 0 — of 80
@@ -72,6 +75,7 @@ Not correct: D002 (ids_ok,content_ok); D014 (content_ok); D015 (ids_ok,content_o
 - invented contacts: 0 · errors: 0
 - latency p50 / p95: 14 / 79 ms · cached 8 · escalated 0
 - LLM-vs-router disagreement: 0 rows ()
+- panel: no panel data in these rows
 
 | category | correct |
 |---|---|
@@ -109,6 +113,7 @@ Not correct: D002 (ids_ok,content_ok); D014 (content_ok); D015 (ids_ok,content_o
 - invented contacts: 0 · errors: 0
 - latency p50 / p95: 1586 / 4102 ms · cached 0 · escalated 0
 - LLM-vs-router disagreement: 5 rows
+- panel: no panel data in these rows
 
 ## Held-out (final run) — offline mode: correct 25/50 (50.0%)
 - answerable: answered correctly 13 · answered wrong 11 · not attempted (refused) 2 — of 26
