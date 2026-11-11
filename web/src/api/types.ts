@@ -354,6 +354,15 @@ export interface ReplyBase {
   quiz: QuizItem[] | null;
   reason: RefusalReason | null;
   label_ar: string | null;
+  /** P16.5 premise correction: absent (not null) unless the user's number differs from a cited row's. */
+  premise?: Premise;
+}
+
+/** P16.5: the message's number (`claim`) and the cited row's (`row_number`), both verbatim, and the row id. */
+export interface Premise {
+  claim: string;
+  row_number: string;
+  row_id: string;
 }
 
 /** band "answer" or null (llm) -> AnswerCard; "not_confirmed" -> UnconfirmedCard; status "partial" adds the trailer. */
@@ -948,10 +957,25 @@ export function isTrace(x: unknown): x is Trace {
   );
 }
 
+/** P16.5: a premise with two non-empty numbers whose row is cited. */
+export function isPremise(x: unknown, sources: readonly Source[]): x is Premise {
+  return (
+    isObj(x) &&
+    isStr(x.claim) &&
+    x.claim.length > 0 &&
+    isStr(x.row_number) &&
+    x.row_number.length > 0 &&
+    isStr(x.row_id) &&
+    sources.some((s) => s.id === x.row_id)
+  );
+}
+
 export function isReply(x: unknown): x is Reply {
   if (!isObj(x) || !isOneOf(REPLY_KINDS, x.kind) || !isStr(x.text_ar) || !isArrayOf(x.sources, isSource)) {
     return false;
   }
+  // P16.5: an optional premise must name one of the reply's sources.
+  if (x.premise !== undefined && !(x.kind === "answer" && isPremise(x.premise, x.sources))) return false;
   switch (x.kind) {
     case "answer":
       return (x.status === "answered" || x.status === "partial") && x.sources.length > 0;

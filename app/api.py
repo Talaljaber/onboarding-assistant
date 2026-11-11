@@ -93,6 +93,7 @@ from app.schemas import (  # P13.2 mentor requests
 from app import request_comments as comments_view  # P15 comments and files on mentor requests
 from app.schemas import COMMENT_BODY_MAX_BYTES, AdminCommentCreate, RequestCommentCreate  # P15
 from app.store import alias_problem, store_status
+from app.premise import with_premise  # P16.5 premise correction
 
 KB_LOCK_WAIT_S = 2.0
 PROBE_MIN_INTERVAL_S = 10.0  # `/api/health?probe=1` re-probes the LLM at most this often
@@ -457,6 +458,7 @@ def build_router() -> APIRouter:
         wait_for_reindex(agent)
         resp, result = agent.run_turn(body, request_id=_rid(request))
         explain_offline(agent, resp.trace, body.force_offline)
+        resp = with_premise(body.message, resp)  # P16.5: "you said 20; the source says 17"
         store = _store(request)
         pid = body.profile_id
         if pid and body.confirm is not None and resp.reply.kind == "progress_confirmed":

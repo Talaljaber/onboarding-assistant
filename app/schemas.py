@@ -27,8 +27,11 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    SerializationInfo,
+    SerializerFunctionWrapHandler,
     ValidationInfo,
     field_validator,
+    model_serializer,
     model_validator,
 )
 
@@ -543,8 +546,19 @@ class ChatRequest(_Model):
         return self
 
 
+class Premise(_Model):
+    """P16.5 premise correction: the user's message states a number+unit that differs from a cited row's
+    (`verify.compare_claim` label `differs`). `claim` and `row_number` are verbatim spans of the message and
+    of the row; `row_id` is one of the reply's sources. No generated text."""
+
+    claim: Annotated[str, Field(min_length=1, max_length=40)]
+    row_number: Annotated[str, Field(min_length=1, max_length=40)]
+    row_id: KbId
+
+
 class Reply(_Model):
-    """The assistant's reply. Fields not used by a kind are null (lists empty)."""
+    """The assistant's reply. Fields not used by a kind are null (lists empty). `premise` (P16.5) is optional
+    and left out of the JSON when null, so older clients and fixtures see the same shape."""
 
     kind: ReplyKind
     text_ar: str
@@ -560,10 +574,20 @@ class Reply(_Model):
     quiz: list[QuizItem] | None = None
     reason: RefusalReason | None = None
     label_ar: str | None = None
+    premise: Premise | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_premise(self, handler: SerializerFunctionWrapHandler, info: SerializationInfo) -> Any:
+        data = handler(self)
+        if isinstance(data, dict) and data.get("premise") is None:
+            data.pop("premise", None)
+        return data
 
     @model_validator(mode="after")
     def _kind_fields(self) -> Reply:
         k = self.kind
+        if self.premise is not None and (k != "answer" or self.premise.row_id not in {s.id for s in self.sources}):
+            raise ValueError("premise is only set on an answer and names one of its sources")
         if k == "answer":
             if self.status not in ("answered", "partial"):
                 raise ValueError("answer needs status answered|partial")
@@ -1643,4 +1667,6 @@ __all__ = [
     "RequestCommentCreate",
     "RequestFile",
     "RequestThread",
+    # P16.5 premise correction
+    "Premise",
 ]
