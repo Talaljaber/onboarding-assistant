@@ -4,7 +4,7 @@
 import { useRef, useState, type FormEvent } from "react";
 import { postChat } from "@/api/client";
 import { LIMITS, type ChatRequest } from "@/api/types";
-import { useT } from "@/i18n";
+import { useLang, useT } from "@/i18n";
 import { textDir } from "@/lib/textDir";
 import { useAppState } from "@/state/useAppState";
 import { ChatMessage } from "../chat/ChatMessage";
@@ -18,6 +18,7 @@ const noop = () => {};
 
 export function TryPanel() {
   const t = useT();
+  const { lang } = useLang();
   const app = useAppState();
   const [text, setText] = useState("");
   const [asked, setAsked] = useState<string | null>(null);
@@ -44,6 +45,7 @@ export function TryPanel() {
       confirm: null,
       option_id: null,
       force_offline: app.forceOffline,
+      lang, // an edited row is translated afresh: the exact Arabic is in the server's cache key
       profile_id: app.profileId,
     };
     const res = await postChat(req);

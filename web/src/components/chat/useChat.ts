@@ -1,7 +1,8 @@
 // The chat reducer-in-a-hook: items, busy flag, sending (typed text, starter, option pick, progress
 // confirm), retry, scenario start/end, persistence through `thread` (traces stripped). The server
-// is stateless: every turn carries role, active scenario, saved progress ids, force_offline and the
-// profile id taken from the app state at send time.
+// is stateless: every turn carries role, active scenario, saved progress ids, force_offline, the UI
+// language (P11.1: "en" asks for a verified English helper translation) and the profile id taken from
+// the app state at send time.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getScenarios, postChat, type ApiError } from "@/api/client";
 import {
@@ -11,7 +12,7 @@ import {
   type ProgressConfirm,
   type Reply,
 } from "@/api/types";
-import { useT } from "@/i18n";
+import { useLang, useT } from "@/i18n";
 import { useAppState } from "@/state/useAppState";
 import { useToast } from "../ui/Toast";
 import {
@@ -63,11 +64,14 @@ export interface UseChat {
 export function useChat(): UseChat {
   const app = useAppState();
   const t = useT();
+  const { lang } = useLang();
   const toast = useToast();
   const appRef = useRef(app);
   appRef.current = app;
   const tRef = useRef(t);
   tRef.current = t;
+  const langRef = useRef(lang);
+  langRef.current = lang;
   const toastRef = useRef(toast);
   toastRef.current = toast;
 
@@ -135,6 +139,7 @@ export function useChat(): UseChat {
         confirm: p.confirm,
         option_id: p.optionId,
         force_offline: a.forceOffline,
+        lang: langRef.current,
         profile_id: a.profileId,
       };
       ctl.current = new AbortController();

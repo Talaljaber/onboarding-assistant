@@ -69,3 +69,34 @@ describe("TracePanel answer panel section", () => {
     expect(screen.queryByText("Answer panel")).toBeNull();
   });
 });
+
+describe("TracePanel English translation line (P11.1)", () => {
+  const withSteps = (extra: string[]) => {
+    render(<TracePanel trace={{ ...base, steps: [...base.steps, ...extra] }} citedIds={[]} />, { wrapper: En });
+    return document.querySelector("[data-trace]") as HTMLElement;
+  };
+
+  it("is absent without a translation step", () => {
+    expect(withSteps([]).querySelector("[data-translation]")).toBeNull();
+  });
+
+  it.each([
+    ["translate:ok", "checked and added"],
+    ["cache:translate", "checked, reused"],
+    ["translate:off", "not run (AI mode is off)"],
+    ["translate:fixed", "fixed text, not sent to the model"],
+  ])("%s -> %s", (step, label) => {
+    const line = withSteps([step]).querySelector("[data-translation]");
+    expect(line).toHaveTextContent("English translation:");
+    expect(line).toHaveTextContent(label);
+  });
+
+  it("a rejection names its reason under Technical details", () => {
+    const el = withSteps(["translate:foreign_number"]);
+    const line = el.querySelector("[data-translation]") as HTMLElement;
+    expect(line).toHaveTextContent("not shown (rejected or failed)");
+    expect(line).not.toHaveTextContent("foreign_number");
+    fireEvent.click(within(el).getByRole("button", { name: "Technical details" }));
+    expect(el.querySelector("[data-translation]")).toHaveTextContent("foreign_number");
+  });
+});

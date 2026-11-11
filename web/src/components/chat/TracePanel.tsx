@@ -46,6 +46,17 @@ const ROLE_KEY: Record<PanelRole, DictKey> = {
 
 const conf = (v: number) => v.toFixed(2);
 
+/** P11.1: the translation step of an English-UI answer (`translate:ok`, `cache:translate`, `translate:<x>`). */
+function translationOf(steps: readonly string[]): { key: DictKey; reason: string | null } | null {
+  const s = steps.find((x) => x === "cache:translate" || x.startsWith("translate:"));
+  if (!s) return null;
+  if (s === "translate:ok") return { key: "chatEn.traceOk", reason: null };
+  if (s === "cache:translate") return { key: "chatEn.traceCached", reason: null };
+  if (s === "translate:off") return { key: "chatEn.traceOff", reason: null };
+  if (s === "translate:fixed") return { key: "chatEn.traceFixed", reason: null };
+  return { key: "chatEn.traceRejected", reason: s.slice("translate:".length) };
+}
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className={`${surface.inset} min-w-0 p-2.5 sm:p-3`}>
@@ -65,6 +76,7 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
   const llmStatus = trace.answer?.llm_status ?? null;
   const band = trace.answer?.band ?? null;
   const guard = trace.guards.employment ?? trace.guards.contact;
+  const translation = translationOf(trace.steps);
   const [tech, setTech] = useState(false);
   const techId = useId();
 
@@ -204,6 +216,17 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
           </Badge>
         </p>
         {tech && llmStatus && <p className="text-fg-2">{t("trace.llmStatus", { status: llmStatus })}</p>}
+        {translation && (
+          <p data-translation className="mt-1 flex flex-wrap items-baseline gap-x-2">
+            <span className="font-semibold">{t("chatEn.traceLabel")}:</span>
+            <span>{t(translation.key)}</span>
+            {tech && translation.reason && (
+              <bdi className="font-id text-xs text-fg-2" dir="ltr">
+                {translation.reason}
+              </bdi>
+            )}
+          </p>
+        )}
       </Section>
 
       {trace.panel && (
