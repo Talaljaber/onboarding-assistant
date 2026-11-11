@@ -1,0 +1,28 @@
+{
+  "interns": [
+    {
+      "id": "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "name_ar": "سارة الخطيب",
+      "name_en": "Sara Al-Khatib",
+      "role": "Sales"
+    },
+    {
+      "id": "00000002-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "name_ar": "عمر حداد",
+      "name_en": "Omar Haddad",
+      "role": "Delivery"
+    },
+    {
+      "id": "00000003-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "name_ar": "ليان العلي",
+      "name_en": "Layan Al-Ali",
+      "role": "Sales"
+    },
+    {
+      "id": "00000004-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "name_ar": "يوسف النجار",
+      "name_en": "Yousef Al-Najjar",
+      "role": "Delivery"
+    }
+  ]
+}

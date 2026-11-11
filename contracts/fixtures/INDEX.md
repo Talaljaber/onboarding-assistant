@@ -64,7 +64,13 @@ the not-confirmed / out-of-scope questions are illustrative placeholders until
 | `profile.json` | `POST /api/profiles` (201) | `Profile` |
 | `progress.json` | `GET /api/progress?profile_id=`, `PUT /api/progress` | `ProgressResponse` |
 | `progress_update_request.json` | `PUT /api/progress` body | `ProgressUpdate` |
-| `manager_summary.json` | `GET /api/manager/summary` (admin) | `ManagerSummaryResponse` |
+| `interns.json` | `GET /api/interns` (active interns for the sign-in picker) | `InternsResponse` |
+| `intern_session.json` | `POST /api/interns/{id}/session` | `InternSession` |
+| `admin_interns.json` | `GET /api/admin/interns` (admin) | `AdminInternsResponse` |
+| `intern_create_request.json` | `POST /api/admin/interns` body (admin) | `InternCreate` |
+| `intern_patch_request.json` | `PATCH /api/admin/interns/{id}` body (admin) | `InternPatch` |
+| `intern.json` | `POST /api/admin/interns` (201), `PATCH /api/admin/interns/{id}` | `InternOut` |
+| `intern_detail.json` | `GET /api/admin/interns/{id}` (admin; Sara after ticks, chat, a scenario and quiz practice) | `InternDetail` |
 | `admin_login_request.json` | `POST /api/admin/login` body | `AdminLogin` |
 | `admin_session.json` | `POST /api/admin/login`, `GET /api/admin/session` | `AdminSession` |
 | `health.json` | `GET /api/health` (offline, local store) | `Health` |

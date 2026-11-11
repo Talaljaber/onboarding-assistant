@@ -1,0 +1,65 @@
+{
+  "interns": [
+    {
+      "id": "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "name_ar": "سارة الخطيب",
+      "name_en": "Sara Al-Khatib",
+      "role": "Sales",
+      "active": true,
+      "created_at": "2026-11-10T09:00:00.000+00:00",
+      "percent": 38,
+      "activities_done": 3,
+      "activities_total": 8,
+      "scenarios_practised": 1,
+      "quiz_attempts": 2,
+      "questions_asked": 2,
+      "last_active": "2026-11-10T09:07:00.000+00:00"
+    },
+    {
+      "id": "00000002-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "name_ar": "عمر حداد",
+      "name_en": "Omar Haddad",
+      "role": "Delivery",
+      "active": true,
+      "created_at": "2026-11-10T09:01:00.000+00:00",
+      "percent": 0,
+      "activities_done": 0,
+      "activities_total": 8,
+      "scenarios_practised": 0,
+      "quiz_attempts": 0,
+      "questions_asked": 0,
+      "last_active": null
+    },
+    {
+      "id": "00000003-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "name_ar": "ليان العلي",
+      "name_en": "Layan Al-Ali",
+      "role": "Sales",
+      "active": true,
+      "created_at": "2026-11-10T09:01:00.000+00:00",
+      "percent": 0,
+      "activities_done": 0,
+      "activities_total": 8,
+      "scenarios_practised": 0,
+      "quiz_attempts": 0,
+      "questions_asked": 0,
+      "last_active": null
+    },
+    {
+      "id": "00000004-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "name_ar": "يوسف النجار",
+      "name_en": "Yousef Al-Najjar",
+      "role": "Delivery",
+      "active": true,
+      "created_at": "2026-11-10T09:01:00.000+00:00",
+      "percent": 0,
+      "activities_done": 0,
+      "activities_total": 8,
+      "scenarios_practised": 0,
+      "quiz_attempts": 0,
+      "questions_asked": 0,
+      "last_active": null
+    }
+  ],
+  "label_ar": "متدربون للعرض بأسماء افتراضية — أعداد الإكمال والتدريب فقط، ليست تقييماً"
+}
