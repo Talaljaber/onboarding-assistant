@@ -698,6 +698,42 @@ export const ar = {
     allDone: "تمت مراجعة كل المقاطع.",
     openRow: "فتح {id} في المحرر",
   },
+  firstDay: {
+    // P13.1 "Before your first day" card on the intern's assistant screen (in-app, signed in).
+    title: "قبل يومك الأول",
+    intro: "ما يُجهَّز لك قبل مباشرة العمل وما يحدث في أيامك الأولى.",
+    show: "عرض",
+    hide: "إخفاء",
+    toggle: "عرض «قبل يومك الأول»",
+    planHeading: "الأيام 1–7 في خطتك المقترحة",
+    planNote: "خطة تعلّم مقترحة، وليست سياسة رسمية.",
+    rowsHeading: "من سياسة التهيئة كما هي",
+    askHeading: "جرّب أن تسأل",
+    question: "ماذا يحدث في اليوم الأول؟",
+    openPlan: "الخطة كاملة",
+  },
+  kbCoverage: {
+    // P13.1 admin KB coverage card: aggregate and anonymous counts only.
+    title: "تغطية قاعدة المعرفة",
+    intro: "أعداد مجمّعة من كل المحادثات، دون أسماء ودون أرقام لأي متدرب. تساعدك على رؤية ما تحتاج قاعدة المعرفة إلى إضافته.",
+    last7: "آخر 7 أيام",
+    last30: "آخر 30 يوماً",
+    lastDays: "آخر {n} يوماً",
+    questions: "{n} سؤالاً",
+    refusals: "رُفض {n} لعدم وجود صف يغطيه ({pct}%)",
+    noQuestions: "لا أسئلة في هذه الفترة.",
+    turns: "{n} رسالة في المجموع",
+    topCited: "الصفوف الأكثر استشهاداً",
+    times: "{n} مرة",
+    noCited: "لم يُستشهد بأي صف بعد.",
+    neverCited: "صفوف لم يُستشهد بها بعد ({n})",
+    allCited: "استُشهد بكل الصفوف مرة واحدة على الأقل.",
+    removed: "صف محذوف",
+    openRow: "فتح {id} في المحرر",
+    openKb: "فتح قاعدة المعرفة",
+    since: "منذ {date}",
+    empty: "لا محادثات بعد. تظهر الأعداد هنا بعد أول سؤال.",
+  },
 };
 
 /** Dictionary shape: the same nesting as `ar`, every leaf a string. */

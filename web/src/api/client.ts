@@ -9,6 +9,7 @@ import {
   isImportDetail,
   isImportListResponse,
   isKbDraft,
+  isKbCoverage,
   isChatResponse,
   isErrorBody,
   isHealth,
@@ -35,6 +36,7 @@ import {
   type ImportDetail,
   type ImportListResponse,
   type KbDraft,
+  type KbCoverage,
   type ChatRequest,
   type ChatResponse,
   type ErrorDetail,
@@ -255,6 +257,11 @@ export const approveDrafts = (importId: string, draftIds: string[], signal?: Abo
     signal,
     admin: true,
   });
+
+// ---- KB coverage (P13.1, admin only): aggregate and anonymous counts
+
+export const getKbCoverage = (signal?: AbortSignal) =>
+  request<KbCoverage>("/api/admin/kb/coverage", { guard: isKbCoverage, signal, admin: true });
 
 export const createProfile = (body: ProfileCreate, signal?: AbortSignal) =>
   request<Profile>("/api/profiles", { method: "POST", body, guard: isProfile, signal });

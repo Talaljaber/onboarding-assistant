@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { currentPath, replace } from "@/router";
 import { useT } from "@/i18n";
+import { FirstDayCard } from "@/components/welcome/FirstDayCard";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { LIMITS } from "@/api/types";
 import { useAppState } from "@/state/useAppState";
@@ -177,6 +178,12 @@ function ChatInner() {
             </Button>
           )}
         </div>
+
+        {items.length === 0 && !active && (
+          <div className="mb-5">
+            <FirstDayCard />
+          </div>
+        )}
 
         <ol ref={listRef} aria-label={t("chat.thread")} className="flex flex-col gap-5 pb-5 sm:gap-6">
           <li data-kind="greeting">
