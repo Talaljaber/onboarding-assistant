@@ -3,6 +3,8 @@ import { useHealthInfo } from "@/api/health";
 import type { AnswerReply, PlanReply, ProgressProposalReply, QuizReply, RefusalReply } from "@/api/types";
 import { planActivityIds, wouldBe } from "@/state/progress";
 import { useAppState } from "@/state/useAppState";
+import { MILESTONE_TITLE } from "@/components/plan/shared";
+import { useT } from "@/i18n";
 import { AnswerCard, EmploymentCard, RefusalCard, UnconfirmedCard } from "./AnswerCards";
 import { AssistantBubble, AssistantFrame } from "./AssistantBubble";
 import { PlanCard, QuizCard } from "./PlanQuizCards";
@@ -31,6 +33,7 @@ export function ChatMessage(p: ChatMessageProps) {
   const { item } = p;
   const app = useAppState();
   const health = useHealthInfo();
+  const t = useT();
   const kind = cardKind(item);
   const r = item.reply;
 
@@ -71,7 +74,11 @@ export function ChatMessage(p: ChatMessageProps) {
       const proposal = (r as ProgressProposalReply).proposal ?? NO_PROPOSAL;
       const ids = planActivityIds(app.plan);
       const known = app.progress.total > 0;
-      const label = app.plan?.milestones.find((m) => m.name === proposal.milestone)?.name_ar ?? proposal.milestone;
+      // the i18n title isolates the day range (the server's «الأيام 1–7» renders as 7–1 in RTL)
+      const titleKey = MILESTONE_TITLE[proposal.milestone as keyof typeof MILESTONE_TITLE];
+      const label = titleKey
+        ? t(titleKey)
+        : app.plan?.milestones.find((m) => m.name === proposal.milestone)?.name_ar ?? proposal.milestone;
       card = (
         <ProgressCard
           proposal={proposal}
