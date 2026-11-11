@@ -318,6 +318,20 @@ export const ar = {
   extra: {
     // Screen agents append new keys here, in both files, in the same commit.
     storageUnavailable: "التخزين غير متاح؛ سيُفقد التقدم عند الإغلاق.",
+    aboutHowText: "يبحث في صفوف قاعدة المعرفة المعتمدة (بحث دلالي + كلمات مفتاحية)، وقد تتغير هذه المجموعة عندما يعدّلها مسؤول المحتوى مباشرة. ويمكن لنموذج لغوي صياغة الإجابة، ثم يتحقق الخادم من كل معرّف واقتباس ورقم قبل العرض. بلا اتصال يعرض الصف المطابق كما هو أو يرفض.",
+    aboutKbRows: "صفوف قاعدة المعرفة الآن: {n} (المعدّلة أو المضافة مباشرة: {edited})",
+    aboutModel: "النموذج: {model}",
+    aboutNoModel: "لا يوجد (بلا اتصال)",
+    aboutCreditsText: "الخط: IBM Plex Sans Arabic (رخصة SIL للخطوط المفتوحة)، مضمّن مع التطبيق. النماذج المستخدمة مذكورة تحت حالة الخادم.",
+    aboutClearConfirm: "سيُحذف المسار والتقدم ونتائج التدريب وسجل المحادثة المحفوظة في هذا المتصفح، ثم تُعاد تحميل الصفحة. متابعة؟",
+    aboutEncoder: "نموذج ترميز البحث: {model}",
+    practiceBadge: "تدريب",
+    progressViewSummary: "عرض ملخص اليوم 90",
+    summaryRole: "المسار: {role}",
+    summaryQuizLine: "{date}: {total} أسئلة",
+    summaryNone: "لا شيء بعد",
+    summaryClose: "إغلاق الملخص",
+    planRowsLoading: "جارٍ تحميل الصفوف…",
   },
 };
 
