@@ -19,6 +19,7 @@ import time
 import uuid
 from collections.abc import Callable
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, BackgroundTasks, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -95,6 +96,15 @@ def _error(code: str, status: int, message: str, request: Request, field: str | 
     return JSONResponse(error_body(code, message, _rid(request), field), status_code=status)
 
 
+def cross_origin(origin: bytes | None, host: bytes | None) -> bool:
+    """True when a browser sent an Origin that is not this server (CSRF from another site, `null`).
+    Requests without Origin (curl, tests, the smoke script) are not browser cross-site requests."""
+    if origin is None:
+        return False
+    netloc = urlsplit(origin.decode("latin-1").strip()).netloc.lower()
+    return not netloc or netloc != (host or b"").decode("latin-1").strip().lower()
+
+
 def validation_field(exc: RequestValidationError) -> tuple[str | None, str]:
     """The first error as (dotted field without the body/query/path prefix, message)."""
     errs = exc.errors()
@@ -148,6 +158,11 @@ class RequestContextMiddleware:
 
         app_receive: Receive = receive
         if scope.get("method", "GET") in _BODY_METHODS:
+            # No CORS and no auth: refuse writes a page on another origin makes from the user's browser.
+            if cross_origin(headers.get(b"origin"), headers.get(b"host")):
+                await self._json(send, 400, error_body("validation_error", "cross-origin request refused", rid,
+                                                       "origin"), rid)
+                return
             chunks: list[bytes] = []
             size = 0
             more = True

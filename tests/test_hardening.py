@@ -363,7 +363,7 @@ def test_key_never_in_responses_or_log_file(llm_app: Callable[..., TestClient]) 
     with LOG_FILE.open("rb") as f:
         f.seek(start)
         logged = f.read().decode("utf-8", errors="replace")
-    assert logged and FAKE_OR_KEY not in logged and "sk-or-v1-" not in logged
+    assert logged and FAKE_OR_KEY not in logged and ("sk-or-" + "v1-") not in logged
     assert QUESTION not in logged  # prompts and messages are logged by hash/ids only
     for line in logged.splitlines():
         event = json.loads(line)
@@ -376,3 +376,16 @@ def test_health_probe_is_throttled(llm_app: Callable[..., TestClient]) -> None:
     for _ in range(5):
         assert c.get("/api/health?probe=1").status_code == 200
     assert len(c.script.requests) == calls  # type: ignore[attr-defined]  # within 10 s of the startup probe
+
+
+@pytest.mark.parametrize("origin", ["http://evil.example", "null", "http://127.0.0.1:9999"])
+def test_cross_origin_writes_are_refused(client: TestClient, origin: str) -> None:
+    for path, body in (("/api/kb/reset", {}), ("/api/kb", {"topic": "x"}), ("/api/chat", {"message": QUESTION})):
+        r = client.post(path, json=body, headers={"Origin": origin})
+        assert r.status_code == 400 and r.json()["error"]["field"] == "origin", path
+    assert client.get("/api/health", headers={"Origin": origin}).status_code == 200  # reads are harmless
+
+
+def test_same_origin_writes_pass(client: TestClient) -> None:
+    r = client.post("/api/chat", json={"message": QUESTION}, headers={"Origin": "http://testserver"})
+    assert r.status_code == 200
