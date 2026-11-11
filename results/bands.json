@@ -1,6 +1,6 @@
 {
-  "refuse": -0.115,
-  "not_confirmed": 0.02,
+  "refuse": -0.035,
+  "not_confirmed": 0.035,
   "picked_on": "dev",
   "date": "2026-11-11"
 }
