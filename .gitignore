@@ -16,3 +16,4 @@ __pycache__/
 *.pyc
 .claude/settings.local.json
 .mcp.json
+results/redteam_*.csv
