@@ -23,7 +23,7 @@ from urllib.parse import urlsplit
 
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -90,6 +90,8 @@ from app.schemas import (  # P13.2 mentor requests
     MentorRequestStatusPatch,
     Source,
 )
+from app import request_comments as comments_view  # P15 comments and files on mentor requests
+from app.schemas import COMMENT_BODY_MAX_BYTES, AdminCommentCreate, RequestCommentCreate  # P15
 from app.store import alias_problem, store_status
 
 KB_LOCK_WAIT_S = 2.0
@@ -98,6 +100,9 @@ _ACTIVITY_RE = re.compile(r"^[A-Z]{1,2}-[A-Za-z0-9-]{1,32}$")
 _BODY_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 #: P12.1: the only route with a larger body limit (a base64 document), and only with a valid admin token.
 IMPORT_PATH = "/api/admin/kb/imports"
+#: P15: a comment with up to three 5 MiB files (base64 JSON). The intern route is open like every intern
+#: route; the admin route gets the larger limit only with a valid admin token.
+COMMENT_PATH_RE = re.compile(r"^/api/(admin/)?requests/[0-9a-f-]{36}/comments$")
 # The web client is fully bundled (scripts, styles, fonts under /assets) and talks to its own origin only.
 # React style props are set through the CSSOM, which style-src 'self' allows. No CORS headers are sent.
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; "
@@ -187,6 +192,9 @@ class RequestContextMiddleware:
         max_body = self.max_body
         if scope.get("method") == "POST" and scope.get("path") == IMPORT_PATH and _admin_header_ok(scope, headers):
             max_body = IMPORT_BODY_MAX_BYTES
+        comment = COMMENT_PATH_RE.match(str(scope.get("path") or "")) if scope.get("method") == "POST" else None
+        if comment and (comment.group(1) is None or _admin_header_ok(scope, headers)):
+            max_body = COMMENT_BODY_MAX_BYTES
         too_big = error_body("payload_too_large", f"request body exceeds {max_body // 1024} KB", rid)
 
         length = headers.get(b"content-length")
@@ -405,9 +413,17 @@ def _intern_roles(store: Any) -> dict[str, str]:
     return {i["id"]: i["role"] for i in (store.list_interns() or [])}
 
 
+def _comment_counts(store: Any, ids: list[str]) -> dict[str, int]:
+    """P15: comments per request. A store without the comment tables (Supabase before migration 0005)
+    shows 0 here and answers 503 only on the thread routes, so the requests themselves keep working."""
+    return (store.request_comment_counts(ids) or {}) if ids else {}
+
+
 def _request_list(request: Request, recs: list[dict[str, Any]], status: int = 200) -> JSONResponse:
-    roles = _intern_roles(_store(request))
-    body = requests_view.listing(recs, _kb_source(request), _agent(request).features.plan, roles.get)
+    store = _store(request)
+    roles = _intern_roles(store)
+    counts = _comment_counts(store, [str(r["id"]) for r in recs])
+    body = requests_view.listing(recs, _kb_source(request), _agent(request).features.plan, roles.get, counts)
     return _json(body, status)
 
 
@@ -726,7 +742,8 @@ def build_router() -> APIRouter:
         rec = _requests_or_503(store.mentor_request_update(request_id, {"status": body.status}))
         if not rec:
             raise ApiError("not_found", 404, "unknown request")
-        return _json(requests_view.view(rec, _kb_source(request), _agent(request).features.plan, intern["role"]))
+        return _json(requests_view.view(rec, _kb_source(request), _agent(request).features.plan, intern["role"],
+                                        _comment_counts(store, [request_id]).get(request_id, 0)))
 
     @r.get("/admin/requests", dependencies=ADMIN_ONLY)
     def admin_requests(request: Request, intern_id: str | None = None) -> JSONResponse:
@@ -767,7 +784,8 @@ def build_router() -> APIRouter:
         if not rec:
             raise ApiError("not_found", 404, "unknown request")
         log_event("request_updated", request_id=_rid(request), fields=sorted(body.model_fields_set))
-        return _json(requests_view.view(rec, _kb_source(request), _agent(request).features.plan, role))
+        return _json(requests_view.view(rec, _kb_source(request), _agent(request).features.plan, role,
+                                        _comment_counts(store, [request_id]).get(request_id, 0)))
 
     @r.delete("/admin/requests/{request_id}", dependencies=ADMIN_ONLY)
     def admin_request_delete(request_id: str, request: Request) -> JSONResponse:
@@ -777,6 +795,67 @@ def build_router() -> APIRouter:
             raise ApiError("not_found", 404, "unknown request")
         log_event("request_deleted", request_id=_rid(request))
         return _json(MentorRequestDeleted(id=request_id, deleted=True))
+
+    # -------------------------------------------------------------------------- request threads (P15)
+    def thread_of(store: Any, request_id: str) -> JSONResponse:
+        return _json(comments_view.thread(request_id, _requests_or_503(store.request_comments(request_id))))
+
+    def add_comment(request: Request, store: Any, request_id: str, author: str,
+                    body: AdminCommentCreate) -> JSONResponse:
+        comment, files, blobs = comments_view.prepare(request_id, author, body)
+        saved = _requests_or_503(store.request_comment_add(comment, files, blobs))
+        log_event("request_comment_added", request_id=_rid(request), author=author, files=len(files))
+        return _json(comments_view.view(saved), 201)
+
+    def file_of(store: Any, request_id: str, file_id: str) -> Response:
+        rec = _requests_or_503(store.request_file(request_id, file_id)) if re.match(PROFILE_ID_RE, file_id) else {}
+        if not rec:
+            raise ApiError("not_found", 404, "unknown file")
+        return Response(content=rec["data"], media_type=str(rec["content_type"]),
+                        headers=comments_view.download_headers(rec))
+
+    def intern_scope(store: Any, request_id: str, profile_id: str | None) -> None:
+        """The intern's own request only (another intern's request is 404, like an unknown one)."""
+        if not profile_id:
+            raise ApiError("validation_error", 400, "profile_id is required", "profile_id")
+        intern = _profile_intern(store, profile_id)
+        _own_request(store, request_id, intern["id"])
+
+    @r.get("/requests/{request_id}/comments")
+    def request_thread(request_id: str, request: Request, profile_id: str | None = None) -> JSONResponse:
+        store = _store(request)
+        intern_scope(store, request_id, profile_id)
+        return thread_of(store, request_id)
+
+    @r.post("/requests/{request_id}/comments", status_code=201)
+    def request_comment(request_id: str, body: RequestCommentCreate, request: Request) -> JSONResponse:
+        store = _store(request)
+        intern_scope(store, request_id, body.profile_id)
+        return add_comment(request, store, request_id, "intern", body)
+
+    @r.get("/requests/{request_id}/files/{file_id}")
+    def request_file(request_id: str, file_id: str, request: Request, profile_id: str | None = None) -> Response:
+        store = _store(request)
+        intern_scope(store, request_id, profile_id)
+        return file_of(store, request_id, file_id)
+
+    @r.get("/admin/requests/{request_id}/comments", dependencies=ADMIN_ONLY)
+    def admin_request_thread(request_id: str, request: Request) -> JSONResponse:
+        store = _store(request)
+        _own_request(store, request_id)
+        return thread_of(store, request_id)
+
+    @r.post("/admin/requests/{request_id}/comments", status_code=201, dependencies=ADMIN_ONLY)
+    def admin_request_comment(request_id: str, body: AdminCommentCreate, request: Request) -> JSONResponse:
+        store = _store(request)
+        _own_request(store, request_id)
+        return add_comment(request, store, request_id, "admin", body)
+
+    @r.get("/admin/requests/{request_id}/files/{file_id}", dependencies=ADMIN_ONLY)
+    def admin_request_file(request_id: str, file_id: str, request: Request) -> Response:
+        store = _store(request)
+        _own_request(store, request_id)
+        return file_of(store, request_id, file_id)
 
     # -------------------------------------------------------------------------- Rumour Check (P14.2)
     @r.post("/check")
@@ -839,5 +918,5 @@ def install_api(app: FastAPI) -> None:
     app.include_router(build_router())
 
 
-__all__ = ["CSP", "IMPORT_PATH", "KB_LOCK_WAIT_S", "SECURITY_HEADERS", "RequestContextMiddleware", "build_router", "error_body", "install_api",
+__all__ = ["COMMENT_PATH_RE", "CSP", "IMPORT_PATH", "KB_LOCK_WAIT_S", "SECURITY_HEADERS", "RequestContextMiddleware", "build_router", "error_body", "install_api",
            "validation_field", "wait_for_reindex"]

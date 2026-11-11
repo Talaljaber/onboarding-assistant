@@ -117,6 +117,19 @@ profile id, name or per-intern figure.
 | `mentor_request_deleted.json` | `DELETE /api/admin/requests/{id}` | `MentorRequestDeleted` |
 
 Titles and notes are illustrative; `kb_row` is the live K05 row verbatim; ids and times are illustrative.
+`comment_count` (P15) matches `request_thread.json` for request `000000a1`.
+
+## Request threads: comments and files (P15)
+
+| File | Endpoint | Model |
+|---|---|---|
+| `request_thread.json` | `GET /api/requests/{id}/comments?profile_id=` and `GET /api/admin/requests/{id}/comments` (the intern's answer with one PDF, then the admin's reply) | `RequestThread` |
+| `request_comment_create_request.json` | `POST /api/requests/{id}/comments` body (a short text and a tiny PDF as base64) | `RequestCommentCreate` |
+| `request_comment_admin_create_request.json` | `POST /api/admin/requests/{id}/comments` body (text only, admin) | `AdminCommentCreate` |
+| `request_comment.json` | `POST /api/requests/{id}/comments` and the admin route (201) | `RequestComment` |
+
+The file downloads (`GET /api/requests/{id}/files/{file_id}?profile_id=`, `GET /api/admin/requests/{id}/files/{file_id}`)
+answer the file bytes, not JSON. Texts, ids and times are illustrative.
 
 ## Rumour Check (P14.2)
 

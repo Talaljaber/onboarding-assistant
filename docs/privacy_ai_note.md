@@ -139,12 +139,22 @@ policies for anonymous or signed-in clients.
 | `quiz_attempts` | profile id, question id, option chosen, correct or not |
 | `scenario_attempts` | profile id, scenario id, mode, option id, checklist ids met and missing, value label. **No free text** |
 | `turn_logs` | request id, profile id (if any), time, tool, mode, status, band, cited ids, verifier result and reason, latency, cached, model. **No message text, no answer text** |
+| `mentor_request_comments`, `mentor_request_files` (P15) | replies on a mentor request, both ways: author (intern or admin), text, time; and per attached file its name, type (PDF, Word, PNG or JPEG), size, sha256 and storage key (migration `0005_request_comments.sql`) |
+| Storage bucket `mentor-files` (P15, **private**) | the bytes of files attached to those replies (at most 3 per reply, 5 MB each), at `requests/{request id}/{file id}` |
 
 The store code refuses any turn log with a message, answer, text, prompt or reply field.
 
+**Mentor-request attachments and replies are stored** (the private Supabase bucket `mentor-files`, or the local
+folder `data/live/mentor_files/`); **knowledge-document imports still are not** (only their passages are). Only the
+server reads or writes the files, with the secret key; the browser downloads them through the app, never from a
+public or signed storage link, and the app never shows them inline. An intern sees only the replies and files on
+their own requests; the admin sees all. Deleting a request deletes its replies and files. Reply text and files never
+reach the AI service, a prompt or a turn log.
+
 **Local fallback.** Without Supabase, or when it does not answer (2 s probe at start, 3 s per call),
-the server uses `data/live/local.sqlite` with the same tables. A failure switches the process to the
-local file for the rest of the session. There is no sync back. The latest knowledge base is also kept
+the server uses `data/live/local.sqlite` with the same tables (and `data/live/mentor_files/` for reply
+attachments). A failure switches the process to the local file for the rest of the session; a failure of the
+mentor-request tables or the file storage only makes those features unavailable for that call. There is no sync back. The latest knowledge base is also kept
 in `data/live/kb_snapshot.json`.
 
 **On the laptop.**
@@ -161,7 +171,9 @@ chat thread. «امسح بيانات هذا المتصفح» on the «حول و�
 - No real employee or customer data is used anywhere: not in the data, the tests or the demo.
 - Interns are **fictional demo personas** (the four seeded names and any the admin adds for the demo),
   never real employees. An intern signs in by picking their name: there is no intern password in this
-  demo; a production version would use real authentication.
+  demo (a demo limitation), so anyone at the device can act as any listed intern, including reading that
+  intern's mentor requests, replying and downloading their files; a production version would use real
+  authentication.
 - An intern's name is shown in the intern's header and the admin interface only. It never reaches the AI
   service, a chat request (which carries the profile id only), a turn log or generated text.
 - The admin's interns list and detail page show completion, activities with their completion dates,
@@ -207,7 +219,10 @@ invented a contact. The earlier held-out 1 run, before the panel, gave offline 2
 - Rows added live, and rows rewritten beyond a small edit, are matched less confidently offline (they
   have no anchor questions).
 - One shared admin password for the knowledge editor and the interns screens; no per-person accounts.
-  Interns sign in without a password (demo only).
+  Interns sign in by name only, without a password (demo limitation): anyone at the device can act as an
+  intern, including on that intern's mentor-request replies and files.
+- Mentor-request reply files are checked by type (extension and first bytes) and size only; they are not
+  scanned for viruses, and the app never opens them (download only).
 - Document import is rule based (headings, pages, sentence ends); scanned PDFs without text give nothing.
   With «organize» ticked in AI mode the model may pick the section titles of a PDF or text file; a title
   line over 40 characters that the PDF rules already joined to the next line cannot be picked.

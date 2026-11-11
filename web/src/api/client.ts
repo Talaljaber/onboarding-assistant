@@ -384,3 +384,81 @@ import { isCheckResponse, type CheckRequest, type CheckResponse } from "./types"
 /** Each sentence of a pasted rumour against the KB (no store write on the server). */
 export const postCheck = (body: CheckRequest, signal?: AbortSignal) =>
   request<CheckResponse>("/api/check", { method: "POST", body, guard: isCheckResponse, signal });
+
+// ---------------------------------------------------------------- request threads (P15): comments and files
+
+import {
+  isRequestComment,
+  isRequestThread,
+  type AdminCommentCreate,
+  type RequestComment,
+  type RequestThread,
+} from "./types";
+
+/** Up to three 5 MB files as base64 JSON. */
+export const COMMENT_TIMEOUT_MS = 60000;
+
+/** The signed-in intern's thread on one of their own requests. */
+export const getMyRequestThread = (requestId: string, profileId: string, signal?: AbortSignal) =>
+  request<RequestThread>(`/api/requests/${q(requestId)}/comments?profile_id=${q(profileId)}`, { guard: isRequestThread, signal });
+
+export const postMyRequestComment = (requestId: string, profileId: string, body: AdminCommentCreate, signal?: AbortSignal) =>
+  request<RequestComment>(`/api/requests/${q(requestId)}/comments`, {
+    method: "POST",
+    body: { profile_id: profileId, ...body },
+    guard: isRequestComment,
+    signal,
+    timeoutMs: COMMENT_TIMEOUT_MS,
+  });
+
+export const getAdminRequestThread = (requestId: string, signal?: AbortSignal) =>
+  request<RequestThread>(`/api/admin/requests/${q(requestId)}/comments`, { guard: isRequestThread, signal, admin: true });
+
+export const postAdminRequestComment = (requestId: string, body: AdminCommentCreate, signal?: AbortSignal) =>
+  request<RequestComment>(`/api/admin/requests/${q(requestId)}/comments`, {
+    method: "POST",
+    body,
+    guard: isRequestComment,
+    signal,
+    admin: true,
+    timeoutMs: COMMENT_TIMEOUT_MS,
+  });
+
+/** The app route that serves a file's bytes (intern: scoped by the profile id; admin: with the token). */
+export function requestFilePath(requestId: string, fileId: string, profileId: string | null): string {
+  return profileId
+    ? `/api/requests/${q(requestId)}/files/${q(fileId)}?profile_id=${q(profileId)}`
+    : `/api/admin/requests/${q(requestId)}/files/${q(fileId)}`;
+}
+
+/** Download one file through the app: fetch (with the admin token on admin paths), blob, a temporary object
+ *  URL and a `download` click. Never a storage URL, never opened inline. */
+export async function downloadRequestFile(path: string, filename: string, admin: boolean): Promise<Result<true>> {
+  const headers: Record<string, string> = {};
+  const token = admin ? getAdminToken() : null;
+  if (token) headers.Authorization = `Bearer ${token}`;
+  let blob: Blob;
+  try {
+    const res = await fetch(`${base()}${path}`, { credentials: "omit", headers });
+    if (!res.ok) {
+      if (res.status === 401 && token && getAdminToken() === token) setAdminToken(null);
+      return fail({ kind: "http", status: res.status });
+    }
+    blob = await res.blob();
+  } catch {
+    return fail({ kind: "network", detail: "unreachable" });
+  }
+  const url = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  return { ok: true, value: true };
+}

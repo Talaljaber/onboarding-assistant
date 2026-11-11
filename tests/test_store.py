@@ -722,3 +722,214 @@ def test_supabase_mentor_requests_missing_table_does_not_flip(tmp_path: Path) ->
     assert sb.name == "supabase" and sb.fallback_reason is None
     assert sb.list_interns()
     sb.close()
+
+
+# Comments and files on mentor requests (P15) ---------------------------------------------------------
+
+PDF_BYTES = b"%PDF-1.4\n% test\n%%EOF\n"
+PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+
+
+def _comment(rid: str, author: str = "intern", body: str = "تم", files: list[tuple[str, str, bytes]] = ()) -> Any:
+    import hashlib
+
+    from app.store.base import now_iso, storage_key
+
+    cid = str(uuid.uuid4())
+    recs = []
+    for name, ctype, data in files:
+        fid = str(uuid.uuid4())
+        recs.append({"id": fid, "comment_id": cid, "request_id": rid, "filename": name, "content_type": ctype,
+                     "size_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+                     "storage_key": storage_key(rid, fid), "created_at": now_iso()})
+    comment = {"id": cid, "request_id": rid, "author": author, "body": body, "created_at": now_iso()}
+    return comment, recs, [d for _, _, d in files]
+
+
+def _comment_round_trip(store: Any, intern_id: str) -> tuple[str, list[dict[str, Any]]]:
+    req = store.mentor_requests_create([{"intern_id": intern_id, "kind": "do", "title": "نفّذ"}])[0]
+    rid = req["id"]
+    assert store.request_comments(rid) == [] and store.request_comment_counts([rid]) == {}
+    c1, f1, b1 = _comment(rid, files=[("ملخص.pdf", "application/pdf", PDF_BYTES), ("صورة.png", "image/png", PNG_BYTES)])
+    saved = store.request_comment_add(c1, f1, b1)
+    assert saved is not None and saved["author"] == "intern" and [f["filename"] for f in saved["files"]] == [
+        "ملخص.pdf", "صورة.png"]
+    c2, f2, b2 = _comment(rid, author="admin", body="أحسنت")
+    assert store.request_comment_add(c2, f2, b2)["files"] == []
+    thread = store.request_comments(rid)
+    assert [c["author"] for c in thread] == ["intern", "admin"] and len(thread[0]["files"]) == 2
+    assert thread[0]["files"][0]["storage_key"] == f"requests/{rid}/{f1[0]['id']}"
+    assert store.request_comment_counts([rid, str(uuid.uuid4()), "nope"]) == {rid: 2}
+    got = store.request_file(rid, f1[1]["id"])
+    assert got["data"] == PNG_BYTES and got["content_type"] == "image/png" and got["size_bytes"] == len(PNG_BYTES)
+    assert store.request_file(rid, str(uuid.uuid4())) == {}
+    assert store.request_file(str(uuid.uuid4()), f1[1]["id"]) == {}  # a file of another request
+    assert store.request_file(rid, "../x") == {}
+    # invalid input is refused before anything is written
+    c3, f3, b3 = _comment(rid, files=[("a.pdf", "application/pdf", PDF_BYTES)])
+    for bad in (
+        ({**c3, "author": "mentor"}, f3, b3),
+        ({**c3, "body": ""}, [], []),  # neither text nor a file
+        ({**c3, "body": "x" * 1001}, f3, b3),
+        (c3, [{**f3[0], "content_type": "text/html"}], b3),
+        (c3, [{**f3[0], "size_bytes": 999}], b3),  # not the blob's size
+        (c3, [{**f3[0], "comment_id": str(uuid.uuid4())}], b3),
+        (c3, [{**f3[0], "filename": "../a.pdf"}], b3),
+        (c3, f3, []),
+    ):
+        assert store.request_comment_add(*bad) is None
+    assert len(store.request_comments(rid)) == 2
+    return rid, f1
+
+
+def test_local_request_comments_and_files(local: LocalStore) -> None:
+    local.seed_interns(SEED)
+    sara = (local.list_interns() or [])[0]
+    rid, files = _comment_round_trip(local, sara["id"])
+    on_disk = local.files_dir / rid / files[0]["id"]
+    assert on_disk.read_bytes() == PDF_BYTES
+    assert len(local.table_rows("mentor_request_files")) == 2
+    # deleting the request deletes its comments, file rows and stored files
+    assert local.mentor_request_delete(rid) is True
+    assert local.table_rows("mentor_request_comments") == [] and local.table_rows("mentor_request_files") == []
+    assert not (local.files_dir / rid).exists()
+
+
+def test_local_request_file_write_failure_leaves_nothing(local: LocalStore, monkeypatch: pytest.MonkeyPatch) -> None:
+    local.seed_interns(SEED)
+    sara = (local.list_interns() or [])[0]
+    rid = local.mentor_requests_create([{"intern_id": sara["id"], "kind": "do", "title": "t"}])[0]["id"]
+    monkeypatch.setattr(local, "_run", lambda op, default, fn: default)  # the database insert fails
+    c, f, b = _comment(rid, files=[("a.pdf", "application/pdf", PDF_BYTES)])
+    assert local.request_comment_add(c, f, b) is None
+    assert not (local.files_dir / rid / f[0]["id"]).exists()
+
+
+class FakeStorage:
+    """The Storage REST calls the store makes, in front of a FakePostgrest."""
+
+    PREFIX = "/storage/v1/object/mentor-files"
+
+    def __init__(self, rest: Callable[[httpx.Request], httpx.Response]) -> None:
+        self.rest = rest
+        self.objects: dict[str, tuple[bytes, str]] = {}
+        self.calls: list[httpx.Request] = []
+        self.fail: int | None = None
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if not path.startswith(self.PREFIX):
+            return self.rest(request)
+        self.calls.append(request)
+        if self.fail:
+            return httpx.Response(self.fail, json={"error": "down"})
+        key = path[len(self.PREFIX) + 1:]
+        if request.method == "POST":
+            if key in self.objects or request.headers.get("x-upsert") != "false":
+                return httpx.Response(400, json={"statusCode": "409", "error": "Duplicate"})
+            self.objects[key] = (request.content, request.headers["content-type"])
+            return httpx.Response(200, json={"Key": f"mentor-files/{key}"})
+        if request.method == "GET":
+            if key not in self.objects:
+                return httpx.Response(400, json={"statusCode": "404", "error": "not_found"})
+            return httpx.Response(200, content=self.objects[key][0])
+        if request.method == "DELETE":
+            for k in json.loads(request.content)["prefixes"]:
+                self.objects.pop(k, None)
+            return httpx.Response(200, json=[])
+        return httpx.Response(405)
+
+
+def _sb_with_storage(tmp_path: Path) -> tuple[SupabaseStore, FakePostgrest, FakeStorage]:
+    fake = FakePostgrest()
+    for t in ("interns", "mentor_requests", "mentor_request_comments", "mentor_request_files"):
+        fake.tables[t] = []
+    storage = FakeStorage(fake)
+    sb = make_sb(tmp_path, storage)
+    sb.seed_interns(SEED)
+    return sb, fake, storage
+
+
+def test_supabase_request_comments_and_storage(tmp_path: Path, logs: io.StringIO) -> None:
+    sb, fake, storage = _sb_with_storage(tmp_path)
+    sara = (sb.list_interns() or [])[0]
+    rid, files = _comment_round_trip(sb, sara["id"])
+    up = [r for r in storage.calls if r.method == "POST"]
+    assert [str(r.url) for r in up] == [f"{URL}/storage/v1/object/mentor-files/requests/{rid}/{f['id']}" for f in files]
+    assert [r.headers["content-type"] for r in up] == ["application/pdf", "image/png"]
+    assert all(r.headers["x-upsert"] == "false" and r.headers["apikey"] == FAKE_KEY
+               and r.headers["authorization"] == f"Bearer {FAKE_KEY}" for r in up)
+    assert storage.objects[f"requests/{rid}/{files[0]['id']}"][0] == PDF_BYTES
+    assert len(fake.tables["mentor_request_comments"]) == 2 and len(fake.tables["mentor_request_files"]) == 2
+    assert all("data" not in r for r in fake.tables["mentor_request_files"])  # bytes only in Storage
+    # deleting the request removes the stored objects (the rows cascade in the database)
+    assert sb.mentor_request_delete(rid) is True
+    assert storage.objects == {}
+    assert sb.name == "supabase" and sb.fallback_reason is None
+    assert FAKE_KEY not in logs.getvalue()
+    sb.close()
+
+
+def test_supabase_storage_failure_is_unavailable_and_does_not_flip(tmp_path: Path) -> None:
+    sb, fake, storage = _sb_with_storage(tmp_path)
+    sara = (sb.list_interns() or [])[0]
+    rid = sb.mentor_requests_create([{"intern_id": sara["id"], "kind": "do", "title": "t"}])[0]["id"]
+    storage.fail = 503
+    c, f, b = _comment(rid, files=[("a.pdf", "application/pdf", PDF_BYTES)])
+    assert sb.request_comment_add(c, f, b) is None
+    assert fake.tables["mentor_request_comments"] == [] and fake.tables["mentor_request_files"] == []
+    storage.fail = None
+    saved = sb.request_comment_add(c, f, b)
+    assert saved is not None
+    storage.fail = 500
+    assert sb.request_file(rid, f[0]["id"]) is None
+    storage.fail = None
+    storage.objects.clear()
+    assert sb.request_file(rid, f[0]["id"]) == {}  # the row without its object: unknown file
+    assert sb.name == "supabase" and sb.fallback_reason is None
+    assert sb.list_interns()
+    sb.close()
+
+
+def test_supabase_file_rows_failure_rolls_back(tmp_path: Path) -> None:
+    sb, fake, storage = _sb_with_storage(tmp_path)
+    sara = (sb.list_interns() or [])[0]
+    rid = sb.mentor_requests_create([{"intern_id": sara["id"], "kind": "do", "title": "t"}])[0]["id"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and request.url.path.endswith("/mentor_request_files"):
+            return httpx.Response(500)
+        return storage(request)
+
+    sb2 = make_sb(tmp_path, handler)
+    c, f, b = _comment(rid, files=[("a.pdf", "application/pdf", PDF_BYTES)])
+    assert sb2.request_comment_add(c, f, b) is None
+    assert fake.tables["mentor_request_comments"] == [] and storage.objects == {}
+    assert sb2.name == "supabase"
+    sb.close()
+    sb2.close()
+
+
+def test_supabase_without_migration_0005_does_not_flip(tmp_path: Path) -> None:
+    """No comment tables (PostgREST 404): threads are unavailable, requests and the rest stay on Supabase."""
+    fake = FakePostgrest()
+    fake.tables["interns"] = []
+    fake.tables["mentor_requests"] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "/mentor_request_" in request.url.path:
+            return httpx.Response(404, json={"code": "42P01"})
+        return fake(request)
+
+    sb = make_sb(tmp_path, handler)
+    sb.seed_interns(SEED)
+    sara = (sb.list_interns() or [])[0]
+    rid = sb.mentor_requests_create([{"intern_id": sara["id"], "kind": "do", "title": "t"}])[0]["id"]
+    assert sb.request_comments(rid) is None
+    assert sb.request_comment_counts([rid]) is None
+    c, f, b = _comment(rid)
+    assert sb.request_comment_add(c, f, b) is None
+    assert sb.request_file(rid, str(uuid.uuid4())) is None
+    assert sb.mentor_request_delete(rid) is True  # deleting a request still works
+    assert sb.name == "supabase" and sb.fallback_reason is None
+    sb.close()

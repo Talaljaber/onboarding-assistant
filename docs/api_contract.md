@@ -53,7 +53,7 @@ Every non-2xx response has this body (`ErrorBody`):
 | `too_many_requests` | 429 | admin sign-in after 5 wrong passwords inside 60 s (`field: "password"`) |
 | `internal_error` | 500 | anything else; the message is generic, details only in the log with the request id |
 | `imports_unavailable` | 503 | document import only (P12.1): the store has no `kb_imports`/`kb_drafts` tables (Supabase without migration 0003) or the import call failed; the rest of the app is unaffected |
-| `requests_unavailable` | 503 | mentor requests only (P13.2): the store has no `mentor_requests` table (Supabase without migration 0004) or the call failed; the rest of the app is unaffected |
+| `requests_unavailable` | 503 | mentor requests only (P13.2): the store has no `mentor_requests` table (Supabase without migration 0004) or the call failed; the rest of the app is unaffected. Also the request threads (P15) when the comment tables or the file storage cannot be used (migration 0005) |
 
 No 5xx is ever caused by the LLM or the store: LLM failures become `mode: "offline"` inside a 200,
 store failures switch the process to the local store.
@@ -459,8 +459,8 @@ turns with an answer status, `refusals` = `unsupported` turns, `refusal_share` =
 
 ## 6e. Mentor requests (P13.2)
 
-Text-only "learn this / do this / read this" requests from the admin (the mentor) to an intern. No files, no
-replies, no history: one row per request and intern. A request may link one K-row (`kb_id`, checked against
+"Learn this / do this / read this" requests from the admin (the mentor) to an intern: one row per request and
+intern, no history. Replies and files live on the request's thread (§6h). A request may link one K-row (`kb_id`, checked against
 the live KB) and one plan activity (`activity_id`, checked against the plan of the target intern's track), so
 the intern opens the row or the activity in one click. `title` (1–120 after cleaning) and `note` (≤ 1000,
 line breaks kept) are checked with the server's contact rule (the verifier's: no email, link or phone
@@ -470,8 +470,10 @@ status changes. Request text never reaches the assistant (chat, prompts, turn lo
 
 `MentorRequest` = `{id, intern_id, title, note, kind: "learn"|"do"|"read", kb_id, activity_id, due_date,
 status: "new"|"in_progress"|"done", created_at, updated_at, status_changed_at, kb_row: Source|null,
-activity: {id, kind, title_ar, milestone}|null}`. `kb_row` is the linked row verbatim from the live KB (null
-when the id is no longer in the KB); `activity` is null when the id is not in the intern's current plan.
+activity: {id, kind, title_ar, milestone}|null, comment_count}`. `kb_row` is the linked row verbatim from the
+live KB (null when the id is no longer in the KB); `activity` is null when the id is not in the intern's current
+plan; `comment_count` (P15) is the number of comments on the request's thread (0 when the store has no comment
+tables yet).
 `MentorRequestList` = `{requests: MentorRequest[] (newest first), counts: {new, in_progress, done},
 label_ar}`. Every endpoint answers 503 `requests_unavailable` when the store cannot serve the table.
 
@@ -505,7 +507,8 @@ least one field → `MentorRequest`. 404 unknown request.
 
 ### DELETE /api/admin/requests/{id} (admin)
 
-→ `MentorRequestDeleted` `{id, deleted: true}`. 404 unknown request.
+→ `MentorRequestDeleted` `{id, deleted: true}`. 404 unknown request. Its comments, file records and stored
+files go with it.
 
 ### GET /api/health
 
@@ -543,6 +546,58 @@ Offline: the row both the margin and hybrid search agree on (band `refuse` → `
 not required), then the number-and-unit rule (`app.verify.compare_claim`). In LLM mode one verified call may
 replace a claim's label (`by: "model"`); a claim whose verdict fails `verify_check` keeps its offline label. No
 generated text is returned. No store write and no turn log. `label_ar` is the fixed footer.
+
+## 6h. Request threads: comments and files (P15)
+
+Both ways on one request: the intern answers ("done, here is what I learned"), the admin replies. No edit or
+delete of a comment, no unread state, no notifications, no previews. `RequestComment` = `{id, request_id,
+author: "intern"|"admin", body, created_at, files: RequestFile[] (≤ 3)}`, `RequestFile` = `{id, filename,
+content_type, size_bytes}` (metadata only). `RequestThread` = `{request_id, comments: RequestComment[] (oldest
+first)}`. The intern routes are scoped exactly like `PATCH /api/requests/{id}`, by the session profile id:
+another intern's request (or a file of it) is 404, like an unknown one; 400 missing or malformed `profile_id`.
+The admin routes need the admin token (401 without it). Every route answers 503 `requests_unavailable` when the
+store cannot serve the comment tables or the file storage. Comment text and files never reach the assistant
+(chat, prompts, turn logs).
+
+New comment body `{body?, files?: [{filename, content_b64}]}` (+ `profile_id` on the intern route), JSON with
+base64 like the document import (no multipart): `body` 0–1000 after cleaning (line breaks kept), checked with
+the request contact rule (400 `field: "body"`); a comment needs a body or at least one file (400 `field:
+"body"`). Files: at most 3 (400 `field: "files"`), each 1 byte to 5 MiB decoded, allowed by extension **and**
+magic bytes only — `.pdf` (`%PDF-`), `.docx` (a zip with `word/document.xml`, inside the document import's
+zip-bomb limits), `.png` (PNG signature), `.jpg`/`.jpeg` (`FF D8 FF`); anything else, an empty or larger file
+or bad base64 → 400 `field: "files"`. The file name is reduced to its base name (no folders, control or format
+characters), extension kept, ≤ 120 characters. These two POST routes accept a body up to
+`COMMENT_BODY_MAX_BYTES` (about 20 MB; the admin route only with a valid token); every other route keeps 32 KB.
+
+Files are stored privately: Supabase Storage bucket `mentor-files` (private, migration 0005) or
+`data/live/mentor_files/` on the local store, at `requests/{request_id}/{file_id}`. Only the server reads them,
+with the secret key; the browser never gets a storage URL.
+
+### GET /api/requests/{id}/comments?profile_id=…
+
+→ `RequestThread` of the intern's own request.
+
+### POST /api/requests/{id}/comments
+
+Body `RequestCommentCreate` `{profile_id, body, files}` → 201 `RequestComment` (`author: "intern"`).
+
+### GET /api/requests/{id}/files/{file_id}?profile_id=…
+
+→ the file bytes with the stored `Content-Type`, `Content-Disposition: attachment; filename*=UTF-8''…`,
+`X-Content-Type-Options: nosniff`, `Cache-Control: no-store`. Never shown inline. 404 for a file of another
+request.
+
+### GET /api/admin/requests/{id}/comments (admin)
+
+→ `RequestThread` of any request.
+
+### POST /api/admin/requests/{id}/comments (admin)
+
+Body `AdminCommentCreate` `{body, files}` → 201 `RequestComment` (`author: "admin"`).
+
+### GET /api/admin/requests/{id}/files/{file_id} (admin)
+
+→ the file bytes, same headers as the intern route.
 
 ## 7. Fixed labels
 
@@ -586,6 +641,8 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
   `mentor_requests.json`, `mentor_request_status_request.json`, `mentor_request.json`,
   `mentor_request_patch_request.json`, `mentor_request_deleted.json`;
 - Rumour Check (P14.2): `check_request.json`, `check.json`;
+- request threads (P15): `request_thread.json`, `request_comment.json`, `request_comment_create_request.json`,
+  `request_comment_admin_create_request.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,
   `error_423.json`, `error_500.json`, `error_401.json`, `error_429.json`, `error_503.json`,
   `error_503_requests.json`.

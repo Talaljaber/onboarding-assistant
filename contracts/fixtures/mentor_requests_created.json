@@ -22,7 +22,8 @@
         "edited": false,
         "status": "official"
       },
-      "activity": null
+      "activity": null,
+      "comment_count": 0
     },
     {
       "id": "000000a2-4d3a-4e8b-9c71-2a5d0e7f3b14",
@@ -46,7 +47,8 @@
         "edited": false,
         "status": "official"
       },
-      "activity": null
+      "activity": null,
+      "comment_count": 0
     }
   ],
   "counts": {

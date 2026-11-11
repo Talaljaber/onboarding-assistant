@@ -2,6 +2,7 @@
 // small count badge (open = not done), each with a three-state status control. A status change shows
 // at once (optimistic) and is put back with an error toast when the server refuses it. Nothing renders
 // while there are no requests (or when the server cannot serve them): the home stays as it was.
+// P15: each card has a "Replies (n)" thread where the intern answers and sees the mentor's replies.
 import { useEffect, useId, useState } from "react";
 import { getMyRequests, setMyRequestStatus } from "@/api/client";
 import type { MentorRequest, RequestStatus } from "@/api/types";
@@ -12,6 +13,7 @@ import { Icon } from "../ui/Icon";
 import { surface } from "../ui/recipes";
 import { useToast } from "../ui/Toast";
 import { RequestCard, StatusControl } from "./RequestCard";
+import { RequestThread } from "./RequestThread";
 
 const ORDER: Record<RequestStatus, number> = { new: 0, in_progress: 1, done: 2 };
 
@@ -102,12 +104,15 @@ export function MentorRequestsPanel() {
                 key={req.id}
                 req={req}
                 footer={
-                  <StatusControl
-                    value={req.status}
-                    title={req.title}
-                    disabled={saving.has(req.id)}
-                    onChange={(s) => void change(req, s)}
-                  />
+                  <>
+                    <StatusControl
+                      value={req.status}
+                      title={req.title}
+                      disabled={saving.has(req.id)}
+                      onChange={(s) => void change(req, s)}
+                    />
+                    <RequestThread req={req} side="intern" profileId={profileId} />
+                  </>
                 }
               />
             ))}

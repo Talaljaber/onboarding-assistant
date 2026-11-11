@@ -3,9 +3,10 @@
 What it does: checks the admin's free text with the same contact/link rule the verifier applies to generated
 text (`verify.has_contact_or_link`: no email, link or phone number), checks a linked K-row id against the live
 KB and a linked activity id against the intern's plan, and shapes stored rows into the contract
-(`MentorRequest`, with the K-row verbatim and the activity title for one-click opening).
-What it must never do: accept a file or a reply, hold a score, or let request text reach the assistant (the
-agent, answer, LLM and prompt code never import this module; the text is shown to the intern only).
+(`MentorRequest`, with the K-row verbatim, the activity title for one-click opening and the thread's comment
+count). Replies and files live on the request's comment thread (P15, `app/request_comments.py`).
+What it must never do: hold a score, or let request text reach the assistant (the agent, answer, LLM and
+prompt code never import this module; the text is shown to the intern only).
 """
 
 from __future__ import annotations
@@ -65,7 +66,8 @@ def _activity(plan: PlanBook, aid: str | None, role: str | None) -> schemas.Link
                                   milestone=act.milestone)  # type: ignore[arg-type]
 
 
-def view(rec: dict[str, Any], kb_row: KbLookup, plan: PlanBook, role: str | None) -> schemas.MentorRequest:
+def view(rec: dict[str, Any], kb_row: KbLookup, plan: PlanBook, role: str | None,
+         comment_count: int = 0) -> schemas.MentorRequest:
     """The contract shape of one stored request; `role` is the intern's current track."""
     kid = rec.get("kb_id")
     return schemas.MentorRequest(
@@ -75,12 +77,15 @@ def view(rec: dict[str, Any], kb_row: KbLookup, plan: PlanBook, role: str | None
         status_changed_at=iso(rec["status_changed_at"]),
         kb_row=kb_row(kid) if kid else None,
         activity=_activity(plan, rec.get("activity_id"), role),
+        comment_count=comment_count,
     )
 
 
 def listing(recs: list[dict[str, Any]], kb_row: KbLookup, plan: PlanBook,
-            role_of: Callable[[str], str | None]) -> schemas.MentorRequestList:
-    items = [view(r, kb_row, plan, role_of(str(r["intern_id"]))) for r in recs]
+            role_of: Callable[[str], str | None],
+            comment_counts: dict[str, int] | None = None) -> schemas.MentorRequestList:
+    counted = comment_counts or {}
+    items = [view(r, kb_row, plan, role_of(str(r["intern_id"])), counted.get(str(r["id"]), 0)) for r in recs]
     counts = {s: sum(1 for i in items if i.status == s) for s in schemas.REQUEST_STATUSES}
     return schemas.MentorRequestList(requests=items, counts=schemas.RequestCounts(**counts),
                                      label_ar=schemas.REQUESTS_LABEL_AR)

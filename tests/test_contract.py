@@ -103,6 +103,11 @@ FIXTURES: dict[str, type[BaseModel]] = {
     # P14.2 Rumour Check
     "check_request.json": s.CheckRequest,
     "check.json": s.CheckResponse,
+    # P15 comments and files on mentor requests
+    "request_thread.json": s.RequestThread,
+    "request_comment.json": s.RequestComment,
+    "request_comment_create_request.json": s.RequestCommentCreate,
+    "request_comment_admin_create_request.json": s.AdminCommentCreate,
 }
 
 # One response fixture per endpoint (the request fixtures are listed in FIXTURES above).
@@ -144,6 +149,11 @@ ENDPOINT_FIXTURES = {
     "DELETE /api/admin/requests/{id}": "mentor_request_deleted.json",
     "GET /api/admin/kb/{id}/impact": "kb_impact.json",  # P14.1
     "POST /api/check": "check.json",
+    # P15 (the two file downloads answer bytes, not JSON: documented in api_contract.md §6h)
+    "GET /api/requests/{id}/comments": "request_thread.json",
+    "POST /api/requests/{id}/comments": "request_comment.json",
+    "GET /api/admin/requests/{id}/comments": "request_thread.json",
+    "POST /api/admin/requests/{id}/comments": "request_comment.json",
 }
 
 REQUEST_MODELS: dict[type[BaseModel], str] = {
@@ -164,6 +174,8 @@ REQUEST_MODELS: dict[type[BaseModel], str] = {
     s.MentorRequestPatch: "mentor_request_patch_request.json",
     s.MentorRequestStatusPatch: "mentor_request_status_request.json",
     s.CheckRequest: "check_request.json",
+    s.RequestCommentCreate: "request_comment_create_request.json",
+    s.AdminCommentCreate: "request_comment_admin_create_request.json",
 }
 
 
@@ -592,3 +604,34 @@ def test_rumour_check_shows_rows_verbatim_and_no_generated_text() -> None:
         s.CheckClaim.model_validate({**body["claims"][2], "label": "guarded", "by": "rules"})
     with pytest.raises(ValidationError):
         s.CheckRequest.model_validate({"text": "ا" * 601})
+
+
+def test_request_comments_limits_and_no_score() -> None:
+    """P15: body <= 1000 after cleaning, at most 3 files, two authors, the allow-listed content types only,
+    file sizes 1..5 MiB, and no score anywhere in a thread."""
+    req = load("request_comment_create_request.json")
+    s.RequestCommentCreate.model_validate({**req, "body": "ن" * 1000})
+    files = req["files"]
+    for bad in ({"body": "ن" * 1001}, {"files": files * 4}, {"profile_id": "nope"}, {"profile_id": None},
+                {"files": [{"filename": "", "content_b64": "eA=="}]}, {"files": [{"filename": "a.pdf"}]}):
+        with pytest.raises(ValidationError):
+            s.RequestCommentCreate.model_validate({**req, **bad})
+    with pytest.raises(ValidationError):  # the admin route has no profile id
+        s.AdminCommentCreate.model_validate(req)
+    assert s.AdminCommentCreate.model_validate({"body": "  ok  "}).model_dump() == {"body": "ok", "files": []}
+    comment = load("request_comment.json")
+    for bad in ({"author": "mentor"}, {"files": [{**comment["files"][0], "content_type": "text/html"}]},
+                {"files": [{**comment["files"][0], "size_bytes": 0}]},
+                {"files": [{**comment["files"][0], "size_bytes": 5 * 1024 * 1024 + 1}]}):
+        with pytest.raises(ValidationError):
+            s.RequestComment.model_validate({**comment, **bad})
+    thread = load("request_thread.json")
+    assert {c["author"] for c in thread["comments"]} == set(s.COMMENT_AUTHORS)
+    assert all(c["request_id"] == thread["request_id"] for c in thread["comments"])
+    banned = re.compile(r"score|grade|rating|correct|url|path|key|sha")
+    keys = all_keys(thread) | {f for m in (s.RequestThread, s.RequestComment, s.RequestFile) for f in m.model_fields}
+    assert not [k for k in keys if banned.search(k)]
+    listing = load("mentor_requests.json")["requests"]
+    counted = {r["id"]: r["comment_count"] for r in listing}
+    assert counted[thread["request_id"]] == len(thread["comments"])
+    assert s.COMMENT_BODY_MAX_BYTES > s.COMMENT_FILES_MAX * s.COMMENT_FILE_MAX_BYTES * 4 // 3

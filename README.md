@@ -248,6 +248,11 @@ The web client is prebuilt in `web/dist`; judges do not need Node. To rebuild:
   password (`ADMIN_PASSWORD`, demo default `dada2026`); the server checks a signed, expiring token on
   every editor write and on the manager summary, and slows down repeated wrong passwords. There are no
   per-person accounts: a real deployment would use the company's single sign-on with named admins.
+- **Interns sign in by name only (demo limitation).** Anyone at the device can pick an intern's name and act
+  as that intern, including reading and replying on their mentor requests and downloading their files.
+- **Mentor-request replies keep files.** Replies on a request (both ways) can carry up to 3 PDF, Word or
+  PNG/JPG files of 5 MB; they are stored privately (Supabase bucket `mentor-files` or `data/live/mentor_files/`)
+  and downloaded through the app only. They are checked by type and size, not scanned for viruses.
   The server listens on `127.0.0.1` only and refuses writes from other websites.
 - **No sync.** If Supabase drops during a session, later writes go to the local file and are not
   copied back.
@@ -287,7 +292,9 @@ Full note: [`docs/privacy_ai_note.md`](docs/privacy_ai_note.md).
   Never the role, the intern's name, progress or chat history.
 - **What is stored:** no chat text on any server. Supabase (or the local SQLite file) holds the
   knowledge base and its history, the interns (fictional names and tracks) and their profiles, progress,
-  attempt ids and turn metadata, and the passages of imported documents (never the uploaded file). The browser keeps the signed-in intern, progress, quiz results and the chat
+  attempt ids and turn metadata, and the passages of imported documents (never the uploaded file).
+  Mentor-request attachments and replies are stored (private bucket / local folder); knowledge-document
+  imports still are not. The browser keeps the signed-in intern, progress, quiz results and the chat
   thread in local storage («امسح بيانات هذا
   المتصفح» on «حول والخصوصية» clears it).
 - **No real personal data:** no real employee or customer data is used.
