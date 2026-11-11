@@ -70,6 +70,7 @@ export default function KbScreen() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
   const [oosNote, setOosNote] = useState<string[]>([]);
+  const [tryKey, setTryKey] = useState(0); // P16.4: a reset clears the "try it now" answer
 
   const rows = useMemo(() => kb.data?.rows ?? [], [kb.data]);
   const changed = useMemo(() => rows.filter((r) => r.status !== "official"), [rows]);
@@ -122,6 +123,7 @@ export default function KbScreen() {
     if (r.ok) {
       toast.show(t("extra.kbResetDone", { n: r.value.rows }), "ok");
       setOosNote([]);
+      setTryKey((n) => n + 1);
     } else toast.show(errorText(r), "danger");
   }
 
@@ -144,7 +146,7 @@ export default function KbScreen() {
                 squeeze the table below the width it needs and hide its Edit column. */}
             <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:gap-6">
               <div className="min-w-0">
-                <TryPanel />
+                <TryPanel key={tryKey} />
               </div>
               <div className="flex min-w-0 flex-col gap-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">

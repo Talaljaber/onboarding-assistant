@@ -5,7 +5,8 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { createRequests, getKb, getPlan, patchRequest } from "@/api/client";
 import type { MentorRequest, MentorRequestList, MentorRequestPatch, RequestKind, Role } from "@/api/types";
 import { REQUEST_KINDS, REQUEST_LIMITS } from "@/api/types";
-import { useT } from "@/i18n";
+import { useLang, useT } from "@/i18n";
+import { rowStart, topicLabel } from "@/lib/topic";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
 import { Dialog } from "../ui/Dialog";
@@ -25,6 +26,7 @@ export interface RequestDialogProps {
 
 export function RequestDialog({ intern, editing, onClose, onSaved }: RequestDialogProps) {
   const t = useT();
+  const { lang } = useLang();
   const uid = useId();
   const [kind, setKind] = useState<RequestKind>(editing?.kind ?? "learn");
   const [title, setTitle] = useState(editing?.title ?? "");
@@ -47,7 +49,12 @@ export function RequestDialog({ intern, editing, onClose, onSaved }: RequestDial
   useEffect(() => {
     const ctl = new AbortController();
     void getKb(ctl.signal).then((r) => {
-      if (r.ok) setKbOptions(r.value.rows.map((row) => ({ value: row.id, label: `${row.id} · ${row.topic}` })));
+      // P16.4: the id, its topic and the start of the row text (the keyword alone did not say which row it is)
+      if (r.ok) {
+        setKbOptions(
+          r.value.rows.map((row) => ({ value: row.id, label: `${row.id} · ${topicLabel(row.topic, lang)} · ${rowStart(row.answer_ar, 40)}` })),
+        );
+      }
     });
     void getPlan(intern.role, ctl.signal).then((r) => {
       if (r.ok) {
@@ -57,7 +64,7 @@ export function RequestDialog({ intern, editing, onClose, onSaved }: RequestDial
       }
     });
     return () => ctl.abort();
-  }, [intern.role]);
+  }, [intern.role, lang]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();

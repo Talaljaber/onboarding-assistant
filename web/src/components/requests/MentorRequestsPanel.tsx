@@ -48,6 +48,7 @@ export function MentorRequestsPanel() {
   async function change(req: MentorRequest, status: RequestStatus) {
     if (!profileId || status === req.status) return;
     const before = req.status;
+    if (open === null) setOpen(true); // P16.4: the done card stays in view (the panel no longer folds itself)
     setItems((cur) => cur?.map((i) => (i.id === req.id ? { ...i, status } : i)) ?? cur);
     setSaving((s) => new Set(s).add(req.id));
     const r = await setMyRequestStatus(req.id, profileId, status);

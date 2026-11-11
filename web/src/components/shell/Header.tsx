@@ -98,7 +98,8 @@ export function Header({ health }: { health: Health | null }) {
     setSettingsOpen(false);
     signOut();
     replace("/");
-    toast.show(t("uiIntern.signedOut"), "ok");
+    // P16.4: after the route change, whose effect drops passing toasts (it removed this one at once)
+    window.setTimeout(() => toast.show(t("uiIntern.signedOut"), "ok"), 0);
   };
   const modeSwitch = role && (
     <div role="group" aria-label={t("mode.label")} className={segmented.track}>

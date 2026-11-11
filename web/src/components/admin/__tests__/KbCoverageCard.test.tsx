@@ -50,8 +50,9 @@ describe("KB coverage card", () => {
     const items = within(top).getAllByRole("listitem");
     expect(items).toHaveLength(coverage.top_cited.length);
     expect(items[0]).toHaveTextContent("K16");
-    expect(items[0]).toHaveTextContent("Leave approval");
-    expect(items[0]).toHaveTextContent("4×");
+    // P16.4: the topic, not the English keyword (it goes stale after an edit)
+    expect(items[0]).not.toHaveTextContent("Leave approval");
+    expect(items[0]).toHaveTextContent("4 times");
     expect(within(items[0]!).getByRole("link", { name: "Open K16 in the editor" })).toHaveAttribute("href", "#/kb?row=K16");
 
     const never = document.querySelector<HTMLElement>("[data-coverage-never]")!;

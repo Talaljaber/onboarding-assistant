@@ -6,11 +6,13 @@ import type { MentorRequest, RequestStatus } from "@/api/types";
 import { REQUEST_STATUSES } from "@/api/types";
 import { useLang, useT } from "@/i18n";
 import { formatDay } from "@/lib/intern";
+import { topicLabel } from "@/lib/topic";
 import { SourceRow } from "../chat/SourceRow";
 import { Badge } from "../ui/Badge";
 import { cn } from "../ui/cn";
 import { Icon } from "../ui/Icon";
 import { link, segmented, surface } from "../ui/recipes";
+import { useToast } from "../ui/Toast";
 import { KIND, STATUS } from "./meta";
 
 /** Three-state status control (a radio group shaped like the segmented recipe). */
@@ -26,7 +28,14 @@ export function StatusControl({
   onChange: (s: RequestStatus) => void;
 }) {
   const t = useT();
+  const toast = useToast();
   const name = useId();
+  // P16.4: marking a request done says so (the panel used to fold away with no word)
+  const pick = (s: RequestStatus) => {
+    if (s === value) return;
+    onChange(s);
+    if (s === "done") toast.show(t("p16.markedDone"), "ok");
+  };
   return (
     <fieldset className="m-0 min-w-0 border-0 p-0" data-request-status={value}>
       <legend className="sr-only">{t("mentorReq.statusLegend", { title })}</legend>
@@ -47,7 +56,7 @@ export function StatusControl({
               value={s}
               checked={value === s}
               disabled={disabled}
-              onChange={() => onChange(s)}
+              onChange={() => pick(s)}
               className="sr-only"
             />
             {value === s && s === "done" && <Icon name="check" size={14} className="shrink-0" />}
@@ -112,7 +121,7 @@ export function RequestCard({ req, footer, showStatus }: { req: MentorRequest; f
                   <Icon name="book" size={16} className="shrink-0" />
                   {t(rowOpen ? "mentorReq.hideRow" : "mentorReq.openRow", { id: req.kb_id })}
                   <span lang="ar" className="font-normal text-fg-2 no-underline">
-                    · {req.kb_row.topic}
+                    · {topicLabel(req.kb_row.topic, lang)}
                   </span>
                 </button>
               ) : (

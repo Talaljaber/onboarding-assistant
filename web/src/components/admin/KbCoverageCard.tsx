@@ -7,6 +7,8 @@ import { getKbCoverage } from "@/api/client";
 import type { CoverageRow, CoverageWindow, KbCoverage } from "@/api/types";
 import { useLang, useT } from "@/i18n";
 import { pct } from "@/lib/format";
+import { pluralForm } from "@/lib/plural";
+import { topicLabel } from "@/lib/topic";
 import { formatDay } from "@/lib/intern";
 import { Card } from "../ui/Card";
 import { Icon } from "../ui/Icon";
@@ -17,6 +19,7 @@ const rowHref = (id: string) => `#/kb?row=${id}`;
 
 function WindowTile({ w }: { w: CoverageWindow }) {
   const t = useT();
+  const { lang } = useLang();
   const title = w.days === 7 ? t("kbCoverage.last7") : w.days === 30 ? t("kbCoverage.last30") : t("kbCoverage.lastDays", { n: w.days });
   return (
     <div data-coverage-window={w.days} className={`${surface.panel} flex min-w-0 flex-col gap-1 p-4`}>
@@ -25,19 +28,21 @@ function WindowTile({ w }: { w: CoverageWindow }) {
         <p className="m-0 text-base text-fg-2">{t("kbCoverage.noQuestions")}</p>
       ) : (
         <>
-          <p className="m-0 text-xl font-bold text-fg-1">{t("kbCoverage.questions", { n: w.questions })}</p>
+          <p className="m-0 text-xl font-bold text-fg-1">{t(`p16.questions${pluralForm(w.questions, lang)}`, { n: w.questions })}</p>
           <p className="m-0 text-sm text-fg-2">
             {t("kbCoverage.refusals", { n: w.refusals, pct: pct((w.refusal_share ?? 0) * 100) })}
           </p>
         </>
       )}
-      <p className="m-0 text-xs text-fg-3">{t("kbCoverage.turns", { n: w.turns })}</p>
+      <p className="m-0 text-xs text-fg-3">{t(`p16.turns${pluralForm(w.turns, lang)}`, { n: w.turns })}</p>
     </div>
   );
 }
 
+/** The K-id and its topic (P16.4: not the English keyword, which goes stale after an edit). */
 function RowLabel({ r }: { r: CoverageRow }) {
   const t = useT();
+  const { lang } = useLang();
   return (
     <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
       <a href={rowHref(r.id)} aria-label={t("kbCoverage.openRow", { id: r.id })} className={`font-id inline-flex min-h-11 items-center text-sm sm:min-h-0 ${link}`}>
@@ -47,15 +52,7 @@ function RowLabel({ r }: { r: CoverageRow }) {
         {r.topic === null ? (
           <span className="text-fg-3">{t("kbCoverage.removed")}</span>
         ) : (
-          <>
-            <span dir="auto">{r.topic}</span>
-            {r.keyword_en && (
-              <span className="text-fg-3">
-                {" · "}
-                <bdi dir="ltr">{r.keyword_en}</bdi>
-              </span>
-            )}
-          </>
+          <span dir="auto">{topicLabel(r.topic, lang)}</span>
         )}
       </span>
     </span>
@@ -64,6 +61,7 @@ function RowLabel({ r }: { r: CoverageRow }) {
 
 function CoverageBody({ data }: { data: KbCoverage }) {
   const t = useT();
+  const { lang } = useLang();
   const max = data.top_cited[0]?.count ?? 0;
   if (data.total_turns === 0) {
     return <p className="m-0 text-base text-fg-2">{t("kbCoverage.empty")}</p>;
@@ -90,7 +88,7 @@ function CoverageBody({ data }: { data: KbCoverage }) {
                   <div className="flex items-baseline justify-between gap-3">
                     <RowLabel r={r} />
                     <span className="shrink-0 text-sm font-semibold text-fg-2">
-                      <bdi dir="ltr">{t("kbCoverage.times", { n: r.count })}</bdi>
+                      {t(`p16.times${pluralForm(r.count, lang)}`, { n: r.count })}
                     </span>
                   </div>
                   <span aria-hidden="true" className="h-1.5 overflow-hidden rounded-full bg-surface-2">

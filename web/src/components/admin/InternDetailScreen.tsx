@@ -8,6 +8,8 @@ import { getInternDetail, patchIntern } from "@/api/client";
 import type { CompanyValue, InternDetail, TimelineKind } from "@/api/types";
 import { translate, useLang, useServerLabel, useT, type DictKey } from "@/i18n";
 import { formatDay, formatWhen, internName, internNameLang } from "@/lib/intern";
+import { pluralForm } from "@/lib/plural";
+import { topicLabel } from "@/lib/topic";
 import { usePath } from "@/router";
 import { ProgressRing } from "../progress/ProgressRing";
 import { AdminRequestsSection } from "../requests/AdminRequestsSection";
@@ -59,6 +61,9 @@ function Section({ title, icon, children, className }: { title: string; icon: Ic
   );
 }
 
+/** P16.4: the timeline shows its newest entries first and the rest on request. */
+const TIMELINE_PAGE = 15;
+
 function Empty({ children }: { children: ReactNode }) {
   return <p className="m-0 text-sm text-fg-3">{children}</p>;
 }
@@ -75,6 +80,7 @@ export default function InternDetailScreen() {
   const [editing, setEditing] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [shown, setShown] = useState(TIMELINE_PAGE);
   const label = useServerLabel(data?.label_ar, "uiIntern.label");
 
   useEffect(() => {
@@ -120,6 +126,7 @@ export default function InternDetailScreen() {
   }
 
   const d = data;
+  const activityTitle = new Map(d?.progress.milestones.flatMap((m) => m.activities.map((a) => [a.id, a.title_ar] as const)) ?? []);
   const roleName = (r: string) => t(r === "Sales" ? "role.sales" : "role.delivery");
   return (
     <section data-screen="admin-intern" className="min-w-0">
@@ -230,7 +237,10 @@ export default function InternDetailScreen() {
                           {ids([s.scenario_id])}
                           {s.value && <ValueTag ar={translate("ar", VALUE_KEY[s.value])} en={s.value} />}
                           <span className="text-sm text-fg-2">
-                            {t("uiIntern.scenarioTimes", { n: s.times, date: formatWhen(s.last_at, lang) })}
+                            {t("p16.scenarioTimes", {
+                              times: t(`p16.times${pluralForm(s.times, lang)}`, { n: s.times }),
+                              date: formatWhen(s.last_at, lang),
+                            })}
                           </span>
                         </li>
                       ))}
@@ -278,8 +288,8 @@ export default function InternDetailScreen() {
                         {d.chat.cited.map((c) => (
                           <li key={c.id} className="flex items-baseline gap-2">
                             {ids([c.id])}
-                            <span lang="ar" className="min-w-0 flex-1 text-fg-1">
-                              {c.topic}
+                            <span dir="auto" className="min-w-0 flex-1 text-fg-1">
+                              {topicLabel(c.topic, lang)}
                             </span>
                             <span className="font-id text-fg-2" dir="ltr">
                               ×{c.count}
@@ -298,23 +308,47 @@ export default function InternDetailScreen() {
                 {d.timeline.length === 0 ? (
                   <Empty>{t("uiIntern.noTimeline")}</Empty>
                 ) : (
-                  <ol className="m-0 flex list-none flex-col gap-0 p-0" data-detail-timeline>
-                    {d.timeline.map((e, n) => (
-                      <li key={`${e.at}-${n}`} className="flex items-start gap-3 border-s-2 border-line ps-4 pb-3 last:pb-0">
-                        <span aria-hidden="true" className="-ms-[1.6rem] mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-accent-soft text-accent ring-4 ring-surface-0">
-                          <Icon name={KIND[e.kind].icon} size={12} />
-                        </span>
-                        <span className="flex min-w-0 flex-1 flex-col">
-                          <span className="flex flex-wrap items-baseline gap-x-2 text-sm text-fg-1">
-                            {t(KIND[e.kind].key)}
-                            {e.ids.length > 0 && ids(e.ids)}
-                            {e.role !== d.intern.role && <span className="text-xs text-fg-3">({roleName(e.role)})</span>}
-                          </span>
-                          <span className="text-xs text-fg-3">{formatWhen(e.at, lang)}</span>
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
+                  <>
+                    <ol className="m-0 flex list-none flex-col gap-0 p-0" data-detail-timeline>
+                      {d.timeline.slice(0, shown).map((e, n) => {
+                        const title = e.kind === "activity" && e.ids.length === 1 ? activityTitle.get(e.ids[0]!) : undefined;
+                        return (
+                          <li key={`${e.at}-${n}`} className="flex items-start gap-3 border-s-2 border-line ps-4 pb-3 last:pb-0">
+                            <span aria-hidden="true" className="-ms-[1.6rem] mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-accent-soft text-accent ring-4 ring-surface-0">
+                              <Icon name={KIND[e.kind].icon} size={12} />
+                            </span>
+                            <span className="flex min-w-0 flex-1 flex-col">
+                              <span className="flex flex-wrap items-baseline gap-x-2 text-sm text-fg-1">
+                                {title ? (
+                                  <>
+                                    <span>
+                                      {t(KIND[e.kind].key)}:{" "}
+                                      <span lang="ar" dir="rtl" className="font-semibold">
+                                        {title}
+                                      </span>
+                                    </span>
+                                    {ids(e.ids)}
+                                  </>
+                                ) : (
+                                  <>
+                                    {t(KIND[e.kind].key)}
+                                    {e.ids.length > 0 && ids(e.ids)}
+                                  </>
+                                )}
+                                {e.role !== d.intern.role && <span className="text-xs text-fg-3">({roleName(e.role)})</span>}
+                              </span>
+                              <span className="text-xs text-fg-3">{formatWhen(e.at, lang)}</span>
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                    {d.timeline.length > shown && (
+                      <Button variant="secondary" icon="chevron-down" className="self-start" onClick={() => setShown((n) => n + TIMELINE_PAGE)} data-timeline-more>
+                        {t("p16.timelineMore", { n: d.timeline.length - shown })}
+                      </Button>
+                    )}
+                  </>
                 )}
               </Section>
             </>

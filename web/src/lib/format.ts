@@ -21,3 +21,12 @@ export function score(value: number): string {
 export function isoDay(iso: string): string {
   return iso.slice(0, 10);
 }
+
+/** The local calendar day `YYYY-MM-DD` of a timestamp (default: now); a bare `YYYY-MM-DD` is kept as is. */
+export function localDay(iso?: string): string {
+  if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const d = iso ? new Date(iso) : new Date();
+  if (Number.isNaN(d.getTime())) return iso ? iso.slice(0, 10) : "";
+  const p = (v: number) => String(v).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}

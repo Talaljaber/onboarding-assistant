@@ -3,7 +3,7 @@
 // tool and step names, English reason codes and the request id sit behind a "Technical details"
 // disclosure (closed by default); the route, retrieval, vote rows, summary and checks stay visible.
 import { useId, useState, type ReactNode } from "react";
-import type { PanelRole, Trace } from "@/api/types";
+import type { PanelRole, Trace, TracePanelVote } from "@/api/types";
 import { useT, type DictKey } from "@/i18n";
 import { ms, score } from "@/lib/format";
 import { Badge } from "../ui/Badge";
@@ -45,6 +45,39 @@ const ROLE_KEY: Record<PanelRole, DictKey> = {
 };
 
 const conf = (v: number) => v.toFixed(2);
+
+const FLAG_KEY: Record<string, DictKey> = {
+  injection: "p16.flagInjection",
+  contact: "p16.flagContact",
+  decision: "p16.flagDecision",
+};
+
+/**
+ * P16.4: a short fixed summary of one panel vote in the UI language, from its role, verdict and the
+ * server's note prefixes ("flags: …", "discarded: …", "refusal kept: …"); the model's own note (often
+ * English) stays behind "Technical details".
+ */
+function voteSummary(v: TracePanelVote, t: (k: DictKey, vars?: Record<string, string | number>) => string): string {
+  const note = (v.note ?? "").trim();
+  switch (v.role) {
+    case "sanitizer": {
+      if (!v.ok) return t("p16.voteSanitizerNo");
+      const m = /^flags:\s*([^;]+);/.exec(note);
+      const flags = m ? m[1]!.split(",").map((f) => FLAG_KEY[f.trim()]).filter((k): k is DictKey => Boolean(k)) : [];
+      return flags.length ? t("p16.voteSanitizerFlag", { flags: flags.map((k) => t(k)).join("، ") }) : t("p16.voteSanitizerOk");
+    }
+    case "answerer":
+      if (note.startsWith("discarded")) return t("p16.voteAnswererDiscarded");
+      return t(v.ok ? "p16.voteAnswererOk" : "p16.voteAnswererNo");
+    case "citation_judge":
+      return t(v.ok ? "p16.voteCitationOk" : "p16.voteCitationNo");
+    case "coverage_judge":
+      if (note.startsWith("refusal kept")) return t("p16.voteCoverageKept");
+      return t(v.ok ? "p16.voteCoverageOk" : "p16.voteCoverageNo");
+    case "escalation":
+      return t(v.ok ? "p16.voteEscalationOk" : "p16.voteEscalationNo");
+  }
+}
 
 /** P11.1: the translation step of an English-UI answer (`translate:ok`, `cache:translate`, `translate:<x>`). */
 function translationOf(steps: readonly string[]): { key: DictKey; reason: string | null } | null {
@@ -231,10 +264,10 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
 
       {trace.panel && (
         <Section title={t("extra.panelTitle")}>
-          <div data-panel className="overflow-x-auto">
-            <ul className="flex min-w-[20rem] flex-col gap-2">
+          <div data-panel className="min-w-0">
+            <ul className="flex min-w-0 flex-col gap-2">
               {trace.panel.votes.map((v, i) => (
-                <li key={`${i}-${v.role}`} data-vote={v.role} data-ok={v.ok} className="flex flex-col gap-0.5">
+                <li key={`${i}-${v.role}`} data-vote={v.role} data-ok={v.ok} className="flex min-w-0 flex-col gap-0.5 break-words">
                   <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     <span className="font-semibold">{t(ROLE_KEY[v.role])}</span>
                     {tech && <bdi className="font-id break-all text-xs" dir="ltr">{v.model}</bdi>}
@@ -250,16 +283,22 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
                     )}
                     {v.cached && <span className="text-xs text-fg-2">{t("extra.panelCached")}</span>}
                   </p>
-                  {v.note && (
-                    <p className="text-xs text-fg-2" dir="auto">
-                      {v.note}
-                    </p>
+                  <p data-vote-summary className="text-xs text-fg-2">
+                    {voteSummary(v, t)}
+                  </p>
+                  {tech && v.note && (
+                    <div data-vote-note className="text-xs text-fg-3 [overflow-wrap:anywhere]">
+                      <span className="font-semibold">{t("p16.voteRaw")}:</span>
+                      <p dir="auto" className="m-0">
+                        {v.note}
+                      </p>
+                    </div>
                   )}
                 </li>
               ))}
             </ul>
           </div>
-          <p data-panel-summary className="mt-2 flex flex-wrap items-baseline gap-x-3 font-semibold">
+          <p data-panel-summary className="mt-2 flex min-w-0 flex-wrap items-baseline gap-x-3 font-semibold [overflow-wrap:anywhere]">
             {typeof trace.panel.confidence === "number" && (
               <span>{t("extra.panelAgreed", { value: conf(trace.panel.confidence) })}</span>
             )}

@@ -11,7 +11,7 @@ import { surface } from "@/components/ui/recipes";
 import { ValueLabel } from "@/components/ui/ValueLabel";
 import { useScenarioList } from "@/components/scenarios/useScenarioList";
 import { useT } from "@/i18n";
-import { isoDay } from "@/lib/format";
+import { localDay } from "@/lib/format";
 import { practisedScenarios } from "@/state/progress";
 import { useAppState } from "@/state/useAppState";
 
@@ -78,7 +78,7 @@ export function Day90Summary({ onClose }: { onClose: () => void }) {
             </p>
             <p className="m-0 inline-flex items-center gap-1.5">
               <Icon name="calendar" size={14} className="shrink-0 text-fg-3 print:hidden" />
-              {t("summary.generated", { date: isoDay(new Date().toISOString()) })}
+              {t("summary.generated", { date: localDay() })}
             </p>
           </div>
         </div>
@@ -92,7 +92,7 @@ export function Day90Summary({ onClose }: { onClose: () => void }) {
             {done.map(({ a, date }) => (
               <li key={a.id} className={itemCls}>
                 <span lang="ar" dir="rtl" className="min-w-0 text-start text-fg-1">{a.title_ar}</span>
-                <bdi className={dateCls} dir="ltr">({isoDay(date)})</bdi>
+                <bdi className={dateCls} dir="ltr">({localDay(date)})</bdi>
               </li>
             ))}
           </ul>
@@ -119,7 +119,7 @@ export function Day90Summary({ onClose }: { onClose: () => void }) {
                       </>
                     )}
                   </span>
-                  <bdi className={dateCls} dir="ltr">({isoDay(date)})</bdi>
+                  <bdi className={dateCls} dir="ltr">({localDay(date)})</bdi>
                 </li>
               );
             })}
@@ -133,7 +133,7 @@ export function Day90Summary({ onClose }: { onClose: () => void }) {
         ) : (
           <ul className={listCls}>
             {quiz.attempts.map((q, i) => (
-              <li key={`${q.at}-${i}`} className={itemCls}>{t("extra.summaryQuizLine", { date: isoDay(q.at), total: q.total })}</li>
+              <li key={`${q.at}-${i}`} className={itemCls}>{t("extra.summaryQuizLine", { date: localDay(q.at), total: q.total })}</li>
             ))}
           </ul>
         )}

@@ -142,7 +142,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
         )}
       >
         <span role={tooLong ? "alert" : undefined}>{tooLong ? t("chat.tooLong", { max: maxLength }) : ""}</span>
-        <bdi dir="ltr" className="shrink-0 tabular-nums">
+        <bdi className="shrink-0 tabular-nums">
           {t("chat.counter", { n: text.length, max: maxLength })}
         </bdi>
       </p>

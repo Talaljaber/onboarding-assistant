@@ -63,6 +63,33 @@ describe("TracePanel answer panel section", () => {
     expect(screen.getByText("مدقق المصادر")).toBeInTheDocument();
   });
 
+  it("summarises each vote in Arabic and keeps the model's own note behind technical details (P16.4)", () => {
+    const el = show(
+      {
+        votes: [
+          { role: "sanitizer", model: "m", ok: true, note: "flags: contact; Plain factual question about leave" },
+          ...votes,
+          { role: "coverage_judge", model: "retrieval-band", ok: true, note: "refusal kept: retrieval band is refuse" },
+        ],
+        accepted: true,
+        single_call: false,
+      },
+      "ar",
+    );
+    const rows = el.querySelectorAll("[data-vote]");
+    expect(rows[0]!.querySelector("[data-vote-summary]")).toHaveTextContent("نبّه إلى: طلب بيانات اتصال.");
+    expect(rows[1]!.querySelector("[data-vote-summary]")).toHaveTextContent("كتب مسودة الإجابة من الصفوف المسترجعة.");
+    expect(rows[2]!.querySelector("[data-vote-summary]")).toHaveTextContent("المصادر المذكورة لا تدعم الإجابة كلها.");
+    expect(rows[3]!.querySelector("[data-vote-summary]")).toHaveTextContent("أبقى الرفض");
+    expect(screen.queryByText(/Plain factual question/)).toBeNull();
+    expect(el.querySelector("[data-vote-note]")).toBeNull();
+    fireEvent.click(within(el).getByRole("button", { name: "تفاصيل تقنية" }));
+    expect(screen.getByText(/Plain factual question/)).toBeInTheDocument();
+    // no fixed minimum width inside a scroller (it clipped the start of each line in RTL at 360 px)
+    expect(el.querySelector("[data-panel]")!.className).not.toMatch(/overflow-x-auto/);
+    expect(el.querySelector("[data-panel] ul")!.className).not.toMatch(/min-w-\[/);
+  });
+
   it("renders nothing extra when the panel is absent", () => {
     const el = show(undefined);
     expect(el.querySelector("[data-panel]")).toBeNull();

@@ -22,6 +22,7 @@ import {
   defaultDocName,
   fileProblem,
   fileToBase64,
+  headingOf,
   mb,
   rememberSummary,
   typesLabel,
@@ -129,6 +130,10 @@ export default function ImportScreen() {
     setFile(f);
     setDocName(defaultDocName(f.name));
     setProblem(caps ? fileProblem(f, caps) : null);
+    // P16.4: a text file's own heading is a better source name than its file name
+    void headingOf(f).then((h) => {
+      if (h) setDocName((cur) => (cur === defaultDocName(f.name) ? h : cur));
+    });
   }
 
   function onDrop(e: DragEvent<HTMLDivElement>) {
@@ -205,7 +210,8 @@ export default function ImportScreen() {
                     {file ? t("kbImport.change") : t("kbImport.choose")}
                   </Button>
                   <p className="m-0 text-sm text-fg-3">
-                    {t("kbImport.types", { types: typesLabel(caps), mb: mb(caps.max_bytes) })}
+                    {/* P16.4: the ".txt .md" list is an LTR isolate (LRI ... PDI) so each dot sits before its extension */}
+                    {t("kbImport.types", { types: `⁦${typesLabel(caps)}⁩`, mb: mb(caps.max_bytes) })}
                     {!caps.pdf && <> {t("kbImport.pdfOptional")}</>}
                   </p>
                 </div>
@@ -213,7 +219,9 @@ export default function ImportScreen() {
 
               <TextField
                 label={t("kbImport.docName")}
-                description={t("kbImport.docNameHelp")}
+                description={problem?.key === "kbImport.errName" ? t("kbImport.errName") : t("kbImport.docNameHelp")}
+                aria-invalid={problem?.key === "kbImport.errName" || undefined}
+                required
                 value={docName}
                 maxLength={80}
                 disabled={busy}

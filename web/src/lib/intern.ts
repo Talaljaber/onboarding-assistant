@@ -26,7 +26,10 @@ export function formatWhen(iso: string | null | undefined, lang: Lang): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return new Intl.DateTimeFormat(LOCALE[lang], { dateStyle: "medium", timeStyle: "short" }).format(d);
+  // a no-break space before the AM/PM marker («ص» / «م») so it never wraps onto its own line (P16.4)
+  return new Intl.DateTimeFormat(LOCALE[lang], { dateStyle: "medium", timeStyle: "short" })
+    .format(d)
+    .replace(/\s(?=(?:ص|م|AM|PM)$)/u, " ");
 }
 
 /** "11 Nov 2026" style date. */

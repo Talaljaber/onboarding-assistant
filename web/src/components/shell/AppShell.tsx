@@ -55,7 +55,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="flex-1">{t("app.disclaimer")}</span>
               <button
                 type="button"
-                aria-label={t("ui.dialog.closeLabel")}
+                aria-label={t("p16.bannerClose")}
                 onClick={() => setDemoBannerSeen(true)}
                 className="grid size-11 shrink-0 place-items-center rounded-full text-fg-2 hover:bg-surface-2"
               >
