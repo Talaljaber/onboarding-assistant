@@ -81,6 +81,8 @@ from app.schemas import (
     Role,
     ScenarioFeedbackRequest,
 )
+from app import factcheck  # P14.2 Rumour Check
+from app.schemas import CheckRequest  # P14.2 Rumour Check
 from app.schemas import (  # P13.2 mentor requests
     MentorRequestCreate,
     MentorRequestDeleted,
@@ -775,6 +777,22 @@ def build_router() -> APIRouter:
             raise ApiError("not_found", 404, "unknown request")
         log_event("request_deleted", request_id=_rid(request))
         return _json(MentorRequestDeleted(id=request_id, deleted=True))
+
+    # -------------------------------------------------------------------------- Rumour Check (P14.2)
+    @r.post("/check")
+    def check(body: CheckRequest, request: Request) -> JSONResponse:
+        """Each sentence of a pasted rumour against the KB. No store write and no turn log (no text is kept)."""
+        agent = _agent(request)
+        wait_for_reindex(agent)
+        use_llm = agent.settings.llm_check and agent.llm_on(body.force_offline)
+        if use_llm and agent.llm is not None and agent.llm.chat is not None:
+            agent.llm.chat.last_error = None  # an earlier request's error must not count against this one
+        deadline = min(agent.settings.llm_deadline_s, factcheck.CHECK_MAX_S)
+        resp = factcheck.run_check(body.text, retriever=agent.retriever, kb=agent.kb, llm=agent.llm,
+                                   use_llm=use_llm, deadline_s=deadline)
+        if use_llm:
+            agent._note_hard_failure()  # a 401/402 turns the LLM off for the next requests, as a chat turn does
+        return _json(resp)
 
     # -------------------------------------------------------------------------- health
     @r.get("/health")

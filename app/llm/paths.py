@@ -1,4 +1,4 @@
-"""The LLM answer, feedback, translation (P11.1), small-talk (P12.2), import-organizer (P12.1), import title (P13.4) and tool-choice paths as pure functions over a `CachedChat`.
+"""The LLM answer, feedback, translation (P11.1), small-talk (P12.2), import-organizer (P12.1), import title (P13.4), Rumour Check (P14.2) and tool-choice paths as pure functions over a `CachedChat`.
 
 `answer.py`, `scenarios.py` and `agent.py` call these. Each one renders its prompt file, serves a cache
 hit (re-verified) or makes one call, verifies the reply, and stores it in the cache **only after** it
@@ -21,6 +21,7 @@ from app.llm.cached_chat import JSON_OBJECT, CachedChat
 from app.logging_setup import log_event
 from app.verify import (
     BAD_SHAPE,
+    CheckVerdict,
     FOREIGN_ID,
     FOREIGN_NUMBER,
     INVALID_JSON,
@@ -28,6 +29,7 @@ from app.verify import (
     normalise_ids,
     parse_json_object,
     verify_answer,
+    verify_check,
     OrganizeVerdict,
     TitlesVerdict,
     verify_feedback,
@@ -649,3 +651,76 @@ def store_choice(chat: CachedChat | None, info: Mapping[str, Any]) -> None:
     """Cache a tool choice after `tools.validate_args` accepted it (no-op for a cache hit)."""
     if chat is not None and info.get("raw") and info.get("cache_key") and not info.get("cached"):
         chat.store(str(info["cache_key"]), str(info["raw"]))
+
+
+# -- Rumour Check (P14.2) ------------------------------------------------------------------------------------------
+CHECK_PROMPT = "check_v1"
+CHECK_MAX_TOKENS = 500
+
+
+def render_check_prompt(claims: Mapping[int, str], rows: Sequence[Mapping[str, Any]]) -> str:
+    """The rendered `check_v1` prompt: the numbered claims (never a guarded one: the caller drops those) and the
+    live rows as `{id, topic, text}`. No role, no name, no profile, no document name."""
+    return _render(
+        CHECK_PROMPT,
+        claims=[{"i": i, "text": t} for i, t in sorted(claims.items())],
+        rows=[{"id": str(r.get("id")), "topic": r.get("topic", ""), "text": r.get("answer_ar", "")} for r in rows],
+    )
+
+
+def _accept_check(content: str, claims: Mapping[int, str], rows: Sequence[Mapping[str, Any]]) -> CheckVerdict:
+    parsed = parse_json_object(content)
+    return verify_check(parsed, claims, rows) if parsed is not None else CheckVerdict(False, INVALID_JSON)
+
+
+def llm_check(
+    claims: Mapping[int, str],
+    rows: Sequence[Mapping[str, Any]],
+    chat: CachedChat | None,
+    deadline_s: float,
+    *,
+    info: dict[str, Any] | None = None,
+) -> tuple[CheckVerdict | None, str | None]:
+    """One call for the whole Rumour Check: a verified `CheckVerdict` (its `items` are the claims whose verdict
+    passed) or `(None, reason)`. Never raises. A cache hit is re-verified and used only when complete; a fresh
+    reply is stored only when **every** claim's verdict passed with nothing rejected or downgraded (a partly
+    rejected reply is used for the claims that passed, never cached). `info` gets `cached`, `latency_ms`,
+    `calls`, `model`, `prompt`, `rejected`, `downgraded`."""
+    _fill(info, model=getattr(chat, "model_id", None), prompt=CHECK_PROMPT, cached=False, latency_ms=0, calls=0,
+          rejected=0, downgraded=0)
+    try:
+        if chat is None:
+            return None, "no_llm"
+        if not claims:
+            return None, BAD_SHAPE
+        rendered = render_check_prompt(claims, rows)
+        ex = _Exchange(chat, CHECK_PROMPT, rendered, CHECK_MAX_TOKENS)
+        hit = ex.cached()
+        if hit is not None:
+            verdict = _accept_check(hit, claims, rows)
+            if verdict.ok and verdict.complete:
+                _fill(info, cached=True)
+                return verdict, None
+            log_event("llm_cache_stale", prompt=CHECK_PROMPT, key=ex.key[:12], reason=verdict.reason or "rejected")
+        if deadline_s < MIN_CALL_S:
+            return None, "no_time"
+        content, latency_ms, failure = ex.fresh(deadline_s)
+        _fill(info, latency_ms=latency_ms, calls=1)
+        if content is None:
+            return None, failure
+        verdict = _accept_check(content, claims, rows)
+        if not verdict.ok:
+            log_event("verifier_rejection", prompt=CHECK_PROMPT, key=ex.key[:12], reason=verdict.reason,
+                      model=chat.model_id)
+            return None, verdict.reason
+        _fill(info, rejected=len(verdict.rejected), downgraded=len(verdict.downgraded))
+        if verdict.complete:
+            ex.store(content)
+        else:
+            log_event("verifier_rejection", prompt=CHECK_PROMPT, key=ex.key[:12], reason="claims_rejected",
+                      model=chat.model_id, rejected=sorted(set(verdict.rejected.values())),
+                      downgraded=len(verdict.downgraded))
+        return verdict, None
+    except Exception as exc:  # noqa: BLE001 - a check must never fail the request
+        log_event("llm_path_error", prompt=CHECK_PROMPT, error=type(exc).__name__)
+        return None, "internal_error"

@@ -376,3 +376,11 @@ import { isKbImpact, type KbImpact } from "./types";
 /** Interns whose answers cited the row, and the plan and quiz items that reference it (edit dialog). */
 export const getKbImpact = (id: string, signal?: AbortSignal) =>
   request<KbImpact>(`/api/admin/kb/${q(id)}/impact`, { guard: isKbImpact, signal, admin: true });
+
+// ---------------------------------------------------------------- Rumour Check (P14.2)
+
+import { isCheckResponse, type CheckRequest, type CheckResponse } from "./types";
+
+/** Each sentence of a pasted rumour against the KB (no store write on the server). */
+export const postCheck = (body: CheckRequest, signal?: AbortSignal) =>
+  request<CheckResponse>("/api/check", { method: "POST", body, guard: isCheckResponse, signal });

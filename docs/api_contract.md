@@ -527,6 +527,23 @@ either track whose `refs` hold it, `quiz_ids` the quiz items whose explanation i
 only: never chat text, never a count per intern. `{id}` must match `K\d{2,3}` and exist in the live KB, else
 404 (so the path never collides with `/api/admin/kb/imports/...`). 401 without the admin token.
 
+## 6g. Rumour Check (P14.2)
+
+### POST /api/check
+
+Body `CheckRequest` `{text (1–600 after cleaning, line breaks kept), force_offline?}` → `CheckResponse`
+`{claims: CheckClaim[] (≤ 5), truncated, mode, label_ar}`. The text is split on `. ، ؛ ؟ !` and line breaks only;
+each claim is the user's own substring (`text` at offset `start` of the cleaned text); a sixth sentence sets
+`truncated`. `CheckClaim` = `{i, text, start, label, source: Source|null, numbers: CheckNumbers|null, by:
+"rules"|"model"}` with `label` one of `supported` (the row confirms it), `differs` (same unit word, another
+number: `numbers` = `{claim, claim_start, row, row_start}`, both verbatim spans), `contradicts` (model only,
+verified quote in the row), `related` (nearest row, not confirmed), `not_found` (no row; `source` null) and
+`guarded` (the employment / contact guard stopped it; `source` null, never compared, never sent to the model).
+Offline: the row both the margin and hybrid search agree on (band `refuse` → `not_found`; the answer band is
+not required), then the number-and-unit rule (`app.verify.compare_claim`). In LLM mode one verified call may
+replace a claim's label (`by: "model"`); a claim whose verdict fails `verify_check` keeps its offline label. No
+generated text is returned. No store write and no turn log. `label_ar` is the fixed footer.
+
 ## 7. Fixed labels
 
 | constant | text |
@@ -538,6 +555,7 @@ only: never chat text, never a count per intern. `{id}` must match `K\d{2,3}` an
 | quiz `label_ar` | «اختبار تدريبي» |
 | admin interns `label_ar` | «متدربون للعرض بأسماء افتراضية — أعداد الإكمال والتدريب فقط، ليست تقييماً» |
 | mentor requests `label_ar` | «طلبات من المشرف للمتابعة — ليست تقييماً» |
+| rumour check `label_ar` | «هذا فحص للمعلومة، وليس حكماً على أحد» |
 
 The refusal, not-confirmed, partial, contact, employment and injection texts are the fixed server texts
 of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
@@ -567,6 +585,7 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
 - mentor requests (P13.2): `mentor_request_create_request.json`, `mentor_requests_created.json`,
   `mentor_requests.json`, `mentor_request_status_request.json`, `mentor_request.json`,
   `mentor_request_patch_request.json`, `mentor_request_deleted.json`;
+- Rumour Check (P14.2): `check_request.json`, `check.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,
   `error_423.json`, `error_500.json`, `error_401.json`, `error_429.json`, `error_503.json`,
   `error_503_requests.json`.

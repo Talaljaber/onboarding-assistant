@@ -1364,3 +1364,69 @@ export function isKbImpact(x: unknown): x is KbImpact {
     isArrayOf(x.quiz_ids, isStr)
   );
 }
+
+// ---------------------------------------------------------------- Rumour Check (P14.2): POST /api/check
+// Every card is a fixed label, the user's own substring and (except not_found / guarded) a live row verbatim.
+// `numbers` only for `differs`: the claim's number and the row's number, each a verbatim span.
+
+export const CHECK_LABELS = ["supported", "differs", "contradicts", "related", "not_found", "guarded"] as const;
+export type CheckLabel = (typeof CHECK_LABELS)[number];
+export const CHECK_LIMITS = { textMax: 600, claimsMax: 5 } as const;
+
+export interface CheckRequest {
+  text: string;
+  force_offline?: boolean;
+}
+
+export interface CheckNumbers {
+  claim: string;
+  claim_start: number;
+  row: string;
+  row_start: number;
+}
+
+export interface CheckClaim {
+  i: number;
+  /** The user's own sentence (a substring of the text sent, at `start`). */
+  text: string;
+  start: number;
+  label: CheckLabel;
+  source: Source | null;
+  numbers: CheckNumbers | null;
+  by: "rules" | "model";
+}
+
+export interface CheckResponse {
+  claims: CheckClaim[];
+  /** More than five sentences were sent; the rest were not checked. */
+  truncated: boolean;
+  mode: Mode;
+  label_ar: string;
+}
+
+function isCheckNumbers(x: unknown): x is CheckNumbers {
+  return isObj(x) && isStr(x.claim) && isNum(x.claim_start) && isStr(x.row) && isNum(x.row_start);
+}
+
+export function isCheckClaim(x: unknown): x is CheckClaim {
+  return (
+    isObj(x) &&
+    isNum(x.i) &&
+    isStr(x.text) &&
+    isNum(x.start) &&
+    isOneOf(CHECK_LABELS, x.label) &&
+    (x.source === null || isSource(x.source)) &&
+    (x.numbers === null || isCheckNumbers(x.numbers)) &&
+    (x.by === "rules" || x.by === "model")
+  );
+}
+
+export function isCheckResponse(x: unknown): x is CheckResponse {
+  return (
+    isObj(x) &&
+    isArrayOf(x.claims, isCheckClaim) &&
+    isBool(x.truncated) &&
+    isOneOf(MODES, x.mode) &&
+    isStr(x.label_ar)
+  );
+}

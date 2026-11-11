@@ -20,6 +20,8 @@ const MAIN: Item[] = [
   { path: "/progress", key: "nav.progress", icon: "chart" },
 ];
 const ABOUT: Item = { path: "/about", key: "nav.about", icon: "info" };
+/** P14.2 Rumour Check: in the sidebar's learn group; on phones it is in the settings sheet and a chat chip. */
+const CHECK: Item = { path: "/check", key: "check.nav", icon: "megaphone" };
 
 /** The tools group of the intern app: About only (the admin has its own shell, P11.2). */
 function useMore(): Item[] {
@@ -70,7 +72,7 @@ export function NavTabs() {
     >
       <p className="mb-2 hidden px-3 text-xs font-semibold text-fg-3 lg:block">{t("uiShell.navGroupLearn")}</p>
       <ul className="flex flex-col gap-1">
-        {MAIN.map((i) => (
+        {[...MAIN, CHECK].map((i) => (
           <SideLink key={i.path} item={i} current={path === i.path} />
         ))}
       </ul>

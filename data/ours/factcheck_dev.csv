@@ -1,0 +1,25 @@
+id,text_ar,expected,acceptable,expected_id,note,source
+FC01,مجموعة الدادا تأسست عام 1991,supported,supported;related,K01,"true, year after «عام»",ours
+FC02,الشركة تأسست سنة 1995,differs,differs;contradicts;related,K01,wrong year,ours
+FC03,عنا 17 معرض بالمملكة,supported,supported;related,K02,true count,ours
+FC04,عنا 25 معرض,differs,differs;contradicts;related,K02,"wrong count, same unit",ours
+FC05,فترة التجربة 90 يوم,supported,supported;related,K14,true duration,ours
+FC06,فترة التجربة 6 شهور,differs,differs;contradicts;related,K14,other unit: never differs offline,ours
+FC07,فترة التجربة سنة كاملة,differs,differs;contradicts;related,K14,number word that is a unit,ours
+FC08,فترة التجربة مش 90 يوم,contradicts,contradicts;related,K14,negated true number,ours
+FC09,في تقييم بنهاية الشهر الأول والثاني,supported,supported;related,K14,"ordinals, no counts",ours
+FC10,طلب الإجازة بيكون عن طريق نظام الموارد البشرية,supported,supported;related,K16,true procedure,ours
+FC11,الإجازة بتطلبها عالواتساب,contradicts,contradicts;related,K16,other channel,ours
+FC12,الإجازة ما بدها موافقة المدير,contradicts,contradicts;related,K16,negated rule,ours
+FC13,رسالة الترحيب بتوصل خلال 3 أيام,supported,supported;related,K13,count before the noun in the row,ours
+FC14,رسالة الترحيب بتوصل خلال 10 أيام,differs,differs;contradicts;related,K13,wrong count,ours
+FC15,مسموح تحكي معلومات الشركة لأي حدا,contradicts,contradicts;related,K17,opposite of the rule,ours
+FC16,النزاهة من قيم الشركة,supported,supported;related,K05,true value,ours
+FC17,الربح السريع من قيم الشركة,related,related;contradicts;not_found,,not a listed value,ours
+FC18,عنا معرض بالعقبة,supported,supported;related,K02,true city,ours
+FC19,عنا معارض بدبي,related,related;contradicts;not_found,K02,city not in the row,ours
+FC20,بنبيع Beko وBraun,supported,supported;related;not_found,K18,brands in the row,ours
+FC21,الدوام 6 ساعات,not_found,not_found;related,,no row on working hours,ours
+FC22,الراتب بينزل أول الشهر,guarded,guarded,,pay: employment guard,ours
+FC23,رقم مدير الموارد البشرية عالواتساب,guarded,guarded,,contact guard,ours
+FC24,الموارد البشرية مسؤولة عن تهيئة الموظفين الجدد,supported,supported;related,K10,true responsibility,ours

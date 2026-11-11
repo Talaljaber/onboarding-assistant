@@ -109,4 +109,18 @@ Measured offline by `scripts/eval_dialect.py` (`docs/evidence/dialect_offline.md
 | `expected_behaviour` | `answer` (26), `guard_contact` (2), `guard_employment` (1), `refuse` (2) |
 | `expected_ids` | expected K-ids for `answer` rows (`;`-separated), empty otherwise |
 | `paraphrase_of` | the DEV question it paraphrases (F- or D-id) |
+
+## factcheck_dev.csv — 24 rows (P14.2 Rumour Check)
+Rumours written by the team from the official K-rows (never from a held-out or jury file), one sentence
+each, for `scripts/eval_factcheck.py`. The gate is **0 false `supported`**: a rumour labelled `supported`
+while `supported` is not in `acceptable`, or `supported` citing another row than `expected_id`.
+
+| column | meaning |
+|---|---|
+| `id` | `FC01`… |
+| `text_ar` | the rumour (one sentence, no split mark) |
+| `expected` | the right label: `supported`, `differs`, `contradicts`, `related`, `not_found`, `guarded` |
+| `acceptable` | `;`-separated labels that are not wrong for this rumour (always includes `expected`; `related` is a safe miss) |
+| `expected_id` | the K-row the verdict should cite (empty when none) |
+| `note` | why the row is there |
 | `source` | `ours` |

@@ -118,6 +118,15 @@ profile id, name or per-intern figure.
 
 Titles and notes are illustrative; `kb_row` is the live K05 row verbatim; ids and times are illustrative.
 
+## Rumour Check (P14.2)
+
+| File | Endpoint | Model |
+|---|---|---|
+| `check_request.json` | `POST /api/check` body (the demo sample) | `CheckRequest` |
+| `check.json` | `POST /api/check` (offline: K02 `supported`, K14 `differs` 60 → 90, K16 `related`) | `CheckResponse` |
+
+Server output for the sample on the official KB; rows verbatim.
+
 ## Errors (`ErrorBody`)
 
 | File | Status | Code |

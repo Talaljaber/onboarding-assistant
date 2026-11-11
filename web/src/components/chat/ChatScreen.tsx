@@ -2,7 +2,7 @@
 // trace panel (side column at >= 1024 px with the trace toggle on, inline below), error states.
 // `#/chat?scenario=<id>` starts practice mode for that scenario (hand-off from the scenarios screen).
 import { useEffect, useRef, useState } from "react";
-import { currentPath, replace } from "@/router";
+import { currentPath, navigate, replace } from "@/router";
 import { useT } from "@/i18n";
 import { FirstDayCard } from "@/components/welcome/FirstDayCard";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -160,6 +160,9 @@ function ChatInner() {
   const followUps =
     !busy && userTurns >= 1 && userTurns <= 2 && lastItem?.type === "reply" && ANSWER_KINDS.has(cardKind(lastItem));
   const starters = role ? STARTERS[role].map((k) => t(k)) : [];
+  // P14.2: one more first-turn chip opens the Rumour Check with the sample instead of asking.
+  const checkChip = t("check.chip");
+  const pickFirst = (q: string) => (q === checkChip ? navigate("/check?sample=1") : chat.send(q));
   const lastIsReply = lastItem?.type === "reply";
 
   return (
@@ -194,7 +197,9 @@ function ChatInner() {
               <AssistantBubble
                 text={t("chat.greeting", { role: t(role === "Delivery" ? "role.delivery" : "role.sales") })}
               />
-              {items.length === 0 && <StarterChips questions={starters} disabled={busy} onPick={chat.send} />}
+              {items.length === 0 && (
+                <StarterChips questions={[...starters, checkChip]} disabled={busy} onPick={pickFirst} />
+              )}
             </AssistantFrame>
           </li>
 

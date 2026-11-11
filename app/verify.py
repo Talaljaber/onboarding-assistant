@@ -16,7 +16,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.textnorm import ascii_digits, normalize, number_words_to_digits
+from app.textnorm import NUMBER_WORDS, ascii_digits, normalize, number_words_to_digits
 
 # -- reasons ------------------------------------------------------------------------------------------
 INVALID_JSON = "invalid_json"
@@ -668,3 +668,219 @@ def verify_small_talk(reply: object, *, documents: Iterable[str] = ()) -> Verdic
         if not _language_ok(text, lang):
             return _reject(WRONG_LANGUAGE)
     return Verdict(True)
+
+
+# -- the Rumour Check rules (P14.2) -------------------------------------------------------------------------
+#: Labels the check may show. `differs` is the offline number-and-unit verdict; `contradicts` comes only from a
+#: verified model reply; `guarded` is a claim the employment / contact guard stopped (never compared).
+CHECK_LABELS = ("supported", "differs", "contradicts", "related", "not_found", "guarded")
+#: Labels the model may return for one claim (`differs` is never the model's: numbers are compared by rule).
+CHECK_MODEL_LABELS = frozenset({"supported", "contradicts", "related", "not_found"})
+_CHECK_TOKEN = re.compile(r"[^\s.,;:!?؟،؛«»\"'()\[\]{}]+")
+_CHECK_NUMBER = re.compile(r"و?(\d+)")
+_CHECK_LETTER = re.compile(r"[^\W\d_]")
+#: Number words that are not counts: ordinals («الأول»، «الثاني») and unit words that carry their own number
+#: («شهر»، «شهرين»، «سنة»). They never form a number-and-unit pair, so «شهرين» can never confirm «90 يوماً».
+_CHECK_NOT_A_COUNT = frozenset({"اول", "الاول", "الاولي", "ثاني", "الثاني", "الثانيه", "ثالث", "الثالث",
+                                "شهر", "شهرين", "سنه", "سنتين"})
+#: Negation and limiting words (normalised): a claim with one the row lacks is never `supported` or `differs`.
+_CHECK_HEDGES = frozenset({"لا", "لم", "لن", "ليس", "ليست", "ما", "مش", "مو", "مب", "مافي", "مافيش", "ماف",
+                           "غير", "بدون", "دون", "الا", "فقط", "بس", "ابدا", "مستحيل", "not", "no", "never",
+                           "only"})
+#: A unit word shorter than this never matches (one or two letters are a particle, not a unit).
+CHECK_UNIT_MIN = 3
+
+
+@dataclass(frozen=True)
+class NumberSpan:
+    """A count in a text: its value (ASCII digits), the raw span [start, end) and the normalised word after it."""
+
+    value: str
+    start: int
+    end: int
+    unit: str | None
+
+
+@dataclass(frozen=True)
+class ClaimCompare:
+    """Offline verdict of one claim against one row: `supported`, `differs` or `related`. For `differs`,
+    `claim_span` / `row_span` are the two numbers (raw spans in the claim and in the row text)."""
+
+    label: str
+    claim_span: NumberSpan | None = None
+    row_span: NumberSpan | None = None
+
+
+def _count_value(token_norm: str) -> str | None:
+    m = _CHECK_NUMBER.fullmatch(token_norm)
+    if m:
+        return m.group(1).lstrip("0") or "0"
+    bare = token_norm[1:] if token_norm.startswith("و") and token_norm[1:] in NUMBER_WORDS else token_norm
+    if bare in _CHECK_NOT_A_COUNT:
+        return None
+    m = _CHECK_NUMBER.fullmatch(_number_words_to_digits(token_norm))
+    return (m.group(1).lstrip("0") or "0") if m else None
+
+
+def number_spans(text: str) -> list[NumberSpan]:
+    """Counts in `text` (digits, Arabic-Indic digits, cardinal number words such as «تسعين»), each with the
+    normalised word right after it when that word is not itself a number («17 معرضاً» → (17, «معرضا»))."""
+    toks = [(m.start(), m.end(), _normalize(m.group(0))) for m in _CHECK_TOKEN.finditer(text)]
+    toks = [t for t in toks if t[2]]
+    out: list[NumberSpan] = []
+    i = 0
+    while i < len(toks):
+        start, _, norm = toks[i]
+        j = i
+        two = f"{norm} {toks[i + 1][2]}" if i + 1 < len(toks) else ""
+        value: str | None
+        if two in NUMBER_WORDS:
+            value, j = str(NUMBER_WORDS[two]), i + 1
+        else:
+            value = _count_value(norm)
+        if value is None:
+            i += 1
+            continue
+        unit = None
+        if j + 1 < len(toks):
+            nxt = toks[j + 1][2]
+            if _CHECK_LETTER.search(nxt) and not _NUMBER.search(_number_words_to_digits(nxt)):
+                unit = nxt
+        out.append(NumberSpan(value, start, toks[j][1], unit))
+        i = j + 1
+    return out
+
+
+def same_unit(a: str | None, b: str | None) -> bool:
+    """Normalised prefix match of two unit words («معرض» ↔ «معرضا», «يوم» ↔ «يوما»); «شهور» ≠ «يوما»."""
+    if not a or not b:
+        return False
+    short, long = sorted((a, b), key=len)
+    return len(short) >= CHECK_UNIT_MIN and long.startswith(short)
+
+
+def _hedges(text: str) -> set[str]:
+    return {w for w in (_normalize(m.group(0)) for m in _CHECK_TOKEN.finditer(text)) if w in _CHECK_HEDGES}
+
+
+def compare_claim(claim: str, row: object) -> ClaimCompare:
+    """The offline number-and-unit rule for one claim against one row (P14.2).
+
+    - `supported`: the claim (normalised, ≥ 6 characters) is a substring of the row; or it carries no negation
+      or limiting word the row lacks and **every** number in it (`numbers_in`: digits and number words) equals
+      a row number whose following word matches by normalised prefix («تسعين يوم» ↔ «90 يوماً»).
+    - `differs`: a claim number has the same unit word as a row number but another value («60 يوم» vs
+      «90 يوماً»), and no hedge word stands in the way.
+    - `related` otherwise: a number without a matching unit («3 شهور», «شهرين») is never a verdict.
+    """
+    row_text = _row_text(row)
+    if quote_in_row(claim, row_text):
+        return ClaimCompare("supported")
+    if _hedges(claim) - _hedges(row_text):
+        return ClaimCompare("related")
+    row_spans = [r for r in number_spans(row_text) if r.unit]
+    matched: set[str] = set()
+    for c in number_spans(claim):
+        units = [r for r in row_spans if same_unit(c.unit, r.unit)]
+        if any(r.value == c.value for r in units):
+            matched.add(c.value)
+        elif units:
+            return ClaimCompare("differs", c, units[0])
+    wanted = numbers_in(claim)
+    if wanted and wanted <= matched:
+        return ClaimCompare("supported")
+    return ClaimCompare("related")
+
+
+@dataclass(frozen=True)
+class CheckItem:
+    """One accepted model verdict: `label` ∈ CHECK_MODEL_LABELS and `id` (None for `not_found`)."""
+
+    label: str
+    id: str | None
+
+
+@dataclass(frozen=True)
+class CheckVerdict:
+    """`items[i]` holds the accepted verdict per claim index; `rejected[i]` why a claim's verdict failed (that
+    claim keeps its offline label); `downgraded` the claims whose `supported` failed the number rule and became
+    `related`. `complete` = every claim got an accepted verdict and nothing was rejected or downgraded."""
+
+    ok: bool
+    reason: str | None = None
+    items: dict[int, CheckItem] = field(default_factory=dict)
+    rejected: dict[int, str] = field(default_factory=dict)
+    downgraded: list[int] = field(default_factory=list)
+    complete: bool = False
+
+
+def _check_one(item: Mapping[str, Any], claim: str, by_id: Mapping[str, object]) -> tuple[CheckItem | None, str, bool]:
+    label = item.get("label")
+    if not isinstance(label, str) or label not in CHECK_MODEL_LABELS:
+        return None, BAD_SHAPE, False
+    raw_id = item.get("id")
+    if label == "not_found":
+        if raw_id not in (None, ""):
+            return None, BAD_SHAPE, False
+        return CheckItem("not_found", None), "", False
+    ids = normalise_ids(raw_id) if isinstance(raw_id, str) else []
+    if len(ids) != 1:
+        return None, NO_IDS if not ids else BAD_SHAPE, False
+    if ids[0] not in by_id:
+        return None, FOREIGN_ID, False
+    row = by_id[ids[0]]
+    if label in ("supported", "contradicts"):
+        quote = item.get("quote")
+        if not isinstance(quote, str) or not quote.strip():
+            return None, QUOTE_MISSING, False
+        if not quote_in_row(quote, row):
+            return None, QUOTE_NOT_IN_ROW, False
+    if label == "supported" and numbers_in(claim) and compare_claim(claim, row).label != "supported":
+        return CheckItem("related", ids[0]), "", True
+    return CheckItem(label, ids[0]), "", False
+
+
+def verify_check(reply: object, claims: Mapping[int, str], rows: Sequence[object]) -> CheckVerdict:
+    """Checks on a parsed `{"claims": [{"i", "label", "id", "quote"}]}` Rumour Check reply (P14.2).
+
+    `claims` maps each index sent to the model to its claim text; `rows` are the live rows sent. The whole reply
+    is rejected unless it is an object with exactly the key `claims` holding a list. Each item is then checked on
+    its own: `i` is a sent index (once), `label` ∈ CHECK_MODEL_LABELS, `id` names one sent row (none for
+    `not_found`), and `supported` / `contradicts` carry a `quote` that `quote_in_row` finds in that row. A
+    `supported` whose claim numbers fail `compare_claim` is downgraded to `related` (never to a contradiction).
+    The quote is checked, never shown: the model supplies no displayed text. Never raises.
+    """
+    if not isinstance(reply, Mapping):
+        return CheckVerdict(False, INVALID_JSON)
+    items = reply.get("claims")
+    if set(reply) != {"claims"} or not isinstance(items, list):
+        return CheckVerdict(False, BAD_SHAPE)
+    by_id = {_field(r, "id").strip().upper(): r for r in rows}
+    accepted: dict[int, CheckItem] = {}
+    rejected: dict[int, str] = {}
+    downgraded: list[int] = []
+    stray = 0
+    for item in items:
+        i = item.get("i") if isinstance(item, Mapping) else None
+        if not isinstance(item, Mapping) or not isinstance(i, int) or isinstance(i, bool) or i not in claims:
+            stray += 1
+            continue
+        if i in accepted or i in rejected:  # a second verdict for one claim: trust neither
+            stray += 1
+            accepted.pop(i, None)
+            if i in downgraded:
+                downgraded.remove(i)
+            rejected[i] = BAD_SHAPE
+            continue
+        try:
+            got, reason, down = _check_one(item, claims[i], by_id)
+        except Exception:  # noqa: BLE001 - bad input is a rejection, never an error
+            got, reason, down = None, BAD_SHAPE, False
+        if got is None:
+            rejected[i] = reason
+            continue
+        accepted[i] = got
+        if down:
+            downgraded.append(i)
+    complete = not stray and not rejected and not downgraded and set(accepted) == set(claims)
+    return CheckVerdict(True, None, accepted, rejected, downgraded, complete)

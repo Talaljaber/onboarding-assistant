@@ -1,0 +1,63 @@
+{
+  "claims": [
+    {
+      "i": 0,
+      "text": "قالولي إنو عنا 17 معرض",
+      "start": 0,
+      "label": "supported",
+      "source": {
+        "id": "K02",
+        "topic": "Company",
+        "answer_ar": "تمتلك المجموعة 17 معرضاً في عمان والسلط وإربد والزرقاء والعقبة.",
+        "source_document": "Company Profile 2026",
+        "source_page": 4,
+        "edited": false,
+        "status": "official"
+      },
+      "numbers": null,
+      "by": "rules"
+    },
+    {
+      "i": 1,
+      "text": "وفترة التجربة 60 يوم",
+      "start": 24,
+      "label": "differs",
+      "source": {
+        "id": "K14",
+        "topic": "Onboarding",
+        "answer_ar": "فترة التجربة 90 يوماً، مع تقييمات في نهاية الشهر الأول والثاني للوظائف الإدارية والإشرافية وغير التشغيلية.",
+        "source_document": "On-Boarding Policy",
+        "source_page": 4,
+        "edited": false,
+        "status": "official"
+      },
+      "numbers": {
+        "claim": "60",
+        "claim_start": 14,
+        "row": "90",
+        "row_start": 13
+      },
+      "by": "rules"
+    },
+    {
+      "i": 2,
+      "text": "والإجازة بتطلبها عالواتساب",
+      "start": 46,
+      "label": "related",
+      "source": {
+        "id": "K16",
+        "topic": "Policy",
+        "answer_ar": "يُقدَّم طلب الإجازة عبر نظام الموارد البشرية ويستلزم موافقة المدير المباشر قبل بدء الإجازة.",
+        "source_document": "General Policies",
+        "source_page": 2,
+        "edited": false,
+        "status": "official"
+      },
+      "numbers": null,
+      "by": "rules"
+    }
+  ],
+  "truncated": false,
+  "mode": "offline",
+  "label_ar": "هذا فحص للمعلومة، وليس حكماً على أحد"
+}

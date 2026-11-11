@@ -100,6 +100,9 @@ FIXTURES: dict[str, type[BaseModel]] = {
     "error_503_requests.json": s.ErrorBody,
     # P14.1 KB impact
     "kb_impact.json": s.KbImpact,
+    # P14.2 Rumour Check
+    "check_request.json": s.CheckRequest,
+    "check.json": s.CheckResponse,
 }
 
 # One response fixture per endpoint (the request fixtures are listed in FIXTURES above).
@@ -140,6 +143,7 @@ ENDPOINT_FIXTURES = {
     "PATCH /api/admin/requests/{id}": "mentor_request.json",
     "DELETE /api/admin/requests/{id}": "mentor_request_deleted.json",
     "GET /api/admin/kb/{id}/impact": "kb_impact.json",  # P14.1
+    "POST /api/check": "check.json",
 }
 
 REQUEST_MODELS: dict[type[BaseModel], str] = {
@@ -159,6 +163,7 @@ REQUEST_MODELS: dict[type[BaseModel], str] = {
     s.MentorRequestCreate: "mentor_request_create_request.json",
     s.MentorRequestPatch: "mentor_request_patch_request.json",
     s.MentorRequestStatusPatch: "mentor_request_status_request.json",
+    s.CheckRequest: "check_request.json",
 }
 
 
@@ -563,3 +568,27 @@ def test_feedback_customer_line_is_optional() -> None:
         without = {k: v for k, v in fb.items() if k != "customer_ar"}
         assert s.Feedback.model_validate(without).customer_ar is None
         assert not re.search(r"\d|[٠-٩]", fb["customer_ar"]), name
+
+
+def test_rumour_check_shows_rows_verbatim_and_no_generated_text() -> None:
+    """P14.2: every card is a fixed label, the user's substring and a live row; numbers only for `differs`."""
+    with (ROOT / "data" / "official" / "knowledge_base.csv").open(encoding="utf-8-sig", newline="") as fh:
+        kb = {r["id"]: r for r in csv.DictReader(fh)}
+    text = load("check_request.json")["text"]
+    body = load("check.json")
+    assert body["label_ar"] == s.CHECK_LABEL_AR
+    assert [c["label"] for c in body["claims"]] == ["supported", "differs", "related"]
+    for c in body["claims"]:
+        assert text[c["start"]:c["start"] + len(c["text"])] == c["text"]
+        assert c["source"]["answer_ar"] == kb[c["source"]["id"]]["answer_ar"]
+    ts = TYPES_TS.read_text(encoding="utf-8")
+    for label in s.CHECK_LABELS:
+        assert f'"{label}"' in ts, label
+    assert "export function isCheckResponse" in ts
+    bad = {**body["claims"][0], "numbers": body["claims"][1]["numbers"]}
+    with pytest.raises(ValidationError):  # numbers only for differs
+        s.CheckClaim.model_validate(bad)
+    with pytest.raises(ValidationError):  # guarded never names a row
+        s.CheckClaim.model_validate({**body["claims"][2], "label": "guarded", "by": "rules"})
+    with pytest.raises(ValidationError):
+        s.CheckRequest.model_validate({"text": "ا" * 601})
