@@ -1,0 +1,137 @@
+# AI use, knowledge sources, privacy and limitations
+
+This note covers the Dada Academy onboarding assistant, a competition prototype. It says what the app
+sends out, what it stores, where, and what it cannot do. Every statement describes the code in this
+repository. Sentences marked {{VERIFY}} describe parts still being finished and are checked before
+submission.
+
+## 1. Knowledge sources
+
+- **The only source of facts is the official `knowledge_base.csv`** (18 rows, K01–K18). The six
+  official CSVs sit unchanged in `data/official/`; their sha256 values are checked at every start
+  (`scripts/check_official.py`, and `app/config.py` refuses to start on a mismatch).
+- **Live edits** (the knowledge-base screen) are stored separately from the official file. Edited rows
+  carry the badge «معدّل مباشرة» and added rows «مضاف مباشرة» wherever they are cited.
+  «استعادة النسخة الرسمية» restores the official rows.
+- **Files we wrote** (`data/ours/`): out-of-scope example questions, scenario checklists and reply
+  options, plan activities, anchor questions per row and the DEV test set. Every row is marked
+  `source=ours`. They are **fictional competition examples**, not Dada SOPs or policy.
+- **Scenarios, the 90-day plan, the quiz and the activities are fictional competition examples.** The
+  plan is labelled as suggested, not an official evaluation schedule.
+- **Some company facts are paraphrased from Dada materials and need Dada's approval before any external
+  release.** This prototype makes no claim that Dada has approved it or its content, and it says nothing
+  about Dada's real practices beyond the 18 rows.
+
+## 2. Models and AI use
+
+| Model | Where it runs | What it does |
+|---|---|---|
+| `intfloat/multilingual-e5-small`, int8 ONNX (`models/e5`, about 77 MB) | on the laptop, ONNX Runtime | embeds rows and questions for search; also matches a message to a scenario |
+| `deepseek/deepseek-v4.1-flash` via OpenRouter (pinned; optional) | OpenRouter, only with a key | chooses the tool, words the answer from cited rows, gives checklist feedback on practice replies {{VERIFY}} |
+
+- No model was trained or fine-tuned. Search is e5 plus BM25, fused by reciprocal-rank fusion.
+- The AI model never decides alone. The server runs the guards first (employment decisions, requests for
+  phone numbers or contacts). It checks every proposed tool call against fixed lists. It checks every
+  answer: cited ids must be rows it was sent, each id needs a verbatim quote from that row, every number
+  must appear in the cited rows or the question, and no phone, email or link is allowed. A reply that
+  fails is dropped and the offline result is shown. Only verified replies are cached. {{VERIFY}}
+- Scenario feedback is never a score. The server writes the feedback from fixed checklist sentences;
+  the model only marks which items the reply covered and may add one short tip, which is also checked. {{VERIFY}}
+- Calls use temperature 0 and seed 42, no automatic model routing, and a spending cap of USD 3 enforced
+  in code (`.cache/budget.json`).
+
+## 3. What leaves the laptop, and when
+
+| Situation | What is sent | To whom |
+|---|---|---|
+| No key in `.env` (a fresh copy has none) | **nothing** to any AI service | — |
+| Header switch «بلا اتصال» | **nothing** to any AI service for that request | — |
+| Key present, mode «تلقائي» | see below | OpenRouter |
+| Supabase variables present | store records (section 4) | the project's Supabase database ({{SUPABASE_REGION}}) |
+
+With a key, per message, at most:
+- **tool choice:** the message, the previous message, the list of scenario titles and milestone names,
+  and whether a practice is active {{VERIFY}};
+- **answer:** the question, the previous question (only for short follow-ups), the list hint, and the
+  live knowledge-base rows with their search ranks;
+- **practice feedback:** the scenario text, its checklist sentences and the user's reply;
+- **startup probe:** one tiny fixed test message. {{VERIFY}}
+
+**Never sent:** the user's role or track, demo alias, profile id, progress, quiz results or the
+chat history beyond the previous message. The role never reaches the answer prompt.
+
+Every OpenRouter request carries `provider.data_collection: "deny"`, so OpenRouter routes only to providers
+that do not collect or store prompts. The key stays in `.env` (git-ignored) and in the request header. It is
+never logged, never sent to the browser, and the built web client is checked for it.
+
+Network tripwire: `scripts\no_network.py scripts\run_eval.py --set dev --mode offline` runs the whole
+DEV evaluation with every socket connection and name lookup disabled.
+
+## 4. What is stored, and where
+
+**In Supabase (only when its four variables are set).** The browser never talks to Supabase; only the
+server does, with the secret key from `.env`. Row-level security is on for every table, with no
+policies for anonymous or signed-in clients.
+
+| Table | Contents |
+|---|---|
+| `kb_rows`, `kb_row_history` | the 18 rows and any live edits, with before/after and source (seed, editor, reset) |
+| `profiles` | a demo alias such as «متدرب ١» and the track. An alias that looks like an email or phone is rejected |
+| `progress` | profile id, activity id, time |
+| `quiz_attempts` | profile id, question id, option chosen, correct or not |
+| `scenario_attempts` | profile id, scenario id, mode, option id, checklist ids met and missing, value label. **No free text** |
+| `turn_logs` | request id, time, tool, mode, status, band, cited ids, verifier result and reason, latency, cached, model. **No message text, no answer text** |
+
+The store code refuses any turn log with a message, answer, text, prompt or reply field.
+
+**Local fallback.** Without Supabase, or when it does not answer (2 s probe at start, 3 s per call),
+the server uses `data/live/local.sqlite` with the same tables. A failure switches the process to the
+local file for the rest of the session. There is no sync back. The latest knowledge base is also kept
+in `data/live/kb_snapshot.json`.
+
+**On the laptop.**
+- `logs/app.jsonl`: events with ids, tool, band, mode and latency. No message text. Values that look
+  like keys are redacted.
+- `.cache/llm.sqlite`: verified AI replies, keyed by a hash. `.cache/budget.json`: spend and call
+  counts.
+
+**In the browser (local storage).** Role, language, progress, practised scenarios, quiz results and the
+chat thread. «امسح بيانات هذا المتصفح» on the «حول والخصوصية» screen clears it.
+
+## 5. Personal data
+
+- No real employee or customer data is used anywhere: not in the data, the tests or the demo.
+- Profiles are demo aliases, not accounts. There is no login.
+- The manager view shows completion and practice counts only, labelled as demo profiles, not real
+  employees and not an evaluation. {{VERIFY}}
+- The assistant does not make or predict employment decisions (probation outcome, pay, firing,
+  promotion). Those questions get a fixed reply that points to HR.
+
+## 6. Offline mode: what it can and cannot do
+
+Offline mode answers from approved rows only. It shows the best row verbatim, a "not confirmed" card
+with the closest row, or the fixed refusal. It never writes new text about the company.
+
+Measured on the DEV set (154 questions, used to pick thresholds; these are **DEV numbers**, not a
+held-out result):
+- answerable questions: 62/80 correct, 0 refused;
+- unanswerable questions: 7/43 refused outright, 40/43 refused or "not confirmed", 3/43 answered with a
+  wrong row;
+- invented contacts: 0.
+
+Held-out set (sealed, run once after the freeze): offline {{HELDOUT_OFFLINE_CORRECT}} correct;
+unanswerable refused {{HELDOUT_OFFLINE_UNANS_REFUSED}}, refused or not confirmed
+{{HELDOUT_OFFLINE_UNANS_REFUSED_OR_NC}}; AI mode {{HELDOUT_LLM_CORRECT}} correct.
+
+## 7. Limitations
+
+- Offline mode catches few unseen unanswerable questions with a hard refusal. Most get "not confirmed"
+  with the closest row, which the user must check.
+- Offline mode cannot combine rows or answer part of a question; only the five-values list is built by
+  the server.
+- Edited or added rows are matched less confidently offline (they have no anchor questions).
+- The verifier checks grounding, not style. A grounded but clumsy sentence can pass.
+- The AI layer depends on a third-party service; its availability and retention follow OpenRouter's and
+  the provider's terms, limited by `data_collection: deny`.
+- No sync between the local fallback and Supabase.
+- 18 rows only. The assistant is not an HR system and does not replace HR.
