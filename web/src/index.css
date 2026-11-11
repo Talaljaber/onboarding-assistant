@@ -1,0 +1,66 @@
+@import "tailwindcss";
+@import "./design/tokens.css";
+
+/* Base: Arabic-first reading comfort, light theme, no gradients. */
+html {
+  font-family: var(--da-font-sans);
+  font-size: 16px;
+  background: var(--da-page);
+  color: var(--da-text-1);
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--da-page);
+  line-height: 1.7;
+}
+html[lang="en"] body {
+  line-height: 1.55;
+}
+h1, h2, h3, h4 {
+  font-weight: 600;
+  line-height: 1.4;
+}
+:focus-visible {
+  outline: 2px solid var(--da-focus);
+  outline-offset: 2px;
+}
+.font-id {
+  font-family: var(--da-font-mono);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.skip-link {
+  position: absolute;
+  inset-inline-start: 0.5rem;
+  top: -4rem;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  border-radius: var(--da-radius-sm);
+  background: var(--da-accent);
+  color: var(--da-on-accent);
+}
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Print: hide the shell, black on white (Day 90 summary). */
+@media print {
+  [data-shell], [data-toast-region], [data-composer] {
+    display: none !important;
+  }
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+}
