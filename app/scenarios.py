@@ -1,0 +1,393 @@
+"""Role scenarios: the scenario index, checklists, options and practice feedback.
+
+What it does: loads the six official scenarios (`data/official/role_scenarios.csv`) with our
+checklists and offline options (`data/ours/scenario_checklists.csv`, `scenario_options.csv`),
+matches a free-text message to a scenario with the e5 encoder (any role), and composes practice
+feedback: fixed option feedback, offline free-text feedback (the suggested response and the value,
+nothing judged), and server-worded feedback from checklist ids for the LLM path.
+
+What it must never do: score, count, grade or rate a response (feedback carries no number or
+percentage); invent a scenario that is not in the official file; call the network. `feedback_llm`
+is a stub returning None until the LLM layer exists (W3-B).
+"""
+
+from __future__ import annotations
+
+import csv
+import io
+from collections.abc import Sequence
+from dataclasses import dataclass, field, replace
+from pathlib import Path
+from typing import Any, Protocol
+
+import numpy as np
+from numpy.typing import NDArray
+
+from app import schemas
+
+ROLES = schemas.ROLES
+VALUES = schemas.VALUES
+MIN_COS = 0.80
+
+START_TEXT_OFFLINE_AR = "لنتدرّب على هذا الموقف. اختر رداً أو اكتب كيف سترد."
+START_TEXT_LLM_AR = "لنتدرّب على هذا الموقف. اكتب كيف سترد."
+FEEDBACK_TEXT_AR = "شكراً على ردك. هذه ملاحظات تدريبية على الموقف."
+OPTION_FEEDBACK_TEXT_AR = "هذه ملاحظات تدريبية على اختيارك."
+END_TEXT_AR = "انتهى التدريب على هذا الموقف. يمكنك البدء بموقف آخر متى شئت."
+
+
+class Encoder(Protocol):
+    """The part of `app.encoder.OnnxEncoder` this module uses (unit vectors, "query: " prefix applied)."""
+
+    def encode_array(self, texts: Sequence[str]) -> NDArray[np.float32]: ...
+
+
+@dataclass(frozen=True)
+class ChecklistItem:
+    scenario_id: str
+    item_id: str
+    text_ar: str
+    done_ar: str
+    add_ar: str
+
+
+@dataclass(frozen=True)
+class ScenarioOption:
+    scenario_id: str
+    option_id: str
+    text_ar: str
+    is_best: bool
+    company_value: str
+    feedback_ar: str
+
+
+@dataclass(frozen=True)
+class Scenario:
+    id: str
+    department: str
+    company_value: str
+    scenario_ar: str
+    suggested_good_response_ar: str
+    data_status: str
+    options: tuple[ScenarioOption, ...] = ()
+    checklist: tuple[ChecklistItem, ...] = ()
+
+    @property
+    def value_ar(self) -> str:
+        return schemas.VALUES_AR[self.company_value]
+
+    def to_out(self, *, with_options: bool) -> schemas.ScenarioOut:
+        """The contract shape; options are sent in offline mode and in the scenario list."""
+        opts = [schemas.Option(id=o.option_id, text_ar=o.text_ar) for o in self.options] if with_options else None
+        return schemas.ScenarioOut(
+            id=self.id,
+            department=self.department,  # type: ignore[arg-type]
+            company_value=self.company_value,  # type: ignore[arg-type]
+            value_ar=self.value_ar,
+            scenario_ar=self.scenario_ar,
+            data_status=self.data_status,
+            options=opts,
+        )
+
+
+@dataclass
+class Feedback:
+    """Practice feedback. Never a score, count, grade or percentage."""
+
+    strengths_ar: list[str]
+    improve_ar: str | None
+    value: str
+    tip_ar: str | None
+    mode: str
+    label_ar: str
+    scenario_id: str
+    suggested_good_response_ar: str
+    option_id: str | None = None
+    met: list[str] = field(default_factory=list)
+
+    @property
+    def value_ar(self) -> str:
+        return schemas.VALUES_AR[self.value]
+
+    def to_schema(self) -> schemas.Feedback:
+        return schemas.Feedback(
+            scenario_id=self.scenario_id,
+            option_id=self.option_id,
+            strengths_ar=list(self.strengths_ar),
+            improve_ar=self.improve_ar,
+            value=self.value,  # type: ignore[arg-type]
+            value_ar=self.value_ar,
+            tip_ar=self.tip_ar,
+            suggested_good_response_ar=self.suggested_good_response_ar,
+            mode=self.mode,  # type: ignore[arg-type]
+            label_ar=self.label_ar,
+        )
+
+
+# --------------------------------------------------------------------------------------
+# Loading
+# --------------------------------------------------------------------------------------
+
+
+def _read_csv(path: Path) -> list[dict[str, str]]:
+    text = path.read_text(encoding="utf-8-sig")
+    return list(csv.DictReader(io.StringIO(text)))
+
+
+def _default_dirs() -> tuple[Path, Path]:
+    from app.config import get_settings
+
+    s = get_settings()
+    return s.data_official, s.data_ours
+
+
+def load_scenarios(official_dir: Path) -> list[Scenario]:
+    return [
+        Scenario(
+            id=r["id"],
+            department=r["department"],
+            company_value=r["company_value"],
+            scenario_ar=r["scenario_ar"],
+            suggested_good_response_ar=r["suggested_good_response_ar"],
+            data_status=r["data_status"],
+        )
+        for r in _read_csv(official_dir / "role_scenarios.csv")
+    ]
+
+
+def load_checklists(ours_dir: Path) -> list[ChecklistItem]:
+    return [
+        ChecklistItem(r["scenario_id"], r["item_id"], r["text_ar"], r["done_ar"], r["add_ar"])
+        for r in _read_csv(ours_dir / "scenario_checklists.csv")
+    ]
+
+
+def load_options(ours_dir: Path) -> list[ScenarioOption]:
+    return [
+        ScenarioOption(
+            scenario_id=r["scenario_id"],
+            option_id=r["option_id"],
+            text_ar=r["text_ar"],
+            is_best=r["is_best"].strip().lower() == "true",
+            company_value=r["company_value"],
+            feedback_ar=r["feedback_ar"],
+        )
+        for r in _read_csv(ours_dir / "scenario_options.csv")
+    ]
+
+
+# --------------------------------------------------------------------------------------
+# Index
+# --------------------------------------------------------------------------------------
+
+
+class ScenarioIndex:
+    """The six scenarios with their options and checklists, and an e5 matcher over `scenario_ar`."""
+
+    def __init__(
+        self,
+        encoder: Encoder | None,
+        scenarios: Sequence[Scenario],
+        checklists: Sequence[ChecklistItem],
+        options: Sequence[ScenarioOption],
+    ) -> None:
+        self._encoder = encoder
+        self._vectors: NDArray[np.float32] | None = None
+        by_id: dict[str, Scenario] = {}
+        for sc in scenarios:
+            opts = tuple(o for o in options if o.scenario_id == sc.id)
+            items = tuple(c for c in checklists if c.scenario_id == sc.id)
+            _check_scenario(sc, opts, items)
+            by_id[sc.id] = replace(sc, options=opts, checklist=items)
+        self._by_id = by_id
+        self._order = [sc.id for sc in scenarios]
+
+    @classmethod
+    def from_files(
+        cls,
+        encoder: Encoder | None = None,
+        *,
+        official_dir: Path | None = None,
+        ours_dir: Path | None = None,
+    ) -> ScenarioIndex:
+        if official_dir is None or ours_dir is None:
+            d_off, d_ours = _default_dirs()
+            official_dir = official_dir or d_off
+            ours_dir = ours_dir or d_ours
+        return cls(encoder, load_scenarios(official_dir), load_checklists(ours_dir), load_options(ours_dir))
+
+    # lookups ------------------------------------------------------------------------
+
+    def ids(self) -> list[str]:
+        return list(self._order)
+
+    def all(self) -> list[Scenario]:
+        return [self._by_id[i] for i in self._order]
+
+    def for_role(self, role: str | None) -> list[Scenario]:
+        """Scenarios of a department; `None` returns all six."""
+        if role is None:
+            return self.all()
+        if role not in ROLES:
+            raise ValueError(f"unknown role {role!r}")
+        return [sc for sc in self.all() if sc.department == role]
+
+    def has(self, id: str) -> bool:
+        return id in self._by_id
+
+    def get(self, id: str) -> Scenario:
+        """The scenario; raises KeyError for an unknown id (the API maps it to 404)."""
+        return self._by_id[id]
+
+    def options(self, id: str) -> list[ScenarioOption]:
+        return list(self.get(id).options)
+
+    def checklist(self, id: str) -> list[ChecklistItem]:
+        return list(self.get(id).checklist)
+
+    def list_response(self, role: str | None = None) -> schemas.ScenarioListResponse:
+        return schemas.ScenarioListResponse(
+            scenarios=[sc.to_out(with_options=True) for sc in self.for_role(role)],
+            label_ar=schemas.SCENARIO_LIST_LABEL_AR,
+        )
+
+    # matching -----------------------------------------------------------------------
+
+    def warm(self) -> None:
+        """Embed the scenario texts now instead of on the first match."""
+        self._scenario_vectors()
+
+    def _scenario_vectors(self) -> NDArray[np.float32] | None:
+        if self._encoder is None:
+            return None
+        if self._vectors is None:
+            texts = [self._by_id[i].scenario_ar for i in self._order]
+            self._vectors = np.asarray(self._encoder.encode_array(texts), dtype=np.float32)
+        return self._vectors
+
+    def match(self, text: str, *, min_cos: float = MIN_COS) -> tuple[str, float] | None:
+        """Best scenario for a message by e5 cosine against `scenario_ar` (any role), or None."""
+        vectors = self._scenario_vectors()
+        if vectors is None or not text.strip():
+            return None
+        assert self._encoder is not None
+        q = np.asarray(self._encoder.encode_array([text]), dtype=np.float32)[0]
+        cos = vectors @ q
+        best = int(np.argmax(cos))
+        score = float(cos[best])
+        if score < min_cos:
+            return None
+        return self._order[best], score
+
+
+def _check_scenario(sc: Scenario, opts: Sequence[ScenarioOption], items: Sequence[ChecklistItem]) -> None:
+    if sc.department not in ROLES or sc.company_value not in VALUES:
+        raise ValueError(f"scenario {sc.id}: bad department or value")
+    if len(opts) != 3 or sum(o.is_best for o in opts) != 1:
+        raise ValueError(f"scenario {sc.id}: needs three options with exactly one best")
+    if any(o.company_value not in VALUES for o in opts):
+        raise ValueError(f"scenario {sc.id}: option with an unknown value")
+    if not items:
+        raise ValueError(f"scenario {sc.id}: no checklist items")
+
+
+# --------------------------------------------------------------------------------------
+# Feedback
+# --------------------------------------------------------------------------------------
+
+
+def _base(scenario: Scenario, mode: str) -> dict[str, Any]:
+    return {
+        "scenario_id": scenario.id,
+        "suggested_good_response_ar": scenario.suggested_good_response_ar,
+        "label_ar": schemas.FEEDBACK_LABEL_AR,
+        "mode": mode,
+    }
+
+
+def feedback_option(scenario: Scenario, option_id: str) -> Feedback:
+    """Fixed feedback for a chosen option: the best option's text is a strength, another is "improve"."""
+    opt = next((o for o in scenario.options if o.option_id == option_id), None)
+    if opt is None:
+        raise ValueError(f"option {option_id} does not belong to {scenario.id}")
+    return Feedback(
+        strengths_ar=[opt.feedback_ar] if opt.is_best else [],
+        improve_ar=None if opt.is_best else opt.feedback_ar,
+        value=opt.company_value,
+        tip_ar=None,
+        option_id=opt.option_id,
+        **_base(scenario, "offline"),
+    )
+
+
+def feedback_freetext_offline(scenario: Scenario, user_text: str) -> Feedback:
+    """Offline free text: nothing is judged; the suggested response and the scenario's value are shown."""
+    del user_text  # offline mode does not judge the text
+    return Feedback(
+        strengths_ar=[],
+        improve_ar=None,
+        value=scenario.company_value,
+        tip_ar=None,
+        **_base(scenario, "offline"),
+    )
+
+
+def feedback_from_checklist(
+    scenario: Scenario,
+    met: Sequence[str],
+    missing: Sequence[str],
+    value: str,
+    tip_ar: str | None,
+    *,
+    mode: str = "llm",
+) -> Feedback:
+    """Server-worded feedback from verified checklist ids: `done_ar` per met item, `add_ar` of the first missing.
+
+    The caller has already verified that every id belongs to the scenario's checklist, that `value`
+    is one of the five values and that `tip_ar` passed the tip checks (or is None).
+    """
+    items = {c.item_id: c for c in scenario.checklist}
+    unknown = [i for i in [*met, *missing] if i not in items]
+    if unknown or value not in VALUES:
+        raise ValueError(f"unknown checklist ids {unknown} or value {value!r}")
+    missing_items = [items[i] for i in missing if i not in met]
+    return Feedback(
+        strengths_ar=[items[i].done_ar for i in met],
+        improve_ar=missing_items[0].add_ar if missing_items else None,
+        value=value,
+        tip_ar=tip_ar,
+        met=list(met),
+        **_base(scenario, mode),
+    )
+
+
+def feedback_llm(scenario: Scenario, user_text: str, llm: Any, budget: Any) -> Feedback | None:
+    """LLM feedback (feedback_v1.md → verify → `feedback_from_checklist`). Stub until W3-B: always None."""
+    del scenario, user_text, llm, budget
+    return None
+
+
+def start_text_ar(*, with_options: bool) -> str:
+    return START_TEXT_OFFLINE_AR if with_options else START_TEXT_LLM_AR
+
+
+__all__ = [
+    "END_TEXT_AR",
+    "FEEDBACK_TEXT_AR",
+    "MIN_COS",
+    "OPTION_FEEDBACK_TEXT_AR",
+    "ChecklistItem",
+    "Encoder",
+    "Feedback",
+    "Scenario",
+    "ScenarioIndex",
+    "ScenarioOption",
+    "feedback_freetext_offline",
+    "feedback_from_checklist",
+    "feedback_llm",
+    "feedback_option",
+    "load_checklists",
+    "load_options",
+    "load_scenarios",
+    "start_text_ar",
+]
