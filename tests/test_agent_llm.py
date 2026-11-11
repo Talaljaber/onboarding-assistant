@@ -104,6 +104,16 @@ def test_llm_choice_starts_scenario_without_options(agent: Agent, fake: Any) -> 
     assert len(client.calls) == 1 and client.calls[0]["max_tokens"] == 120
 
 
+def test_a_generic_practice_request_follows_the_role_not_the_model(agent: Agent, fake: Any) -> None:
+    fake(choice("start_scenario", scenario_id="S01", role_override=None))  # a Sales scenario, cached role-free
+    r = ask(agent, "تدريب", role="Delivery")
+    assert r.reply.kind == "scenario_start" and r.state.active_scenario == "S04"
+    assert r.trace.agent.fallback_reason == "router_practice_request"
+    fake(choice("greet", kind="greeting"))
+    r = ask(agent, "تدريب", role="Delivery")
+    assert r.reply.kind == "scenario_start" and r.state.active_scenario == "S04"
+
+
 @pytest.mark.parametrize(
     ("reply", "reason"),
     [

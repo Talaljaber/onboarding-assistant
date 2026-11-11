@@ -149,3 +149,12 @@ def test_red_team_guard_routes(scen: Features, q: str, reason: str) -> None:
 )
 def test_red_team_negatives_reach_retrieval(scen: Features, q: str) -> None:
     assert route(q, scenario_index=scen).tool == "answer_from_rows"
+
+
+def test_a_practice_request_for_another_situation_switches_scenario(scen: Features) -> None:
+    st = TurnState(active_scenario="S01")
+    r = route("تدريب: زبون يسأل عن ميزة غير مؤكدة", state=st, scenario_index=scen)
+    assert r.tool == "start_scenario" and r.args["scenario_id"] == "S02"
+    # an ordinary reply, and a request for the same situation, stay feedback for the active scenario
+    r = route("بسأله عن حجم العيلة وبقترح عليه موديل", state=st, scenario_index=scen)
+    assert r.tool == "give_scenario_feedback" and r.args["scenario_id"] == "S01"

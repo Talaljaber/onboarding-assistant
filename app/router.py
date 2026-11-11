@@ -157,6 +157,11 @@ def _guard_route(hit: GuardHit) -> Route:
     return Route("refuse", {"reason": hit.kind}, DEFAULT_CONFIDENCE, f"{hit.kind} guard", hit)
 
 
+#: An explicit practice word («تدريب: …»): during practice only this, plus a situation that matches a
+#: different scenario, switches scenarios; a reply that merely describes the customer stays feedback.
+PRACTICE_WORD = re.compile(r"(?<![\w])(?:تدريب|تدرب|اتدرب|بدي اتدرب|practice)(?![\w])")
+
+
 def route(
     text: str,
     *,
@@ -180,6 +185,14 @@ def route(
     if state.active_scenario:
         if END_PRACTICE.search(t):
             return Route("end_scenario", {}, DEFAULT_CONFIDENCE, "end practice phrase")
+        # an explicit practice request for a *different* situation switches scenarios instead of being
+        # graded as a reply to the current one (QA: «تدريب: زبون يسأل عن ميزة غير مؤكدة» during S01)
+        asks_practice = detect_practice_request(t) or PRACTICE_WORD.search(t) is not None
+        if scenario_index is not None and asks_practice and has_situation_cue(t):
+            m = scenario_index.match(text, min_cos=SCENARIO_MIN_COS)
+            if m is not None and m[0] != state.active_scenario:
+                return Route("start_scenario", {"scenario_id": m[0], "role_override": detect_role(t)},
+                             DEFAULT_CONFIDENCE, f"switch scenario {state.active_scenario} -> {m[0]} ({m[1]:.2f})")
         return Route(
             "give_scenario_feedback",
             {"scenario_id": state.active_scenario, "user_text": text},

@@ -360,6 +360,14 @@ class Agent:
             # Extends the §2.2 agreement rule (D-W3-choice-agree): a greeting or plan pick never
             # overrides a knowledge question the router sees; the answer path owns refusal.
             return fallback("router_knowledge_question", tool, valid)
+        if r.tool == "start_scenario" and (
+            tool != "start_scenario" or r.args.get("scenario_id") is None
+            or valid.get("scenario_id") != r.args.get("scenario_id")
+        ):
+            # The router already saw a practice request: a generic «تدريب» starts the user's role's own
+            # scenario (the model's pick is cached without the role: QA, Delivery got S01), a matched
+            # situation keeps the router's scenario, and a greeting never replaces practice.
+            return fallback("router_practice_request", tool, valid)
         store_choice(self.llm.chat, info)
 
         args = dict(valid)
