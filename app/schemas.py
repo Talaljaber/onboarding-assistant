@@ -800,6 +800,15 @@ class KbDraft(_Model):
     updated_at: str
 
 
+class TitlesSummary(_Model):
+    """P13.4: what the optional model title step did for a PDF or text file (`count` title lines it chose;
+    `reason` e.g. `not_requested`, `structured`, `llm_off`, `timeout`, or null when every batch passed)."""
+
+    used: bool
+    count: NonNeg
+    reason: str | None
+
+
 class OrganizeSummary(_Model):
     """What the optional model step did: passages it organized vs. the offline fallback."""
 
@@ -810,6 +819,8 @@ class OrganizeSummary(_Model):
     merged: NonNeg
     skipped: NonNeg
     reason: str | None
+    #: P13.4 (additive): set by the server on upload.
+    titles: TitlesSummary | None = None
 
 
 class ImportDetail(_Model):
@@ -1373,6 +1384,7 @@ __all__ = [
     "CoverageWindow",
     "KbCoverage",
     "OrganizeSummary",
+    "TitlesSummary",
     "BANDS",
     "ERROR_CODES",
     "ERROR_STATUS",

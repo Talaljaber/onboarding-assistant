@@ -7,6 +7,7 @@ Every model reply here is a scripted string from a fake client (plan §A6.11), n
 from __future__ import annotations
 
 import base64
+import csv
 import io
 import json
 import threading
@@ -654,19 +655,22 @@ def test_organize_in_llm_mode_through_the_api(env: tuple[TestClient, Agent, Loca
                                               monkeypatch: pytest.MonkeyPatch) -> None:
     client, agent, _ = env
     monkeypatch.setenv("OFFLINE", "0")
-    fake = FakeClient(labeller("ما الزي المطلوب في المعرض؟"))
+    fake = FakeClient(json.dumps({"title_lines": [1, 3]}), labeller("ما الزي المطلوب في المعرض؟"))
     budget = Budget(tmp_path / "budget.json", 3.0)
     monkeypatch.setattr(agent, "llm", LLM(chat=CachedChat(fake, MODEL, DictCache(), budget), model=MODEL, mode="llm",
                                           budget=budget))
     assert client.get("/api/admin/kb/import/capabilities").json()["ai_available"] is True
     off = upload(client)  # the checkbox off: no call
     assert off.status_code == 201 and fake.calls == []
+    assert off.json()["organize"]["titles"] == {"used": False, "count": 0, "reason": "not_requested"}
     on = ImportDetail.model_validate(upload(client, organize=True).json())
-    assert len(fake.calls) == 1 and on.organize is not None and on.organize.used and on.organize.organized == 2
+    assert len(fake.calls) == 2 and on.organize is not None and on.organize.used and on.organize.organized == 2
+    assert on.organize.titles is not None and (on.organize.titles.used, on.organize.titles.count) == (True, 2)
     assert on.document.organized and [d.topic for d in on.drafts] == ["Policy", "Policy"]
     assert on.drafts[0].question_ar == "ما الزي المطلوب في المعرض؟" and on.drafts[0].text_ar == DRESS
-    sent = fake.calls[0]["messages"][0]["content"]
-    assert "dress_code" not in sent and on.document.id not in sent  # only passage text and headings
+    for call in fake.calls:  # the title lines, then the passages: never the file name or an id
+        sent = call["messages"][0]["content"]
+        assert "dress_code" not in sent and on.document.id not in sent
 
 
 # ============================================================================ stores
@@ -792,3 +796,234 @@ def test_add_many_validates_all_first_and_notifies_once(tmp_path: Path) -> None:
     added = kb.add_many([row, {**row, "answer_ar": PARKING, "source_page": 2}])
     assert [r.id for r in added] == ["K19", "K20"] and seen == [("K19", "K20")]
     assert kb.add_many([]) == [] and len(seen) == 1
+
+
+# ============================================================================ title detection (P13.4)
+LINES = [{"n": 1, "page": 1, "text": "دليل الأدوات اليومية"},
+         {"n": 2, "page": 1, "text": "يستلم الموظف جهازاً محمولاً في يومه الأول من قسم تقنية المعلومات."},
+         {"n": 3, "page": 1, "text": "نظام التذاكر:"},
+         {"n": 4, "page": 1, "text": "تُرفع كل مشكلة تقنية عبر نظام التذاكر ويُرد عليها خلال يوم عمل."},
+         {"n": 5, "page": 2, "text": "Page 2"}]
+
+
+def test_good_titles_reply_passes() -> None:
+    verdict = v.verify_titles({"title_lines": [3, 1]}, LINES, 5)
+    assert verdict.ok and verdict.lines == [1, 3] and verdict.rejected == 0  # a short line ending in ":" is fine
+    assert v.verify_titles({"title_lines": []}, LINES, 5).lines == []
+
+
+def test_titles_reply_with_a_bad_shape_is_rejected_whole() -> None:
+    assert v.verify_titles([1, 3], LINES, 5).reason == v.INVALID_JSON
+    for bad in ({"titles": [1]}, {"title_lines": 1}, {"title_lines": [1], "text": "x"}, {"title_lines": ["1"]},
+                {"title_lines": [1.0]}, {"title_lines": [True]}, {"title_lines": [None]}):
+        verdict = v.verify_titles(bad, LINES, 5)
+        assert not verdict.ok and verdict.reason == v.BAD_SHAPE, bad
+
+
+def test_bad_title_numbers_are_dropped_one_by_one() -> None:
+    long_title = {"n": 6, "page": 2, "text": "ع" * 81}
+    sentence = {"n": 7, "page": 2, "text": "يُرجى مراجعة قسم الموارد البشرية قبل نهاية الأسبوع الأول."}  # > 40 + "."
+    digits = {"n": 8, "page": 2, "text": "2026 - 3"}
+    last = {"n": 9, "page": 2, "text": "الخاتمة"}
+    lines = [*LINES, long_title, sentence, digits, last]
+    for n in (0, 10, -1, 6, 7, 8, 9):  # out of range, too long, a sentence, no letter, the last line
+        verdict = v.verify_titles({"title_lines": [1, n]}, lines, 9)
+        assert verdict.ok and verdict.lines == [1] and verdict.rejected == 1, n
+    dup = v.verify_titles({"title_lines": [1, 3, 1]}, lines, 9)
+    assert dup.lines == [1, 3] and dup.rejected == 1
+    assert v.title_line_ok("قواعد اللباس في المعرض.", 1, 9)  # short and punctuated: still allowed
+
+
+def test_titles_prompt_carries_numbers_pages_and_cut_lines_only() -> None:
+    from app.llm.paths import TITLES_LINE_CHARS, render_titles_prompt
+
+    rendered = render_titles_prompt([{"n": 4, "page": 2, "text": "عنوان"}, {"n": 5, "page": 2, "text": "ب" * 500}])
+    block = json.loads(rendered.split("LINES (data):\n```json\n", 1)[1].split("\n```", 1)[0])
+    assert block[0] == {"n": 4, "page": 2, "text": "عنوان"}
+    assert len(block[1]["text"]) == TITLES_LINE_CHARS and block[1]["text"].endswith("…")
+    assert "filename" not in rendered and "import_id" not in rendered
+
+
+def lines_in(messages: list[dict[str, str]]) -> list[dict[str, Any]]:
+    text = messages[0]["content"]
+    return json.loads(text.split("LINES (data):\n```json\n", 1)[1].split("\n```", 1)[0])  # type: ignore[no-any-return]
+
+
+def titler(*titles: str) -> Callable[[list[dict[str, str]]], str]:
+    """A fake model that picks the lines whose text is one of `titles`."""
+    def reply(messages: list[dict[str, str]]) -> str:
+        return json.dumps({"title_lines": [ln["n"] for ln in lines_in(messages) if ln["text"] in titles]})
+    return reply
+
+
+def test_titles_cached_only_when_nothing_was_rejected(chat: Any) -> None:
+    from app.llm.paths import llm_titles
+
+    cc, client, cache = chat(json.dumps({"title_lines": [1, 3]}))
+    verdict, why = llm_titles(LINES, 5, cc, 5.0)
+    assert why is None and verdict is not None and verdict.lines == [1, 3] and len(cache.data) == 1
+    assert client.calls[0]["params"]["temperature"] == 0 and client.calls[0]["model"] == MODEL
+    again, _ = llm_titles(LINES, 5, cc, 5.0)  # from the cache, re-verified
+    assert again == verdict and len(client.calls) == 1
+
+    cc2, _, cache2 = chat(json.dumps({"title_lines": [1, 5]}))  # 5 is the last line: dropped
+    partial, _ = llm_titles(LINES, 5, cc2, 5.0)
+    assert partial is not None and partial.lines == [1] and partial.rejected == 1 and cache2.data == {}
+
+    cc3, _, cache3 = chat(json.dumps({"title_lines": "1,3"}), "not json")
+    assert llm_titles(LINES, 5, cc3, 5.0) == (None, v.BAD_SHAPE)
+    assert llm_titles(LINES, 5, cc3, 5.0) == (None, v.INVALID_JSON)
+    assert cache3.data == {}
+
+
+def test_rebuild_keeps_text_pages_and_paragraphs() -> None:
+    from app.kb_import.titles import document_lines, rebuild
+
+    blocks = [Block("مقدمة", 1, "heading"),  # a rule-based heading the model does not choose
+              Block("دليل الأدوات اليومية\nيستلم الموظف جهازاً.\nنظام التذاكر\nتُرفع المشكلات عبر النظام.", 1),
+              Block("فقرة ثانية في الصفحة نفسها.", 1),
+              Block("الإجازات\nتُقدّم الطلبات عبر البوابة.", 2)]
+    lines = document_lines(blocks)
+    assert [(ln.n, ln.page) for ln in lines] == [(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1), (7, 2), (8, 2)]
+    rebuilt = rebuild(lines, {2, 4, 7})
+    assert [(b.kind, b.text, b.page) for b in rebuilt] == [
+        ("para", "مقدمة", 1), ("heading", "دليل الأدوات اليومية", 1), ("para", "يستلم الموظف جهازاً.", 1),
+        ("heading", "نظام التذاكر", 1), ("para", "تُرفع المشكلات عبر النظام.", 1),
+        ("para", "فقرة ثانية في الصفحة نفسها.", 1),
+        ("heading", "الإجازات", 2), ("para", "تُقدّم الطلبات عبر البوابة.", 2)]
+    # Verbatim: the same lines in the same order, nothing added or lost.
+    assert [x for b in rebuilt for x in b.text.split("\n")] == [ln.text for ln in lines]
+    joined = rebuild(lines, set())
+    assert joined[0] == Block("مقدمة\n" + blocks[1].text, 1)  # a heading that is not a title joins its text
+    assert [b.page for b in rebuild(document_lines([Block("أ\nب", 1), Block("ج", 2)]), set())] == [1, 2]
+
+
+ONE_PAGE = ("دليل الأدوات اليومية\n"
+            "يستلم الموظف جهازاً محمولاً في يومه الأول من قسم تقنية المعلومات، ويوقّع على نموذج الاستلام.\n"
+            "نظام التذاكر\n"
+            "تُرفع كل مشكلة تقنية عبر نظام التذاكر، ويُرد عليها خلال يوم عمل واحد من فريق الدعم.\n"
+            "الإجازات السنوية\n"
+            "تُقدَّم طلبات الإجازة عبر بوابة الموظف قبل أسبوع على الأقل، وتحتاج موافقة المدير المباشر.\n")
+TITLES = ("دليل الأدوات اليومية", "نظام التذاكر", "الإجازات السنوية")
+
+
+def test_detect_titles_used_fallback_and_skipped(chat: Any) -> None:
+    from app.kb_import.titles import detect_titles
+
+    _, blocks, _ = extract("guide.txt", ONE_PAGE.encode())
+    assert [b.kind for b in blocks] == ["para"]  # one paragraph: no rule-based heading
+    cc, client, _ = chat(titler(*TITLES))
+    out, s = detect_titles("txt", blocks, requested=True, llm=LLM(chat=cc, model=MODEL, mode="llm"), use_llm=True)
+    assert (s.used, s.count, s.reason) == (True, 3, None) and len(client.calls) == 1
+    assert [b.text for b in out if b.kind == "heading"] == list(TITLES)
+
+    failing, _, _ = chat(LLMUnavailable("OpenRouter request timed out"))
+    same, s2 = detect_titles("txt", blocks, requested=True, llm=LLM(chat=failing, model=MODEL, mode="llm"),
+                             use_llm=True)
+    assert same is blocks and (s2.used, s2.count, s2.reason) == (False, 0, "timeout")
+
+    cc3, client3, _ = chat(titler(*TITLES))
+    llm3 = LLM(chat=cc3, model=MODEL, mode="llm")
+    docx_blocks = [Block("Leave", 1, "heading"), Block("Annual leave is 14 days.", 1)]
+    for kind, bl in (("md", blocks), ("csv", blocks), ("docx", docx_blocks)):
+        kept, s3 = detect_titles(kind, bl, requested=True, llm=llm3, use_llm=True)
+        assert kept is bl and s3.reason == "structured" and not s3.used
+    _, s4 = detect_titles("txt", blocks, requested=False, llm=llm3, use_llm=True)
+    _, s5 = detect_titles("txt", blocks, requested=True, llm=llm3, use_llm=False)
+    assert (s4.reason, s5.reason) == ("not_requested", "llm_off") and client3.calls == []
+    # A Word file with no heading style at all is treated like plain text.
+    _, s6 = detect_titles("docx", blocks, requested=True, llm=llm3, use_llm=True)
+    assert s6.used and len(client3.calls) == 1
+
+
+def test_detect_titles_batches_with_global_numbers(chat: Any) -> None:
+    from app.kb_import.titles import detect_titles
+    from app.llm.paths import TITLES_BATCH
+
+    texts = [f"القسم {i}" if i % 50 == 0 else f"سطر النص رقم {i} يشرح قاعدة من قواعد العمل." for i in range(1, 251)]
+    blocks = [Block("\n".join(texts[:-1]), 1), Block("الخاتمة", 1, "heading"), Block(texts[-1], 1)]
+    cc, client, _ = chat(lambda m: json.dumps({"title_lines": [ln["n"] for ln in lines_in(m)
+                                                               if ln["text"].startswith("القسم ")]}),
+                         LLMUnavailable("OpenRouter request timed out"))
+    out, s = detect_titles("txt", blocks, requested=True, llm=LLM(chat=cc, model=MODEL, mode="llm"), use_llm=True)
+    sent = [lines_in(c["messages"]) for c in client.calls]
+    assert [len(x) for x in sent] == [TITLES_BATCH, 51] and sent[1][0]["n"] == TITLES_BATCH + 1
+    # Batch 1 passed (4 titles); batch 2 timed out and keeps its rule-based heading «الخاتمة».
+    assert s.used and s.count == 4 and s.reason == "timeout"
+    assert [b.text for b in out if b.kind == "heading"] == ["القسم 50", "القسم 100", "القسم 150", "القسم 200",
+                                                            "الخاتمة"]
+    assert [x for b in out for x in b.text.split("\n")] == [*texts[:-1], "الخاتمة", texts[-1]]
+
+
+def test_model_titles_split_a_pdf_page(chat: Any) -> None:
+    """Titles that end with a colon are not rule-based headings; the model's line numbers split the page."""
+    pytest.importorskip("pypdf")
+    from app.kb_import.titles import detect_titles
+
+    pdf = make_pdf([["Laptop:", "You get a laptop on your first day from the IT team.", "Tickets:",
+                     "Report every issue in the ticket system within one day.", "Page 1"]])
+    _, blocks, _ = extract("t.pdf", pdf)
+    assert not any(b.kind == "heading" for b in blocks)
+    cc, _, _ = chat(titler("Laptop:", "Tickets:"))
+    out, s = detect_titles("pdf", blocks, requested=True, llm=LLM(chat=cc, model=MODEL, mode="llm"), use_llm=True)
+    passages = chunk(out)
+    assert s.used and [p.heading for p in passages] == ["Laptop:", "Tickets:"] and [p.page for p in passages] == [1, 1]
+
+
+def test_titles_through_the_api_split_one_page_into_sections(env: tuple[TestClient, Agent, LocalStore],
+                                                             tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    client, agent, _ = env
+    before = ImportDetail.model_validate(upload(client, ONE_PAGE, name="guide.txt", organize=True).json())
+    assert len(before.drafts) == 1 and before.organize is not None and before.organize.titles is not None
+    assert before.organize.titles.reason == "llm_off"  # offline server: nothing sent, one run-on passage
+    monkeypatch.setenv("OFFLINE", "0")
+    fake = FakeClient(titler(*TITLES), labeller())
+    budget = Budget(tmp_path / "budget.json", 3.0)
+    monkeypatch.setattr(agent, "llm", LLM(chat=CachedChat(fake, MODEL, DictCache(), budget), model=MODEL, mode="llm",
+                                          budget=budget))
+    r = upload(client, ONE_PAGE, name="guide.txt", organize=True)
+    assert r.status_code == 201, r.text
+    detail = ImportDetail.model_validate(r.json())
+    assert detail.organize is not None and detail.organize.titles is not None
+    assert (detail.organize.titles.used, detail.organize.titles.count) == (True, 3)
+    body = [ln for ln in ONE_PAGE.splitlines() if ln not in TITLES]
+    assert [d.text_ar for d in detail.drafts] == body and all(d.page == 1 for d in detail.drafts)
+    assert "guide" not in fake.calls[0]["messages"][0]["content"]
+    assert lines_in(fake.calls[0]["messages"])[0] == {"n": 1, "page": 1, "text": TITLES[0]}
+
+
+def _eval_titles() -> Any:
+    import importlib.util
+
+    root = Path(__file__).resolve().parent.parent
+    spec = importlib.util.spec_from_file_location("eval_titles", root / "scripts" / "eval_titles.py")
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_eval_titles_dry_run_without_a_model(tmp_path: Path) -> None:
+    mod = _eval_titles()
+    out = tmp_path / "titles.csv"
+    assert mod.main(["--out", str(out)]) == 0  # OFFLINE=1 in tests: rule-based columns only
+    rows = list(csv.DictReader(io.StringIO(out.read_text(encoding="utf-8"))))
+    assert len(rows) == len(mod.DOCS) and all(r["used"] == "not_run" and r["model_tp"] == "not_run" for r in rows)
+    assert mod.main(["--out", str(tmp_path / "x.csv"), "--require-llm"]) == 2 and not (tmp_path / "x.csv").exists()
+
+
+def test_eval_titles_scores_a_fake_model(chat: Any, tmp_path: Path) -> None:
+    mod = _eval_titles()
+    expected = {t for _, _, titles in mod.DOCS for t in titles}
+    cc, client, _ = chat(*[titler(*expected) for _ in mod.DOCS])
+    budget = Budget(tmp_path / "b.json", 3.0)
+    out = tmp_path / "titles.csv"
+    assert mod.main(["--out", str(out)], llm=LLM(chat=cc, model=MODEL, mode="llm", budget=budget)) == 0
+    rows = list(csv.DictReader(io.StringIO(out.read_text(encoding="utf-8"))))
+    assert len(client.calls) == len(mod.DOCS)
+    # The rule joins nothing the model needs here, so a perfect fake finds every title and nothing else.
+    assert all((r["used"], r["model_fp"]) == ("1", "0") for r in rows)
+    total = sum(len(t) for _, _, t in mod.DOCS)
+    assert sum(int(r["model_tp"]) for r in rows) == total and sum(int(r["model_fn"]) for r in rows) == 0
+    assert mod.summarise(rows, 0.0).startswith(f"docs={len(mod.DOCS)} used={len(mod.DOCS)}/{len(mod.DOCS)} "
+                                               f"model_tp={total} model_fp=0 model_fn=0")

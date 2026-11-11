@@ -298,6 +298,35 @@ def _docx_blocks(data: bytes) -> tuple[list[Block], int]:
 
 
 # ------------------------------------------------------------------------------------------- pdf
+def pdf_page_blocks(raw: str, page: int) -> list[Block]:
+    """Blocks of one PDF page's extracted text (also used by `scripts/eval_titles.py` on plain text)."""
+    blocks: list[Block] = []
+    for lines in _paragraphs(raw.replace("\r\n", "\n").replace("\r", "\n")):
+        # Layout lines of one paragraph: a line without closing punctuation continues on the next.
+        out: list[str] = []
+        for line in (clean_line(x) for x in lines):
+            if not line:
+                continue
+            if out and not _SENTENCE_END.search(out[-1]) and len(out[-1]) > 40:
+                out[-1] = f"{out[-1]} {line}"
+            else:
+                out.append(line)
+        # A PDF keeps no heading styles: a short line without closing punctuation that is followed by
+        # more text is a heading (a wrapped sentence line over 40 characters was joined above).
+        body: list[str] = []
+        for i, line in enumerate(out):
+            if i + 1 < len(out) and len(line) <= 40 and not _SENTENCE_END.search(line):
+                if body:
+                    blocks.append(Block("\n".join(body), page))
+                    body = []
+                blocks.append(Block(line, page, "heading"))
+            else:
+                body.append(line)
+        if body:
+            blocks.append(Block("\n".join(body), page))
+    return blocks
+
+
 def _pdf_blocks(data: bytes) -> tuple[list[Block], int]:
     try:
         import pypdf  # optional: see requirements.txt
@@ -314,30 +343,7 @@ def _pdf_blocks(data: bytes) -> tuple[list[Block], int]:
             raise ImportRejected("passages", "too_many_pages", f"at most {PDF_MAX_PAGES} pages")
         blocks: list[Block] = []
         for n, page in enumerate(pages, start=1):
-            raw = (page.extract_text() or "").replace("\r\n", "\n").replace("\r", "\n")
-            for lines in _paragraphs(raw):
-                # Layout lines of one paragraph: a line without closing punctuation continues on the next.
-                out: list[str] = []
-                for line in (clean_line(x) for x in lines):
-                    if not line:
-                        continue
-                    if out and not _SENTENCE_END.search(out[-1]) and len(out[-1]) > 40:
-                        out[-1] = f"{out[-1]} {line}"
-                    else:
-                        out.append(line)
-                # A PDF keeps no heading styles: a short line without closing punctuation that is followed by
-                # more text is a heading (a wrapped sentence line over 40 characters was joined above).
-                body: list[str] = []
-                for i, line in enumerate(out):
-                    if i + 1 < len(out) and len(line) <= 40 and not _SENTENCE_END.search(line):
-                        if body:
-                            blocks.append(Block("\n".join(body), n))
-                            body = []
-                        blocks.append(Block(line, n, "heading"))
-                    else:
-                        body.append(line)
-                if body:
-                    blocks.append(Block("\n".join(body), n))
+            blocks += pdf_page_blocks(page.extract_text() or "", n)
         return blocks, len(pages)
     except ImportRejected:
         raise
@@ -365,4 +371,4 @@ def extract(filename: str, data: bytes) -> tuple[str, list[Block], int]:
     return kind, blocks, max(1, pages)
 
 
-__all__ = ["Block", "ImportRejected", "extract", "file_type", "pdf_available", "supported_types"]
+__all__ = ["Block", "ImportRejected", "extract", "file_type", "pdf_available", "pdf_page_blocks", "supported_types"]

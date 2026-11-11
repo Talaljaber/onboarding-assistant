@@ -1,6 +1,7 @@
 """Document import service (P12.1): upload -> passage drafts -> admin review -> added K-rows.
 
-What it does: `create_import` decodes the base64 upload in memory, extracts and chunks the text, labels the
+What it does: `create_import` decodes the base64 upload in memory, extracts the text, optionally lets the
+pinned model pick the title lines of a PDF or text file (P13.4, same opt-in as organizing), chunks it, labels the
 passages (offline, or with the pinned model when the admin asked for it in LLM mode) and stores the import
 record and its drafts. `approve` turns pending drafts into normal added K-rows through
 `KnowledgeBase.add_many` (next free ids, history `editor`, one reindex), in draft order, and marks the
@@ -15,6 +16,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import time
 import uuid
 from collections import Counter
 from pathlib import PurePath
@@ -27,7 +29,8 @@ from app.kb import KnowledgeBase, Row
 from app.kb_import.chunk import chunk
 from app.kb_import import extract as extraction
 from app.kb_import.extract import ImportRejected, extract
-from app.kb_import.organize import Summary, organize
+from app.kb_import.organize import ORGANIZE_MAX_S, Summary, organize
+from app.kb_import.titles import TITLES_MAX_S, TitlesSummary, detect_titles
 from app.logging_setup import log_event
 from app.schemas import (
     IMPORT_FILE_MAX_BYTES,
@@ -97,6 +100,9 @@ def create_import(store: Any, kb: KnowledgeBase, body: ImportCreate, *, llm: Any
         kind, blocks, pages = extract(filename, data)
     except ImportRejected as exc:
         raise ApiError("validation_error", 400, exc.message, exc.field) from None
+    started = time.monotonic()
+    blocks, titles = detect_titles(kind, blocks, requested=body.organize, llm=llm, use_llm=use_llm,
+                                   max_s=min(TITLES_MAX_S, ORGANIZE_MAX_S))
     passages = chunk(blocks)
     if not passages:
         raise ApiError("validation_error", 400, "no readable text found in the file", "content_b64")
@@ -104,7 +110,8 @@ def create_import(store: Any, kb: KnowledgeBase, body: ImportCreate, *, llm: Any
         raise ApiError("validation_error", 400, f"more than {IMPORT_MAX_PASSAGES} passages: split the document",
                        "passages")
     topics = sorted({r.topic for r in kb.rows()})
-    items, summary = organize(passages, topics, requested=body.organize, llm=llm, use_llm=use_llm)
+    items, summary = organize(passages, topics, requested=body.organize, llm=llm, use_llm=use_llm,
+                              max_s=max(0.0, ORGANIZE_MAX_S - (time.monotonic() - started)))
     at = now_iso()
     record = {"id": str(uuid.uuid4()), "filename": filename[:120], "document_name": _document_name(filename, body.document_name),
               "file_type": kind, "pages": pages, "passages": len(items), "organized": summary.used and summary.organized > 0,
@@ -116,13 +123,13 @@ def create_import(store: Any, kb: KnowledgeBase, body: ImportCreate, *, llm: Any
     if not store.kb_import_create(record, drafts):
         raise unavailable()
     log_event("kb_import", file_type=kind, bytes=len(data), pages=pages, passages=len(items),
-              organize=body.organize, organized=summary.organized, fallback=summary.fallback)
+              organize=body.organize, organized=summary.organized, fallback=summary.fallback, titles=titles.count)
     return ImportDetail(document=_with_counts(record, drafts), drafts=[_draft(d) for d in drafts],
-                        organize=OrganizeSummary(**_summary(summary)))
+                        organize=OrganizeSummary(**_summary(summary, titles)))
 
 
-def _summary(s: Summary) -> dict[str, Any]:
-    return s.as_dict()
+def _summary(s: Summary, titles: TitlesSummary) -> dict[str, Any]:
+    return {**s.as_dict(), "titles": titles.as_dict()}
 
 
 def list_imports(store: Any) -> ImportListResponse:
