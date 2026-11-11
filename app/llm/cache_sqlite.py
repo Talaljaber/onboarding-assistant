@@ -14,10 +14,7 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-_SCHEMA = (
-    "CREATE TABLE IF NOT EXISTS llm_cache "
-    "(key TEXT PRIMARY KEY, value TEXT NOT NULL, created_at TEXT NOT NULL)"
-)
+_SCHEMA = "CREATE TABLE IF NOT EXISTS llm_cache (key TEXT PRIMARY KEY, value TEXT NOT NULL, created_at TEXT NOT NULL)"
 
 
 class SqliteCache:

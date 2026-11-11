@@ -166,7 +166,9 @@ def normalise_ids(raw: object) -> list[str]:
                 ids = [_format_id(int(single.group(1)))]
             elif span:
                 lo, hi = int(span.group(1)), int(span.group(2))
-                ids = [_format_id(n) for n in range(lo, hi + 1)] if lo <= hi and hi - lo < _RANGE_MAX else [token.upper()]
+                ids = (
+                    [_format_id(n) for n in range(lo, hi + 1)] if lo <= hi and hi - lo < _RANGE_MAX else [token.upper()]
+                )
             else:
                 ids = [token.upper()]
             out.extend(i for i in ids if i not in out)
@@ -221,7 +223,9 @@ def injection_suspected(text: str) -> bool:
     return any(p.search(text) or p.search(_normalize(text)) for p in _INJECTION)
 
 
-def _text_checks(text: str, allowed_texts: Sequence[str], row_texts: Sequence[str], documents: Iterable[str]) -> str | None:
+def _text_checks(
+    text: str, allowed_texts: Sequence[str], row_texts: Sequence[str], documents: Iterable[str]
+) -> str | None:
     """Checks 5-7 on generated text: numbers, contacts/links, ids or document names."""
     if foreign_numbers(text, allowed_texts) or _foreign_percent(text, row_texts):
         return FOREIGN_NUMBER

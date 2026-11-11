@@ -137,7 +137,12 @@ def _accept_answer(content: str, rows: Sequence[Mapping[str, Any]], user_texts: 
         for nid in normalise_ids(str(k)):
             if nid in verdict.normalised_ids and nid not in quotes and isinstance(v, str):
                 quotes[nid] = v.strip()
-    return {"status": status, "answer_ar": parsed["answer_ar"].strip(), "ids": verdict.normalised_ids, "quotes": quotes}, ""
+    return {
+        "status": status,
+        "answer_ar": parsed["answer_ar"].strip(),
+        "ids": verdict.normalised_ids,
+        "quotes": quotes,
+    }, ""
 
 
 def llm_answer(
@@ -273,7 +278,8 @@ def render_agent_prompt(
     return _render(
         AGENT_PROMPT,
         scenarios=[
-            {"id": s.get("id"), "department": s.get("department"), "scenario_ar": s.get("scenario_ar")} for s in scenarios
+            {"id": s.get("id"), "department": s.get("department"), "scenario_ar": s.get("scenario_ar")}
+            for s in scenarios
         ],
         milestones=list(milestones),
         scenario_active=bool(scenario_active),
