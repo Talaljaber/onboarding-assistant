@@ -334,9 +334,21 @@ def test_unsupported_draft_is_checked_by_coverage_only(tmp_path: Path, kb: Knowl
     unsupported = {"status": "unsupported", "answer_ar": "", "ids": [], "quotes": {}}
     fake = PanelFake(sanitizer=sanitizer("كم الراتب؟"), answerer=js(unsupported),
                      coverage_judge=coverage("unsupported"))
-    res, info = run(make_llm(tmp_path, fake), kb, "كم الراتب؟", band="refuse")
+    res, info = run(make_llm(tmp_path, fake), kb, "كم الراتب؟", band="answer")
     assert res is not None and res.status == "unsupported" and panel_of(info).accepted
     assert fake.roles() == ["answerer", "coverage_judge", "sanitizer"]
+
+
+def test_a_refusal_outside_the_answer_band_is_kept_without_judges(tmp_path: Path, kb: KnowledgeBase) -> None:
+    unsupported = {"status": "unsupported", "answer_ar": "", "ids": [], "quotes": {}}
+    for band in ("refuse", "not_confirmed"):
+        fake = PanelFake(sanitizer=sanitizer("كم رقم المعرض؟"), answerer=js(unsupported),
+                         coverage_judge=coverage("answered", ok=False), escalation=js(K16))
+        res, info = run(make_llm(tmp_path, fake), kb, "كم رقم المعرض؟", band=band)
+        assert res is not None and res.status == "unsupported" and not res.escalated
+        p = panel_of(info)
+        assert p.accepted and p.escalated_to is None and p.votes[-1].note == f"refusal kept: retrieval band is {band}"
+        assert fake.roles() == ["answerer", "sanitizer"]
 
 
 # -- settings, client and budget --------------------------------------------------------------------------

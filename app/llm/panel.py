@@ -361,6 +361,14 @@ def run_panel(
             return finish(None, reason)
         d: dict[str, Any] = draft.value
 
+        # a refusal is reopened only when retrieval itself says the question is answerable (band "answer");
+        # otherwise a judge's hint could talk the escalation into answering a question the rows do not answer
+        if d["status"] == "unsupported" and band is not None and band != "answer":
+            trace["confidence"] = 1.0
+            votes.append({"role": "coverage_judge", "model": "retrieval-band", "ok": True, "confidence": 1.0,
+                          "note": f"refusal kept: retrieval band is {band}", "latency_ms": 0, "cached": False})
+            return finish(d, None, final=draft, accepted=True)
+
         # 3. judges in parallel on the verified draft (an unsupported draft has nothing to cite)
         judge_rows = [{**r, "cited": r["id"] in d["ids"]} for r in answer_rows]
         draft_data = {k: d[k] for k in ("status", "answer_ar", "ids")}
