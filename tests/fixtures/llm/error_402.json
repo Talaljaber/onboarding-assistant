@@ -1,0 +1,10 @@
+{
+ "_note": "hand-written fixture for unit tests; not a real model reply (plan A6.11)",
+ "error": {
+  "code": 402,
+  "message": "Insufficient credits",
+  "metadata": {
+   "provider_name": null
+  }
+ }
+}

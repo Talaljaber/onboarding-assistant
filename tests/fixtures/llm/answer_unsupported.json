@@ -1,0 +1,22 @@
+{
+ "_note": "hand-written fixture for unit tests; not a real model reply (plan A6.11)",
+ "id": "gen-fixture",
+ "model": "deepseek/deepseek-v4.1-flash",
+ "object": "chat.completion",
+ "choices": [
+  {
+   "index": 0,
+   "finish_reason": "stop",
+   "message": {
+    "role": "assistant",
+    "content": "{\"status\": \"unsupported\", \"answer_ar\": \"\", \"ids\": [], \"quotes\": {}}"
+   }
+  }
+ ],
+ "usage": {
+  "prompt_tokens": 820,
+  "completion_tokens": 64,
+  "total_tokens": 884,
+  "cost": 0.000123
+ }
+}
