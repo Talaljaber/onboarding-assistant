@@ -154,6 +154,11 @@ export default function ImportReviewScreen() {
               : t("kbImport.organizedOff")}
           </p>
         )}
+        {summary?.titles?.used && (
+          <p className="m-0 text-sm text-fg-2" data-titles-summary>
+            {t("kbImport.titlesDetected", { n: summary.titles.count })}
+          </p>
+        )}
         {added.length > 0 && (
           <div data-added-rows>
             <Notice tone="ok" role="status">

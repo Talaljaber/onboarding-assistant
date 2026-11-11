@@ -14,7 +14,7 @@ import { LangScope } from "@/i18n";
 import { ToastProvider } from "@/components/ui/Toast";
 import ImportScreen from "../ImportScreen";
 import ImportReviewScreen from "../ImportReviewScreen";
-import { defaultDocName, extOf, fileProblem, fileToBase64 } from "../importFile";
+import { defaultDocName, extOf, fileProblem, fileToBase64, rememberSummary } from "../importFile";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -184,6 +184,22 @@ describe("review screen", () => {
     expect(within(cards[2]!).getByText("Discarded")).toBeInTheDocument();
     expect(within(cards[2]!).getByRole("button", { name: "Restore" })).toBeInTheDocument();
     expect(screen.getByText("Approved passages become knowledge rows and are cited word for word.")).toBeInTheDocument();
+  });
+
+  it("shows how many section titles the model detected, only when it ran", async () => {
+    backend();
+    rememberSummary(IMPORT, { ...detail.organize, titles: { used: true, count: 3, reason: null } });
+    mount(<ImportReviewScreen />);
+    await screen.findAllByRole("article");
+    expect(screen.getByText("Section titles detected by the model: 3.")).toBeInTheDocument();
+  });
+
+  it("no titles line for a structured file (the fixture: .docx, titles not used)", async () => {
+    backend();
+    rememberSummary(IMPORT, detail.organize);
+    mount(<ImportReviewScreen />);
+    await screen.findAllByRole("article");
+    expect(screen.queryByText(/Section titles detected/)).toBeNull();
   });
 
   it("select all + approve selected sends both pending drafts and links the new rows", async () => {

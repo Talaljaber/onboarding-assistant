@@ -553,6 +553,13 @@ export interface KbDraft {
   updated_at: string;
 }
 
+/** P13.4: the optional model title step for a PDF or text file (`count` = title lines the model chose). */
+export interface TitlesSummary {
+  used: boolean;
+  count: number;
+  reason: string | null;
+}
+
 export interface OrganizeSummary {
   requested: boolean;
   used: boolean;
@@ -561,6 +568,8 @@ export interface OrganizeSummary {
   merged: number;
   skipped: number;
   reason: string | null;
+  /** P13.4 (additive): set by the server on upload; absent from older servers */
+  titles?: TitlesSummary | null;
 }
 
 export interface ImportDetail {
