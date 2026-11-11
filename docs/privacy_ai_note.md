@@ -70,6 +70,11 @@ With a key, per message, at most:
 - **escalation (GLM-5.3, only on escalated turns):** the same question, previous question and rows, and
   the flash draft with the judges' short notes; same provider setting, no data collection;
 - **practice feedback:** the scenario text, its checklist sentences and the user's reply;
+- **English helper translation (only with the English interface, only for an answer):** the final
+  verified Arabic answer text (without the fixed partial note) and the Arabic text of the rows it cites.
+  Not the question, the row ids, the document names, the role, the alias or the profile. The
+  translation is checked (numbers, contacts and links, ids, document and person names, Arabic left
+  over, length) before it is shown or cached; a failure leaves only the Arabic;
 - **status probe:** one tiny fixed test message (`Reply with {"ping":true}`, at most 10 tokens) at
   start, on a throttled status re-check, and once after a failure.
 
@@ -164,6 +169,9 @@ invented a contact. The earlier held-out 1 run, before the panel, gave offline 2
   have no anchor questions).
 - One shared admin password for the knowledge editor and the manager view; no per-person accounts.
 - The verifier checks grounding, not style. A grounded but clumsy sentence can pass.
+- The English helper translation is checked for invented numbers, contacts, ids and names, not for
+  meaning: a fluent but slightly off sentence can pass. The Arabic answer and rows remain the
+  reference and are always shown.
 - The AI layer depends on a third-party service; its availability and retention follow OpenRouter's and
   the provider's terms, limited by `data_collection: deny`.
 - No sync between the local fallback and Supabase.

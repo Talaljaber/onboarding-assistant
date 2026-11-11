@@ -188,6 +188,11 @@ The web client is prebuilt in `web/dist`; judges do not need Node. To rebuild:
 - **AI mode needs a key and the network.** Without them the app is offline-only. AI answers are checked,
   but the checks test grounding (ids, quotes, numbers, contacts), not whether the wording is the best.
   The held-out 2 goal (≥ 46/50) was missed by one; escalated turns are slower (within the 9 s budget).
+- **English is a helper, not the reference.** With the English interface and AI mode on, an answer gets a
+  checked English translation above the Arabic (numbers, contacts, ids and names are checked; a failing
+  translation is simply not shown). Offline, or when the check fails, only the Arabic answer shows.
+  K-rows, scenarios, the plan and the quiz stay in Arabic; fixed refusals get a fixed English line.
+  Translation quality has not been measured on held-out data.
 - **Knowledge facts need approval.** Some facts are paraphrased from Dada materials and need Dada's
   approval before any external release.
 - **Fictional examples.** The scenarios (with our reply options and checklists), the 90-day plan, the

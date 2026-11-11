@@ -211,7 +211,7 @@ Examples: `contracts/fixtures/chat_*.json` (one per kind and card variant, see Â
 - `steps` is the ordered timeline. `mode` equals the response `mode`. The trace never contains the
   prompt text or a key.
 - The TracePanel renders: `steps` as a timeline, `retrieval.hits`, `retrieval.margin` + `answer.band`,
-  `agent`, `answer.verifier` (one verdict and reason), mode/model/cached and `latency_ms`/`request_id`.
+  `agent`, `answer.verifier` (one verdict and reason), mode/model/cached and `latency_ms`/`request_id`, and the English translation outcome from the `translate*` step (P11.1).
 
 ### GET /api/scenarios?role=Sales
 
