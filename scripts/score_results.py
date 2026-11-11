@@ -7,7 +7,9 @@ the raw columns that `scripts/run_eval.py` records. Content rules are keyed by t
 column and written from the K-rows (plan §A6.27), never from the jury file's wording. It prints
 the summary table and, when the input is a `results.csv` (or `--out` is given), writes
 `summary.md` and `jury_block.csv` (the jury rows only) next to it. Held-out rows, if a
-`results_heldout_final.csv` sits next to the input, appear as aggregate numbers only.
+`results_heldout_final.csv` or `results_heldout_2_final.csv` sits next to the input, appear as
+aggregate numbers only. LLM blocks with answer-panel columns add panel statistics (escalation and
+acceptance rates, flash calls per row, cost per 100 rows, latency split by escalation).
 
 Stdlib only; importable by run_eval.py and the tests.
 """
@@ -39,10 +41,15 @@ COLUMNS = [
 EXTRA_COLUMNS = [
     "category", "expected_scenario", "expected_milestone", "must_match", "must_not_match", "kind", "reason",
     "router_tool", "scenario_id", "milestone", "percent_before", "percent_after", "turn2_kind", "top1_id",
+    # P8 answer panel (from trace.panel of the first turn) and the row's spend (budget delta, all turns).
+    "panel_confidence", "panel_accepted", "panel_escalated_to", "panel_votes", "turn_cost_usd",
 ]
 ALL_COLUMNS = COLUMNS + EXTRA_COLUMNS
 HELDOUT_FILE = "results_heldout_final.csv"
-SET_ORDER = ("dev", "jury", "heldout")
+# `results_heldout2_final.csv` would miss the `results/*_heldout_*` git-ignore rule; this name matches it.
+HELDOUT2_FILE = "results_heldout_2_final.csv"
+SEALED_FILES = {"heldout": HELDOUT_FILE, "heldout2": HELDOUT2_FILE}
+SET_ORDER = ("dev", "jury", "heldout", "heldout2")
 MODE_ORDER = ("llm", "offline")
 
 # Fixed server texts of plan Part C §4.6 (owned by app/answer.py; copied so the scorer stays standalone).
@@ -344,6 +351,77 @@ def _pct(values: list[int], q: float) -> int:
     return int(round(statistics.quantiles(values, n=100, method="inclusive")[int(q) - 1]))
 
 
+def _float(value: str | None) -> float | None:
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def has_panel(row: dict[str, str]) -> bool:
+    return bool(row.get("panel_votes") or row.get("panel_confidence") or row.get("panel_accepted"))
+
+
+def row_escalated(row: dict[str, str]) -> bool:
+    return bool(row.get("panel_escalated_to")) or truthy(row.get("escalated"))
+
+
+def flash_calls(row: dict[str, str]) -> int:
+    """Uncached non-escalation votes in `panel_votes` ("role:ok:conf[:cached]" joined by ";")."""
+    n = 0
+    for vote in ids(row.get("panel_votes", "")):
+        parts = vote.split(":")
+        if parts[0] != "escalation" and not (len(parts) > 3 and parts[3] == "cached"):
+            n += 1
+    return n
+
+
+@dataclass
+class PanelStats:
+    rows: int = 0
+    escalated: int = 0
+    accepted: int = 0
+    flash_calls: int = 0
+    cost_rows: int = 0
+    cost_usd: float = 0.0
+    lat_escalated: list[int] = field(default_factory=list)
+    lat_direct: list[int] = field(default_factory=list)
+
+
+def panel_stats(rows: Sequence[dict[str, str]]) -> PanelStats:
+    p = PanelStats()
+    for r in rows:
+        cost = _float(r.get("turn_cost_usd"))
+        if cost is not None:
+            p.cost_rows += 1
+            p.cost_usd += cost
+        lat = _int(r.get("latency_ms"))
+        if lat is not None:
+            (p.lat_escalated if row_escalated(r) else p.lat_direct).append(lat)
+        if not has_panel(r):
+            continue
+        p.rows += 1
+        p.escalated += bool(r.get("panel_escalated_to"))
+        p.accepted += truthy(r.get("panel_accepted"))
+        p.flash_calls += flash_calls(r)
+    return p
+
+
+def panel_lines(rows: Sequence[dict[str, str]]) -> list[str]:
+    p = panel_stats(rows)
+    if not p.rows:
+        return ["- panel: no panel data in these rows"]
+    cost = f"${100 * p.cost_usd / p.cost_rows:.4f} (over {p.cost_rows} rows)" if p.cost_rows else "not recorded"
+    return [
+        f"- panel rows {p.rows}: escalation rate {_ratio(p.escalated, p.rows)} · acceptance rate"
+        f" {_ratio(p.accepted, p.rows)} · mean flash calls/row {p.flash_calls / p.rows:.2f} (uncached votes)",
+        f"- cost per 100 rows: {cost}",
+        f"- latency p50 / p95 escalated: {_pct(p.lat_escalated, 50)} / {_pct(p.lat_escalated, 95)} ms"
+        f" ({len(p.lat_escalated)}) · not escalated: {_pct(p.lat_direct, 50)} / {_pct(p.lat_direct, 95)} ms"
+        f" ({len(p.lat_direct)})",
+    ]
+
+
 def build_block(set_name: str, mode: str, rows: list[dict[str, str]]) -> Block:
     b = Block(set=set_name, mode=mode, rows=rows, n=len(rows))
     beh_counts: dict[str, list[int]] = {}
@@ -443,7 +521,12 @@ def gate_lines(b: Block) -> list[str]:
 
 
 def block_lines(b: Block, *, aggregate_only: bool = False) -> list[str]:
-    names = {"dev": "DEV", "jury": "Jury block (reported only, never tuned on)", "heldout": "Held-out (final run)"}
+    names = {
+        "dev": "DEV",
+        "jury": "Jury block (reported only, never tuned on)",
+        "heldout": "Held-out (final run)",
+        "heldout2": "Held-out 2 (final run)",
+    }
     title = f"## {names.get(b.set, b.set)} — {b.mode} mode: correct {_ratio(b.correct, b.n)}"
     attempted_wrong = b.answerable_attempted - b.answerable_correct
     lines = [
@@ -465,6 +548,7 @@ def block_lines(b: Block, *, aggregate_only: bool = False) -> list[str]:
     if b.mode == "llm":
         dis = "" if aggregate_only else f" ({', '.join(b.disagreements)})"
         lines.append(f"- LLM-vs-router disagreement: {len(b.disagreements)} rows{dis}")
+        lines += panel_lines(b.rows)
     lines += gate_lines(b)
     if not aggregate_only:
         if b.answerable_refused_ids:
@@ -500,7 +584,7 @@ def render_summary(rows: Sequence[dict[str, str]], heldout_rows: Sequence[dict[s
     held = blocks(heldout_rows)
     for b in held:
         lines += block_lines(b, aggregate_only=True)
-    lim = [b for b in held if b.mode == "offline"]
+    lim = [b for b in held if b.mode == "offline" and b.set == "heldout"]
     recall = f"{lim[0].unanswerable_refused}/{lim[0].unanswerable}" if lim else "not measured yet (held-out not run)"
     lines += [
         "## Limitations",
@@ -513,8 +597,11 @@ def render_summary(rows: Sequence[dict[str, str]], heldout_rows: Sequence[dict[s
 
 def write_outputs(results_path: Path, out_dir: Path | None, *, echo: bool = True) -> str:
     rows = [score_row(r) for r in read_results(results_path)]
-    held_path = results_path.parent / HELDOUT_FILE
-    held = [score_row(r) for r in read_results(held_path)] if held_path.exists() else []
+    held: list[dict[str, str]] = []
+    for name in (HELDOUT_FILE, HELDOUT2_FILE):
+        held_path = results_path.parent / name
+        if held_path.exists():
+            held += [score_row(r) for r in read_results(held_path)]
     text = render_summary(rows, held)
     if out_dir is not None:
         out_dir.mkdir(parents=True, exist_ok=True)

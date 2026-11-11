@@ -1,4 +1,5 @@
-"""run_eval.py, score_results.py, pick_bands.py and no_network.py with a fake agent (no encoder, no network)."""
+"""run_eval.py, score_results.py, pick_bands.py, pick_panel.py and no_network.py with a fake agent and fixture
+CSVs (no encoder, no network, no model, no sealed file)."""
 
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 import pick_bands  # noqa: E402
+import pick_panel  # noqa: E402
 import run_eval  # noqa: E402
 import score_results as sr  # noqa: E402
 
@@ -304,10 +306,12 @@ def test_dev_rows_load() -> None:
 
 def test_sets_for_keeps_heldout_sealed() -> None:
     assert run_eval.sets_for("all", final=False) == ["dev", "jury"]
-    assert run_eval.sets_for("all", final=True) == ["dev", "jury", "heldout"]
+    assert run_eval.sets_for("all", final=True) == ["dev", "jury", "heldout", "heldout2"]
     assert run_eval.sets_for("heldout", final=False, warm=True) == ["dev", "jury"]
-    with pytest.raises(PermissionError):
-        run_eval.load_rows("heldout")
+    assert run_eval.sets_for("heldout2", final=True) == ["heldout2"]
+    for sealed in ("heldout", "heldout2"):
+        with pytest.raises(PermissionError):
+            run_eval.load_rows(sealed)
 
 
 def test_merge_replaces_same_set_and_mode(tmp_path: Path) -> None:
@@ -336,7 +340,10 @@ def test_main_offline_with_fake_agent(tmp_path: Path, monkeypatch: pytest.Monkey
     assert not (tmp_path / sr.HELDOUT_FILE).exists()
 
 
-def test_heldout_without_final_exits_2_and_opens_nothing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+@pytest.mark.parametrize("set_name", ["heldout", "heldout2"])
+def test_heldout_without_final_exits_2_and_opens_nothing(
+    set_name: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     real_open = builtins.open
     opened: list[str] = []
 
@@ -347,7 +354,8 @@ def test_heldout_without_final_exits_2_and_opens_nothing(monkeypatch: pytest.Mon
     monkeypatch.setattr(builtins, "open", guarded_open)
     monkeypatch.setattr(io, "open", guarded_open)
     monkeypatch.setattr(run_eval, "build_agent", lambda: pytest.fail("agent built for a sealed set"))
-    assert run_eval.main(["--set", "heldout", "--mode", "offline", "--out", str(tmp_path)]) == 2
+    for mode in ("offline", "llm", "both"):
+        assert run_eval.main(["--set", set_name, "--mode", mode, "--out", str(tmp_path)]) == 2
     assert not any("eval_heldout" in f for f in opened)
     assert list(tmp_path.iterdir()) == []
 
@@ -373,6 +381,162 @@ def test_llm_probe_failure_exits_3(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     monkeypatch.setattr(run_eval, "build_agent", AgentWithLlm)
     assert run_eval.main(["--set", "dev", "--mode", "llm", "--out", str(tmp_path)]) == 3
     assert not (tmp_path / "results.csv").exists()
+
+
+def test_heldout2_final_writes_its_own_ignored_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(run_eval, "build_agent", FakeAgent)
+    monkeypatch.setattr(
+        run_eval, "load_rows", lambda s, final=False: [row(set=s, id=f"{s}-SECRET", expected_ids=("K01",))]
+    )
+    assert run_eval.main(["--set", "heldout2", "--final", "--mode", "offline", "--out", str(tmp_path)]) == 0
+    printed = capsys.readouterr().out
+    assert "heldout2-SECRET" not in printed and "Held-out 2 (final run)" in printed
+    assert sr.HELDOUT2_FILE == "results_heldout_2_final.csv"  # matches the `results/*_heldout_*` ignore rule
+    held = sr.read_results(tmp_path / sr.HELDOUT2_FILE)
+    assert [(r["set"], r["correct"]) for r in held] == [("heldout2", "true")]
+    assert not (tmp_path / "results.csv").exists() and not (tmp_path / sr.HELDOUT_FILE).exists()
+
+
+def test_heldout2_appears_as_aggregates_only(tmp_path: Path) -> None:
+    rows = sr.read_results(SAMPLE)
+    (tmp_path / "results.csv").write_bytes(SAMPLE.read_bytes())
+    held = [dict(r, set="heldout2", test_id=f"Q{i:02d}") for i, r in enumerate(rows[:16], 1)]
+    sr.write_rows(tmp_path / sr.HELDOUT2_FILE, held)
+    text = sr.write_outputs(tmp_path / "results.csv", tmp_path, echo=False)
+    assert "## Held-out 2 (final run) — offline mode: correct 12/16" in text
+    assert "Q0" not in text and "Q1" not in text
+    assert held[0]["question"] not in text
+
+
+# --------------------------------------------------------------------------------------
+# answer panel columns and stats
+# --------------------------------------------------------------------------------------
+
+PANEL = {
+    "votes": [
+        {"role": "answerer", "model": "deepseek/deepseek-v4.1-flash", "ok": True, "confidence": 0.9},
+        {"role": "citation_judge", "model": "deepseek/deepseek-v4.1-flash", "ok": False, "confidence": 0.4,
+         "cached": True},
+        {"role": "escalation", "model": "z-ai/glm-5.3", "ok": True, "confidence": None},
+    ],
+    "confidence": 0.4,
+    "accepted": False,
+    "escalated_to": "z-ai/glm-5.3",
+}
+
+
+class FakeBudget:
+    def __init__(self) -> None:
+        self.usd = 1.0
+
+    def spent(self) -> float:
+        return self.usd
+
+
+class PanelAgent(FakeAgent):
+    """FakeAgent whose knowledge answers carry trace.panel (except the K02 one) and spend USD 0.0025 per turn."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.llm = type("L", (), {"budget": FakeBudget()})()
+
+    def turn(self, req: schemas.ChatRequest) -> schemas.ChatResponse:
+        resp = super().turn(req)
+        self.llm.budget.usd += 0.0025
+        if "معرض" in req.message:
+            return resp
+        d = resp.model_dump(mode="json")
+        d["trace"]["panel"] = PANEL
+        return schemas.ChatResponse.model_validate(d)
+
+
+def test_panel_columns_and_turn_cost() -> None:
+    rows = [row(id="A", expected_ids=("K01",)), row(id="B", question="كم معرض؟", expected_ids=("K02",))]
+    res = run_eval.run_rows(PanelAgent(), rows, "llm")
+    a, b = res
+    assert a["panel_confidence"] == "0.40" and a["panel_accepted"] == "false"
+    assert a["panel_escalated_to"] == "z-ai/glm-5.3"
+    assert a["panel_votes"] == "answerer:ok:0.90;citation_judge:no:0.40:cached;escalation:ok:"
+    assert a["turn_cost_usd"] == "0.002500"
+    assert (b["panel_confidence"], b["panel_accepted"], b["panel_votes"]) == ("", "", "")
+    assert b["turn_cost_usd"] == "0.002500" and a["correct"] == b["correct"] == "true"
+    assert sr.flash_calls(a) == 1  # cached and escalation votes are not flash calls
+    assert run_eval.run_rows(FakeAgent(), [row(id="C")], "offline")[0]["turn_cost_usd"] == ""
+
+
+def _panel_row(i: int, conf: str, escalated: bool, correct: bool, latency: int, cost: str = "0.0004") -> dict[str, str]:
+    return _r(
+        set="dev", mode="llm", test_id=f"P{i:02d}", expected_ids="K01", cited_ids="K01" if correct else "K02",
+        answer="x", panel_confidence=conf, panel_accepted="false" if escalated else "true",
+        panel_escalated_to="z-ai/glm-5.3" if escalated else "", escalated="true" if escalated else "false",
+        panel_votes="answerer:ok:0.90;citation_judge:ok:0.80;coverage_judge:ok:0.70", latency_ms=str(latency),
+        turn_cost_usd=cost,
+    )
+
+
+def _panel_fixture() -> list[dict[str, str]]:
+    return [
+        _panel_row(1, "0.95", False, True, 1000),
+        _panel_row(2, "0.90", False, True, 1100),
+        _panel_row(3, "0.80", False, False, 1200),
+        _panel_row(4, "0.60", True, True, 5000, "0.0040"),
+        _panel_row(5, "0.50", True, False, 6000, "0.0040"),
+        _r(set="dev", mode="llm", test_id="G1", expected_behaviour="greet", kind="text", latency_ms="300"),
+    ]
+
+
+def test_panel_stats_in_the_llm_block(tmp_path: Path) -> None:
+    rows = _panel_fixture()
+    p = sr.panel_stats(rows)
+    assert (p.rows, p.escalated, p.accepted, p.flash_calls) == (5, 2, 3, 15)
+    assert p.cost_rows == 5 and abs(p.cost_usd - 0.0092) < 1e-9
+    assert sorted(p.lat_escalated) == [5000, 6000] and sorted(p.lat_direct) == [300, 1000, 1100, 1200]
+    path = tmp_path / "results.csv"
+    sr.write_rows(path, [sr.score_row(dict(r)) for r in rows])
+    text = sr.write_outputs(path, tmp_path, echo=False)
+    assert "escalation rate 2/5 (40.0%)" in text and "acceptance rate 3/5 (60.0%)" in text
+    assert "mean flash calls/row 3.00" in text and "cost per 100 rows: $0.1840 (over 5 rows)" in text
+    assert "latency p50 / p95 escalated:" in text
+    bare = [dict(r, panel_votes="", panel_confidence="", panel_accepted="") for r in rows]
+    assert "- panel: no panel data in these rows" in sr.block_lines(sr.build_block("dev", "llm", bare))
+    assert not any("panel" in line for line in sr.block_lines(sr.build_block("dev", "offline", rows)))
+
+
+# --------------------------------------------------------------------------------------
+# pick_panel
+# --------------------------------------------------------------------------------------
+
+
+def test_pick_panel_what_if_and_recommendation() -> None:
+    rows, skipped = pick_panel.panel_rows([sr.score_row(dict(r)) for r in _panel_fixture()])
+    assert len(rows) == 5 and skipped == 1
+    w = pick_panel.what_if(rows, 0.70)  # the run's own decisions: everything observed
+    assert (w.escalate, w.known, w.known_correct, w.unknown) == (2, 5, 3, 0)
+    w = pick_panel.what_if(rows, 0.85)  # P03 would escalate but did not: its outcome is unknown
+    assert (w.escalate, w.known, w.known_correct, w.low, w.high) == (3, 4, 3, 3, 4)
+    w = pick_panel.what_if(rows, 0.55)  # P04 would be accepted but escalated: unknown
+    assert (w.escalate, w.known, w.low, w.high) == (1, 4, 2, 3)
+    lines, pick = pick_panel.table(rows)
+    assert pick.threshold == 0.65 and pick.low == 3  # best observed correct, then the fewest escalations
+    assert sum("← recommended" in line for line in lines) == 1
+    assert list(pick_panel.THRESHOLDS) == [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
+
+
+def test_pick_panel_cli(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    path = tmp_path / "results.csv"
+    sr.write_rows(path, _panel_fixture())
+    assert pick_panel.main([str(path)]) == 0
+    out = capsys.readouterr().out
+    assert "recommended LLM_PANEL_ACCEPT=0.65" in out and "DEV llm panel rows: 5" in out
+    assert pick_panel.main([str(tmp_path / "missing.csv")]) == 2
+    held = tmp_path / sr.HELDOUT2_FILE
+    sr.write_rows(held, _panel_fixture())
+    assert pick_panel.main([str(held)]) == 2
+    no_panel = tmp_path / "no_panel.csv"
+    sr.write_rows(no_panel, sr.read_results(SAMPLE))
+    assert pick_panel.main([str(no_panel)]) == 2
 
 
 # --------------------------------------------------------------------------------------
