@@ -1187,6 +1187,8 @@ class MentorRequest(_Model):
     status_changed_at: str
     kb_row: Source | None
     activity: LinkedActivity | None
+    #: P15: how many comments (both ways) the request's thread has.
+    comment_count: NonNeg
 
 
 class RequestCounts(_Model):
@@ -1438,6 +1440,75 @@ class CheckResponse(_Model):
     label_ar: str
 
 
+# --------------------------------------------------------------------------------------
+# Comments and files on mentor requests (P15): the intern answers, the admin replies
+# --------------------------------------------------------------------------------------
+
+COMMENT_BODY_MAX = 1000
+COMMENT_FILES_MAX = 3
+#: Each file, decoded (5 MiB). Allowed: .pdf, .docx, .png, .jpg/.jpeg, checked by extension and magic bytes.
+COMMENT_FILE_MAX_BYTES = 5 * 1024 * 1024
+COMMENT_FILENAME_MAX = 120
+#: The JSON body of `POST /api/requests/{id}/comments` (and the admin route, with a valid token): three
+#: base64 files of 5 MiB plus the text. Every other route keeps `BODY_MAX_BYTES`.
+COMMENT_BODY_MAX_BYTES = COMMENT_FILES_MAX * (((COMMENT_FILE_MAX_BYTES + 2) // 3) * 4) + 64 * 1024
+CommentAuthor = Literal["intern", "admin"]
+CommentFileType = Literal[
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "image/png",
+    "image/jpeg",
+]
+COMMENT_AUTHORS: tuple[str, ...] = get_args(CommentAuthor)
+COMMENT_FILE_TYPES: tuple[str, ...] = get_args(CommentFileType)
+
+
+class RequestFile(_Model):
+    """One file on a comment (metadata only; the bytes come from the download route, never inline)."""
+
+    id: UuidStr
+    filename: str
+    content_type: CommentFileType
+    size_bytes: Annotated[int, Field(ge=1, le=COMMENT_FILE_MAX_BYTES)]
+
+
+class RequestComment(_Model):
+    id: UuidStr
+    request_id: UuidStr
+    author: CommentAuthor
+    body: str
+    created_at: str
+    files: Annotated[list[RequestFile], Field(max_length=COMMENT_FILES_MAX)]
+
+
+class RequestThread(_Model):
+    """`GET /api/requests/{id}/comments` and the admin route: oldest first."""
+
+    request_id: UuidStr
+    comments: list[RequestComment]
+
+
+class CommentFileIn(_Model):
+    """One upload: the file as base64 in JSON (no multipart), like the document import."""
+
+    filename: Annotated[Line, Field(min_length=1, max_length=255)]
+    content_b64: Annotated[str, Field(max_length=COMMENT_BODY_MAX_BYTES)]  # empty: 400 `files` from the server
+
+
+class AdminCommentCreate(_Model):
+    """`POST /api/admin/requests/{id}/comments`. A comment needs a body or at least one file (checked by the
+    server: 400 `field: "body"`)."""
+
+    body: Annotated[Block, Field(max_length=COMMENT_BODY_MAX)] = ""
+    files: Annotated[list[CommentFileIn], Field(max_length=COMMENT_FILES_MAX)] = []
+
+
+class RequestCommentCreate(AdminCommentCreate):
+    """`POST /api/requests/{id}/comments`: the intern's reply, scoped by their session profile id."""
+
+    profile_id: ProfileId
+
+
 __all__ = [
     "CHECK_CLAIMS_MAX",
     "CHECK_LABELS",
@@ -1558,4 +1629,18 @@ __all__ = [
     "RequestCounts",
     # P14.1 KB impact
     "KbImpact",
+    # P15 comments and files on mentor requests
+    "COMMENT_AUTHORS",
+    "COMMENT_BODY_MAX",
+    "COMMENT_BODY_MAX_BYTES",
+    "COMMENT_FILENAME_MAX",
+    "COMMENT_FILES_MAX",
+    "COMMENT_FILE_MAX_BYTES",
+    "COMMENT_FILE_TYPES",
+    "AdminCommentCreate",
+    "CommentFileIn",
+    "RequestComment",
+    "RequestCommentCreate",
+    "RequestFile",
+    "RequestThread",
 ]

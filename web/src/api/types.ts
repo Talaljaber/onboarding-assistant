@@ -1254,6 +1254,8 @@ export interface MentorRequest {
   kb_row: Source | null;
   /** The linked activity in the intern's current plan; null when not in it. */
   activity: LinkedActivity | null;
+  /** P15: comments on the request's thread (both ways). */
+  comment_count: number;
 }
 
 export interface RequestCounts {
@@ -1322,7 +1324,8 @@ export function isMentorRequest(x: unknown): x is MentorRequest {
     isStr(x.created_at) &&
     isStr(x.status_changed_at) &&
     (x.kb_row === null || isSource(x.kb_row)) &&
-    (x.activity === null || isLinkedActivity(x.activity))
+    (x.activity === null || isLinkedActivity(x.activity)) &&
+    isNum(x.comment_count)
   );
 }
 
@@ -1429,4 +1432,83 @@ export function isCheckResponse(x: unknown): x is CheckResponse {
     isOneOf(MODES, x.mode) &&
     isStr(x.label_ar)
   );
+}
+
+// ---------------------------------------------------------------- P15 request threads (comments and files)
+// Both ways on one mentor request: the intern answers, the admin replies. Files are metadata here; the bytes
+// come only from the app's download route (never a storage URL, never shown inline).
+
+export const COMMENT_AUTHORS = ["intern", "admin"] as const;
+export type CommentAuthor = (typeof COMMENT_AUTHORS)[number];
+export const COMMENT_FILE_TYPES = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/png",
+  "image/jpeg",
+] as const;
+export type CommentFileType = (typeof COMMENT_FILE_TYPES)[number];
+/** Same limits as the server: body ≤ 1000 characters, ≤ 3 files of ≤ 5 MiB, these extensions only. */
+export const COMMENT_LIMITS = {
+  bodyMax: 1000,
+  filesMax: 3,
+  fileMaxBytes: 5 * 1024 * 1024,
+  extensions: ["pdf", "docx", "png", "jpg", "jpeg"],
+} as const;
+
+export interface RequestFile {
+  id: string;
+  filename: string;
+  content_type: CommentFileType;
+  size_bytes: number;
+}
+
+export interface RequestComment {
+  id: string;
+  request_id: string;
+  author: CommentAuthor;
+  body: string;
+  created_at: string;
+  files: RequestFile[];
+}
+
+/** `GET /api/requests/{id}/comments?profile_id=` and `GET /api/admin/requests/{id}/comments`: oldest first. */
+export interface RequestThread {
+  request_id: string;
+  comments: RequestComment[];
+}
+
+export interface CommentFileIn {
+  filename: string;
+  /** The file's bytes as base64 (JSON upload, like the document import). */
+  content_b64: string;
+}
+
+/** `POST /api/admin/requests/{id}/comments`; the intern route adds `profile_id`. Body or ≥ 1 file. */
+export interface AdminCommentCreate {
+  body: string;
+  files: CommentFileIn[];
+}
+
+export interface RequestCommentCreate extends AdminCommentCreate {
+  profile_id: string;
+}
+
+function isRequestFile(x: unknown): x is RequestFile {
+  return isObj(x) && isStr(x.id) && isStr(x.filename) && isOneOf(COMMENT_FILE_TYPES, x.content_type) && isNum(x.size_bytes);
+}
+
+export function isRequestComment(x: unknown): x is RequestComment {
+  return (
+    isObj(x) &&
+    isStr(x.id) &&
+    isStr(x.request_id) &&
+    isOneOf(COMMENT_AUTHORS, x.author) &&
+    isStr(x.body) &&
+    isStr(x.created_at) &&
+    isArrayOf(x.files, isRequestFile)
+  );
+}
+
+export function isRequestThread(x: unknown): x is RequestThread {
+  return isObj(x) && isStr(x.request_id) && isArrayOf(x.comments, isRequestComment);
 }

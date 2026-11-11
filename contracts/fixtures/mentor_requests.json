@@ -19,7 +19,8 @@
         "kind": "quiz",
         "title_ar": "اختبار قصير",
         "milestone": "Day 30"
-      }
+      },
+      "comment_count": 0
     },
     {
       "id": "000000a3-4d3a-4e8b-9c71-2a5d0e7f3b14",
@@ -35,7 +36,8 @@
       "updated_at": "2026-11-11T11:40:00.000+00:00",
       "status_changed_at": "2026-11-11T11:40:00.000+00:00",
       "kb_row": null,
-      "activity": null
+      "activity": null,
+      "comment_count": 0
     },
     {
       "id": "000000a1-4d3a-4e8b-9c71-2a5d0e7f3b14",
@@ -59,7 +61,8 @@
         "edited": false,
         "status": "official"
       },
-      "activity": null
+      "activity": null,
+      "comment_count": 2
     }
   ],
   "counts": {

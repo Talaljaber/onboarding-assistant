@@ -4,6 +4,9 @@ What it does: reads and writes the §A12.2 tables with the server's secret key, 
 timeout (3 s by default). Any failure (HTTP error, timeout, network, bad JSON) logs `store_fallback`
 with a short reason, flips this process to a LocalStore for good and serves the call from it.
 A 409 (conflict, e.g. a profile id Supabase does not know) is refused without flipping.
+Files on mentor request comments (P15) go to the private Storage bucket `mentor-files` through the Storage
+REST API (`{url}/storage/v1/object/mentor-files/<key>`) with the same secret key; the browser never gets a
+Storage URL.
 What it must never do: raise to the API, log or repr the key, or send chat/answer text.
 """
 
@@ -47,6 +50,11 @@ from app.store.base import (
     request_changes,
     request_record,
     request_row,
+    COMMENT_COLUMNS,
+    FILE_COLUMNS,
+    comment_input,
+    file_row,
+    thread_rows,
 )
 from app.store.local import LocalStore
 
@@ -65,6 +73,11 @@ _METRICS_SELECT = ",".join(TURN_METRIC_FIELDS)
 _PAGE = 1000  # PostgREST's default max rows per response
 _METRICS_MAX_PAGES = 100  # KB coverage reads at most 100k turn logs
 _REQUEST_SELECT = ",".join(REQUEST_COLUMNS)
+_COMMENT_SELECT = ",".join(COMMENT_COLUMNS)
+_FILE_SELECT = ",".join(FILE_COLUMNS)
+STORAGE_PATH = "/storage/v1"
+BUCKET = "mentor-files"
+STORAGE_TIMEOUT_S = 30.0  # a 5 MiB upload or download; table calls keep CALL_TIMEOUT_S
 
 
 class _Conflict(Exception):
@@ -103,6 +116,7 @@ class SupabaseStore:
         if not url.startswith(("https://", "http://")):
             raise ValueError("SUPABASE_URL must be an http(s) URL")
         self._data_live = Path(data_live)
+        self._storage_base = url.rstrip("/") + STORAGE_PATH
         self._timeout_s = min(timeout_s, CALL_TIMEOUT_S)
         self._client = httpx.Client(
             base_url=url.rstrip("/") + REST_PATH,
@@ -762,8 +776,130 @@ class SupabaseStore:
             return False
 
         def remote() -> bool | None:
+            keys = self._file_keys(rid)
             data = self._req("DELETE", "mentor_requests", params={"select": "id", "id": f"eq.{rid}"},
                              prefer="return=representation")
+            if data:
+                self._remove_objects(keys)  # comment and file rows cascade in the database
             return bool(data)
 
         return self._imports("mentor_request_delete", remote, lambda s: s.mentor_request_delete(rid), None)
+
+    # Comments and files on mentor requests (P15) ----------------------------------------------------
+    # Same rule as the requests table: a failure (no migration 0005, Storage down) answers None -> 503 and
+    # never flips the store.
+
+    def _object_url(self, key: str = "") -> str:
+        """An absolute Storage URL (httpx uses it as is, not under the REST base URL)."""
+        return f"{self._storage_base}/object/{BUCKET}" + (f"/{key}" if key else "")
+
+    def _upload(self, key: str, data: bytes, content_type: str) -> None:
+        r = self._client.post(self._object_url(key), content=data, timeout=STORAGE_TIMEOUT_S,
+                              headers={"Content-Type": content_type, "x-upsert": "false"})
+        r.raise_for_status()
+
+    def _download(self, key: str) -> bytes | None:
+        """The object's bytes; None when Storage does not have it (400/404)."""
+        r = self._client.get(self._object_url(key), timeout=STORAGE_TIMEOUT_S, headers={"Accept": "*/*"})
+        if r.status_code in (400, 404):
+            return None
+        r.raise_for_status()
+        return r.content
+
+    def _remove_objects(self, keys: list[str]) -> None:
+        """Best effort: delete stored objects (a leftover object is unreachable without its row)."""
+        if not keys:
+            return
+        try:
+            r = self._client.request("DELETE", self._object_url(), json={"prefixes": keys}, timeout=STORAGE_TIMEOUT_S)
+            r.raise_for_status()
+        except Exception as exc:  # noqa: BLE001
+            log_event("store_error", store="supabase", op="storage_remove", error=failure_reason(exc))
+
+    def _file_keys(self, request_id: str) -> list[str]:
+        """Storage keys of a request's files; [] when the files table cannot be read (no migration 0005)."""
+        try:
+            rows = self._list("mentor_request_files", {"select": "storage_key", "request_id": f"eq.{request_id}"})
+        except Exception as exc:  # noqa: BLE001
+            log_event("store_error", store="supabase", op="request_file_keys", error=failure_reason(exc))
+            return []
+        return [str(r["storage_key"]) for r in rows if r.get("storage_key")]
+
+    def request_comments(self, request_id: str) -> list[dict[str, Any]] | None:
+        rid = valid_uuid(request_id)
+        if rid is None:
+            return []
+
+        def remote() -> list[dict[str, Any]] | None:
+            where = {"request_id": f"eq.{rid}", "order": "created_at.asc"}
+            comments = self._list("mentor_request_comments", {"select": _COMMENT_SELECT, **where})
+            files = self._list("mentor_request_files", {"select": _FILE_SELECT, **where}) if comments else []
+            return thread_rows(comments, files)
+
+        return self._imports("request_comments", remote, lambda s: s.request_comments(rid), None)
+
+    def request_comment_counts(self, request_ids: list[str]) -> dict[str, int] | None:
+        clean = [i for i in (valid_uuid(x) for x in request_ids) if i]
+        if not clean:
+            return {}
+
+        def remote() -> dict[str, int] | None:
+            out: dict[str, int] = {}
+            for n in range(0, len(clean), _IN_CHUNK):
+                rows = self._list("mentor_request_comments", {
+                    "select": "request_id", "request_id": f"in.{_in_list(clean[n:n + _IN_CHUNK])}"})
+                for r in rows:
+                    key = str(r.get("request_id"))
+                    out[key] = out.get(key, 0) + 1
+            return out
+
+        return self._imports("request_comment_counts", remote, lambda s: s.request_comment_counts(clean), None)
+
+    def request_comment_add(
+        self, comment: dict[str, Any], files: list[dict[str, Any]], blobs: list[bytes]
+    ) -> dict[str, Any] | None:
+        clean = comment_input(comment, files, blobs)
+        if clean is None:
+            log_event("store_rejected", store="supabase", op="request_comment_add", reason="invalid_input")
+            return None
+        rec, recs = clean
+
+        def remote() -> dict[str, Any] | None:
+            uploaded: list[str] = []
+            try:
+                for f, blob in zip(recs, blobs, strict=True):
+                    self._upload(f["storage_key"], blob, f["content_type"])
+                    uploaded.append(f["storage_key"])
+                self._req("POST", "mentor_request_comments", json=rec, prefer="return=minimal")
+                try:
+                    if recs:
+                        self._req("POST", "mentor_request_files", json=recs, prefer="return=minimal")
+                except Exception:
+                    self._req("DELETE", "mentor_request_comments", params={"id": f"eq.{rec['id']}"},
+                              prefer="return=minimal")
+                    raise
+            except Exception:
+                self._remove_objects(uploaded)
+                raise
+            return thread_rows([rec], recs)[0]
+
+        return self._imports("request_comment_add", remote, lambda s: s.request_comment_add(rec, recs, blobs), None)
+
+    def request_file(self, request_id: str, file_id: str) -> dict[str, Any] | None:
+        rid, fid = valid_uuid(request_id), valid_uuid(file_id)
+        if rid is None or fid is None:
+            return {}
+
+        def remote() -> dict[str, Any] | None:
+            rows = self._list("mentor_request_files", {"select": _FILE_SELECT, "id": f"eq.{fid}",
+                                                       "request_id": f"eq.{rid}"})
+            if not rows:
+                return {}
+            rec = file_row(rows[0])
+            data = self._download(rec["storage_key"])
+            if data is None:
+                log_event("store_error", store="supabase", op="request_file", error="missing_object")
+                return {}
+            return {**rec, "data": data}
+
+        return self._imports("request_file", remote, lambda s: s.request_file(rid, fid), None)

@@ -2,7 +2,8 @@
 
 What it does: defines the `Store` interface the server uses for KB rows + history, interns (added by
 the admin), their profiles, progress, practice attempts, turn logs, the admin's per-intern records and
-mentor requests (P13.2), plus pure helpers that validate and shape records before any store writes them.
+mentor requests (P13.2) with their comments and files (P15), plus pure helpers that validate and shape
+records before any store writes them.
 What it must never do: touch the network or a database, accept chat/answer text for a turn log,
 or accept an alias shaped like an email or a phone number.
 """
@@ -212,7 +213,33 @@ class Store(Protocol):
         ...
 
     def mentor_request_delete(self, request_id: str) -> bool | None:
-        """True when deleted, False when unknown, None on failure."""
+        """True when deleted (with its comments, file records and stored files), False when unknown, None on
+        failure."""
+        ...
+
+    # Comments and files on mentor requests (P15) ----------------------------------------------------
+    # Same failure rule as the requests table (None -> 503 `requests_unavailable`, never flips the store).
+    # File bytes live in the private Storage bucket `mentor-files` (Supabase) or `data/live/mentor_files`
+    # (local), at `requests/{request_id}/{file_id}`; only the server reads them.
+
+    def request_comments(self, request_id: str) -> list[dict[str, Any]] | None:
+        """The request's comments, oldest first (COMMENT_COLUMNS + `files`: FILE_COLUMNS rows); None when
+        unavailable."""
+        ...
+
+    def request_comment_counts(self, request_ids: list[str]) -> dict[str, int] | None:
+        """Comments per request id (ids without comments are absent); None when unavailable."""
+        ...
+
+    def request_comment_add(
+        self, comment: dict[str, Any], files: list[dict[str, Any]], blobs: list[bytes]
+    ) -> dict[str, Any] | None:
+        """Store the file bytes, then the comment and its file records (validated with `comment_record` and
+        `file_record`; `blobs[i]` is the bytes of `files[i]`). The stored comment with `files`, or None."""
+        ...
+
+    def request_file(self, request_id: str, file_id: str) -> dict[str, Any] | None:
+        """One file of the request: its record plus `data` (the bytes); {} when unknown; None on failure."""
         ...
 
     def close(self) -> None: ...
@@ -659,3 +686,109 @@ def request_row(r: dict[str, Any]) -> dict[str, Any]:
     if out["due_date"] is not None:
         out["due_date"] = str(out["due_date"])[:10]
     return out
+
+
+# Comments and files on mentor requests (P15) -------------------------------------------------------------
+
+COMMENT_COLUMNS = ("id", "request_id", "author", "body", "created_at")
+FILE_COLUMNS = ("id", "comment_id", "request_id", "filename", "content_type", "size_bytes", "sha256", "storage_key",
+                "created_at")
+COMMENT_AUTHORS = frozenset({"intern", "admin"})
+COMMENT_BODY_MAX = 1000
+COMMENT_FILE_TYPES = frozenset({
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "image/png",
+    "image/jpeg",
+})
+COMMENT_FILE_MAX_BYTES = 5 * 1024 * 1024
+COMMENT_FILENAME_MAX = 120
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def storage_key(request_id: str, file_id: str) -> str:
+    """Where a file's bytes live (bucket `mentor-files`, or under `data/live/mentor_files`)."""
+    return f"requests/{request_id}/{file_id}"
+
+
+def comment_record(rec: object) -> dict[str, Any] | None:
+    """A new comment to store (exactly COMMENT_COLUMNS; id and time filled in), or None when invalid."""
+    if not isinstance(rec, dict):
+        return None
+    out = {k: rec.get(k) for k in COMMENT_COLUMNS}
+    out["id"] = valid_uuid(out["id"]) or str(uuid.uuid4())
+    out["request_id"] = valid_uuid(out["request_id"])
+    out["body"] = out["body"] if out["body"] is not None else ""
+    if out["request_id"] is None or out["author"] not in COMMENT_AUTHORS:
+        return None
+    if not isinstance(out["body"], str) or len(out["body"].strip()) > COMMENT_BODY_MAX:
+        return None
+    out["created_at"] = out["created_at"] if isinstance(out["created_at"], str) and out["created_at"] else now_iso()
+    return out
+
+
+def file_record(rec: object) -> dict[str, Any] | None:
+    """A new file record (exactly FILE_COLUMNS; `storage_key` derived from the ids), or None when invalid."""
+    if not isinstance(rec, dict):
+        return None
+    out = {k: rec.get(k) for k in FILE_COLUMNS}
+    for key in ("id", "comment_id", "request_id"):
+        out[key] = valid_uuid(out[key])
+        if out[key] is None:
+            return None
+    name, size = out["filename"], out["size_bytes"]
+    if not isinstance(name, str) or not 1 <= len(name) <= COMMENT_FILENAME_MAX or "/" in name or "\\" in name:
+        return None
+    if out["content_type"] not in COMMENT_FILE_TYPES:
+        return None
+    if not isinstance(size, int) or isinstance(size, bool) or not 1 <= size <= COMMENT_FILE_MAX_BYTES:
+        return None
+    if not isinstance(out["sha256"], str) or not _SHA256_RE.match(out["sha256"]):
+        return None
+    out["storage_key"] = storage_key(str(out["request_id"]), str(out["id"]))
+    out["created_at"] = out["created_at"] if isinstance(out["created_at"], str) and out["created_at"] else now_iso()
+    return out
+
+
+def comment_row(r: dict[str, Any], files: list[dict[str, Any]]) -> dict[str, Any]:
+    out = {k: r.get(k) for k in COMMENT_COLUMNS}
+    out["id"] = str(out["id"])
+    out["request_id"] = str(out["request_id"])
+    out["body"] = out["body"] or ""
+    out["files"] = [file_row(f) for f in files]
+    return out
+
+
+def file_row(r: dict[str, Any]) -> dict[str, Any]:
+    out = {k: r.get(k) for k in FILE_COLUMNS}
+    for key in ("id", "comment_id", "request_id"):
+        out[key] = str(out[key])
+    out["size_bytes"] = int(out["size_bytes"] or 0)
+    return out
+
+
+def thread_rows(comments: list[dict[str, Any]], files: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Comments (oldest first, as given) each with its files (in the given order)."""
+    by_comment: dict[str, list[dict[str, Any]]] = {}
+    for f in files:
+        by_comment.setdefault(str(f.get("comment_id")), []).append(f)
+    return [comment_row(c, by_comment.get(str(c.get("id")), [])) for c in comments]
+
+
+def comment_input(
+    comment: dict[str, Any], files: list[dict[str, Any]], blobs: list[bytes]
+) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
+    """The validated comment and file records for `request_comment_add`, or None when anything is off
+    (a file of another comment or request, a size that is not the blob's)."""
+    c = comment_record(comment)
+    fs = [file_record(f) for f in files]
+    if c is None or len(fs) != len(blobs) or len(fs) > 3:
+        return None
+    if not c["body"].strip() and not fs:
+        return None
+    clean: list[dict[str, Any]] = []
+    for f, blob in zip(fs, blobs, strict=True):
+        if f is None or f["comment_id"] != c["id"] or f["request_id"] != c["request_id"] or f["size_bytes"] != len(blob):
+            return None
+        clean.append(f)
+    return c, clean

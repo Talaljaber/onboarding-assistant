@@ -1,7 +1,8 @@
 """LocalStore: the Store on a SQLite file (default `data/live/local.sqlite`).
 
-What it does: keeps the same tables as `supabase/migrations/0001`–`0004` (SQLite types; arrays and
-jsonb as JSON text) behind one lock, so the server works with no network and no Supabase.
+What it does: keeps the same tables as `supabase/migrations/0001`–`0005` (SQLite types; arrays and
+jsonb as JSON text) behind one lock, so the server works with no network and no Supabase. Files on mentor
+request comments (P15) are kept under `data/live/mentor_files/{request_id}/{file_id}` (git-ignored).
 What it must never do: raise to the caller (every failure is logged and returns a safe default),
 store chat or answer text, or sync with Supabase (there is no sync; offline edits stay local).
 """
@@ -9,6 +10,7 @@ store chat or answer text, or sync with Supabase (there is no sync; offline edit
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 import threading
 import uuid
@@ -44,11 +46,17 @@ from app.store.base import (
     request_changes,
     request_record,
     request_row,
+    COMMENT_COLUMNS,
+    FILE_COLUMNS,
+    comment_input,
+    file_row,
+    thread_rows,
 )
 
 T = TypeVar("T")
 
 DB_NAME = "local.sqlite"
+FILES_DIR = "mentor_files"
 
 SCHEMA = """
 create table if not exists kb_rows (
@@ -171,6 +179,26 @@ create table if not exists mentor_requests (
     status_changed_at text not null
 );
 create index if not exists mentor_requests_intern_idx on mentor_requests (intern_id, created_at);
+create table if not exists mentor_request_comments (
+    id text primary key,
+    request_id text not null references mentor_requests (id) on delete cascade,
+    author text not null check (author in ('intern', 'admin')),
+    body text not null default '',
+    created_at text not null
+);
+create index if not exists mentor_request_comments_request_idx on mentor_request_comments (request_id, created_at);
+create table if not exists mentor_request_files (
+    id text primary key,
+    comment_id text not null references mentor_request_comments (id) on delete cascade,
+    request_id text not null references mentor_requests (id) on delete cascade,
+    filename text not null,
+    content_type text not null,
+    size_bytes integer not null check (size_bytes between 1 and 5242880),
+    sha256 text not null,
+    storage_key text not null,
+    created_at text not null
+);
+create index if not exists mentor_request_files_comment_idx on mentor_request_files (comment_id);
 """
 
 # Applied on open after SCHEMA (the same change as supabase/migrations/0002_interns.sql).
@@ -194,6 +222,7 @@ class LocalStore:
     def __init__(self, data_live: Path | str) -> None:
         self._lock = threading.Lock()
         self.path = Path(data_live) / DB_NAME
+        self.files_dir = Path(data_live) / FILES_DIR
         self._conn = self._open()
 
     def _open(self) -> sqlite3.Connection:
@@ -759,8 +788,108 @@ class LocalStore:
         rid = valid_uuid(request_id)
         if rid is None:
             return False
-        return self._run("mentor_request_delete", None,
+        gone = self._run("mentor_request_delete", None,
                          lambda c: c.execute("delete from mentor_requests where id = ?", (rid,)).rowcount > 0)
+        if gone:
+            shutil.rmtree(self.files_dir / rid, ignore_errors=True)  # its comments and file rows cascade
+        return gone
+
+    # Comments and files on mentor requests (P15) ----------------------------------------------------
+
+    def _blob(self, request_id: str, file_id: str) -> Path:
+        return self.files_dir / request_id / file_id  # both validated uuids: no path from user input
+
+    def request_comments(self, request_id: str) -> list[dict[str, Any]] | None:
+        rid = valid_uuid(request_id)
+        if rid is None:
+            return []
+
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            comments = [dict(r) for r in c.execute(
+                f"select {', '.join(COMMENT_COLUMNS)} from mentor_request_comments where request_id = ?"
+                " order by created_at, rowid", (rid,))]
+            files = [dict(r) for r in c.execute(
+                f"select {', '.join(FILE_COLUMNS)} from mentor_request_files where request_id = ?"
+                " order by created_at, rowid", (rid,))]
+            return thread_rows(comments, files)
+
+        return self._run("request_comments", None, op)
+
+    def request_comment_counts(self, request_ids: list[str]) -> dict[str, int] | None:
+        clean = [i for i in (valid_uuid(x) for x in request_ids) if i]
+        if not clean:
+            return {}
+
+        def op(c: sqlite3.Connection) -> dict[str, int]:
+            q = ("select request_id, count(*) as n from mentor_request_comments"
+                 f" where request_id in ({','.join('?' * len(clean))}) group by request_id")
+            return {str(r["request_id"]): int(r["n"]) for r in c.execute(q, clean)}
+
+        return self._run("request_comment_counts", None, op)
+
+    def request_comment_add(
+        self, comment: dict[str, Any], files: list[dict[str, Any]], blobs: list[bytes]
+    ) -> dict[str, Any] | None:
+        clean = comment_input(comment, files, blobs)
+        if clean is None:
+            log_event("store_rejected", store="local", op="request_comment_add", reason="invalid_input")
+            return None
+        rec, recs = clean
+        written: list[Path] = []
+        try:
+            for f, blob in zip(recs, blobs, strict=True):
+                path = self._blob(f["request_id"], f["id"])
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with path.open("xb") as fh:
+                    fh.write(blob)
+                written.append(path)
+        except OSError as exc:
+            log_event("store_error", store="local", op="request_comment_add", error=type(exc).__name__)
+            self._unlink(written)
+            return None
+
+        def op(c: sqlite3.Connection) -> dict[str, Any]:
+            c.execute(f"insert into mentor_request_comments ({', '.join(COMMENT_COLUMNS)}) values "
+                      f"({', '.join(':' + k for k in COMMENT_COLUMNS)})", rec)
+            c.executemany(f"insert into mentor_request_files ({', '.join(FILE_COLUMNS)}) values "
+                          f"({', '.join(':' + k for k in FILE_COLUMNS)})", recs)
+            return thread_rows([rec], recs)[0]
+
+        out = self._run("request_comment_add", None, op)
+        if out is None:
+            self._unlink(written)
+        return out
+
+    @staticmethod
+    def _unlink(paths: list[Path]) -> None:
+        for path in paths:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def request_file(self, request_id: str, file_id: str) -> dict[str, Any] | None:
+        rid, fid = valid_uuid(request_id), valid_uuid(file_id)
+        if rid is None or fid is None:
+            return {}
+
+        def op(c: sqlite3.Connection) -> dict[str, Any]:
+            r = c.execute(f"select {', '.join(FILE_COLUMNS)} from mentor_request_files where id = ? and request_id = ?",
+                          (fid, rid)).fetchone()
+            return file_row(dict(r)) if r else {}
+
+        rec = self._run("request_file", None, op)
+        if not rec:
+            return rec
+        try:
+            data = self._blob(rid, fid).read_bytes()
+        except FileNotFoundError:
+            log_event("store_error", store="local", op="request_file", error="missing_file")
+            return {}
+        except OSError as exc:
+            log_event("store_error", store="local", op="request_file", error=type(exc).__name__)
+            return None
+        return {**rec, "data": data}
 
     # Used by tests and the integrator's smoke only.
     def table_rows(self, table: str) -> list[dict[str, Any]]:
@@ -776,6 +905,8 @@ class LocalStore:
             "kb_imports",
             "kb_drafts",
             "mentor_requests",
+            "mentor_request_comments",
+            "mentor_request_files",
         }
         if table not in allowed:
             return []
