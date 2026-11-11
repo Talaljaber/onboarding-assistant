@@ -192,7 +192,7 @@ export function RequestThread({ req, side, profileId }: { req: MentorRequest; si
               aria-describedby={problem ? errId : undefined}
               disabled={sending}
             />
-            <p className="m-0 text-xs text-fg-3" dir="ltr">
+            <p className="m-0 text-xs text-fg-3">
               {t("requestThread.counter", { n: body.trim().length, max: COMMENT_LIMITS.bodyMax })}
             </p>
             {files.length > 0 && (

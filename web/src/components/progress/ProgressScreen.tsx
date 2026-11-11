@@ -17,7 +17,7 @@ import { surface } from "@/components/ui/recipes";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { ValueTag } from "@/components/ui/ValueLabel";
 import { useT } from "@/i18n";
-import { isoDay } from "@/lib/format";
+import { localDay } from "@/lib/format";
 import { practisedScenarios } from "@/state/progress";
 import { useAppState } from "@/state/useAppState";
 import { ProgressRing } from "./ProgressRing";
@@ -177,7 +177,7 @@ export default function ProgressScreen() {
                           {id}
                         </bdi>
                         {s && <ValueTag ar={s.value_ar} en={s.company_value} />}
-                        <span className="ms-auto text-sm text-fg-3" dir="ltr">{isoDay(date)}</span>
+                        <span className="ms-auto text-sm text-fg-3" dir="ltr">{localDay(date)}</span>
                       </li>
                     );
                   })}

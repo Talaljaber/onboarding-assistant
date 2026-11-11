@@ -3,7 +3,8 @@
 import { useState } from "react";
 import type { KbRow } from "@/api/types";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { useT } from "@/i18n";
+import { useLang, useT } from "@/i18n";
+import { topicLabel } from "@/lib/topic";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
@@ -46,14 +47,14 @@ function KId({ id }: { id: string }) {
   );
 }
 
-/** keyword on the first line, then document · page (muted). */
+/**
+ * Document · page. The English keyword is not shown: it is a search hint written with the official row and
+ * goes stale when the text is edited (P16.4: «17 showrooms» stayed after 17 -> 18).
+ */
 function SourceMeta({ row, className }: { row: KbRow; className?: string }) {
   const t = useT();
   return (
     <span className={cn("flex min-w-0 flex-col gap-0.5 text-sm", className)}>
-      <span dir="ltr" className="self-start font-semibold text-fg-1">
-        {row.keyword_en}
-      </span>
       <span className="text-fg-2">
         <span dir="auto">{row.source_document}</span>
         <span aria-hidden="true" className="px-1.5 text-fg-3">
@@ -83,6 +84,7 @@ function EditButton({ row, onEdit, compact }: { row: KbRow; onEdit: (row: KbRow)
 
 function RowCard({ row, onEdit }: { row: KbRow; onEdit: (row: KbRow) => void }) {
   const t = useT();
+  const { lang } = useLang();
   const changed = row.status !== "official";
   return (
     <li data-row-id={row.id} className={cn(surface.card, "flex flex-col gap-3 p-4 sm:p-5", changed && "border-s-4 border-s-amber")}>
@@ -90,7 +92,7 @@ function RowCard({ row, onEdit }: { row: KbRow; onEdit: (row: KbRow) => void }) 
       <div className="-my-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
         <KId id={row.id} />
         <span dir="auto" className="text-sm font-semibold text-fg-2">
-          {row.topic}
+          {topicLabel(row.topic, lang)}
         </span>
         <StatusBadges row={row} />
         <span className="-me-2 ms-auto">
@@ -113,6 +115,7 @@ function RowCard({ row, onEdit }: { row: KbRow; onEdit: (row: KbRow) => void }) 
 
 export function KbTable({ rows, onEdit, empty }: { rows: KbRow[]; onEdit: (row: KbRow) => void; empty?: string }) {
   const t = useT();
+  const { lang } = useLang();
   const [sort, setSort] = useState<SortState>(null);
   const cards = useMediaQuery("(max-width: 1279px)");
 
@@ -141,8 +144,8 @@ export function KbTable({ rows, onEdit, empty }: { rows: KbRow[]; onEdit: (row: 
     {
       id: "topic",
       header: t("kb.fields.topic"),
-      cell: (r) => <span dir="auto">{r.topic}</span>,
-      sortValue: (r) => r.topic,
+      cell: (r) => <span dir="auto">{topicLabel(r.topic, lang)}</span>,
+      sortValue: (r) => topicLabel(r.topic, lang),
       width: "7rem",
     },
     {

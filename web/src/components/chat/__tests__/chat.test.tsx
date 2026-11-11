@@ -307,7 +307,7 @@ describe("composer", () => {
     mount();
     const box = screen.getByRole("textbox");
     fireEvent.change(box, { target: { value: "x".repeat(LIMITS.messageMax + 1) } });
-    expect(screen.getByText(`${LIMITS.messageMax + 1} / ${LIMITS.messageMax}`)).toBeInTheDocument();
+    expect(screen.getByText(`${LIMITS.messageMax + 1} of ${LIMITS.messageMax}`)).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(String(LIMITS.messageMax));
     expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
     fireEvent.change(box, { target: { value: "x".repeat(LIMITS.messageMax) } });

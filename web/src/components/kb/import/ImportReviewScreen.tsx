@@ -7,6 +7,7 @@ import { approveDrafts, getImport, patchDraft, type ApiError } from "@/api/clien
 import type { DraftPatch, ImportDetail, KbDraft } from "@/api/types";
 import { useLang, useT, type DictKey } from "@/i18n";
 import { formatWhen } from "@/lib/intern";
+import { pluralForm } from "@/lib/plural";
 import { usePath } from "@/router";
 import { Button } from "../../ui/Button";
 import { Icon } from "../../ui/Icon";
@@ -99,7 +100,8 @@ export default function ImportReviewScreen() {
     merge(r.value.drafts);
     setSelected((cur) => new Set([...cur].filter((x) => !ids.includes(x))));
     setAdded(r.value.rows.map((row) => row.id));
-    toast.show(t("kbImport.addedToast", { n: r.value.rows.length, ms: Math.round(r.value.reindex_ms) }), "ok");
+    const n = r.value.rows.length;
+    toast.show(t(`p16.rowsAdded${pluralForm(n, lang)}`, { n, ms: Math.round(r.value.reindex_ms) }), "ok");
   }
 
   async function patch(draft: KbDraft, body: DraftPatch): Promise<boolean> {

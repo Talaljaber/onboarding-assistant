@@ -196,7 +196,7 @@ describe("edit", () => {
     expect(area).toHaveAttribute("maxLength", "600");
     await userEvent.clear(area);
     await userEvent.type(area, "abc");
-    expect(dlg.querySelector("[data-counter]")).toHaveTextContent("3 / 600");
+    expect(dlg.querySelector("[data-counter]")).toHaveTextContent("3 of 600");
     await userEvent.click(within(dlg).getByRole("button", { name: "Save" }));
     expect(await within(dlg).findByText("Must be 5–600 characters long.")).toBeInTheDocument();
     // the stale "nothing changed" from the first attempt is gone, focus is on the invalid field

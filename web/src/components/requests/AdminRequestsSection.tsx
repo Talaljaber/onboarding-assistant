@@ -6,6 +6,7 @@ import { deleteRequest, getAdminRequests } from "@/api/client";
 import type { MentorRequest, Role } from "@/api/types";
 import { useLang, useT } from "@/i18n";
 import { formatWhen } from "@/lib/intern";
+import { pluralForm } from "@/lib/plural";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
 import { Dialog } from "../ui/Dialog";
@@ -110,7 +111,7 @@ export function AdminRequestsSection({ intern }: { intern: { id: string; role: R
               toast.show(t("mentorReq.saved"), "ok");
             } else if (created) {
               const n = created.requests.length;
-              toast.show(n > 1 ? t("mentorReq.createdMany", { n }) : t("mentorReq.created"), "ok");
+              toast.show(n > 1 ? t(`p16.sentTo${pluralForm(n, lang) as "Two" | "Few" | "Many"}`, { n }) : t("mentorReq.created"), "ok");
               reload();
             }
           }}

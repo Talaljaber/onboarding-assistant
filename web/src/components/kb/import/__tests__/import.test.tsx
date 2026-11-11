@@ -77,6 +77,10 @@ describe("import helpers", () => {
   it("checks type, PDF availability, size and emptiness against the capabilities", () => {
     expect(extOf("Policy.MARKDOWN")).toBe("md");
     expect(defaultDocName("C:\\docs\\General_Policies.docx")).toBe("General Policies");
+    // P16.4: a readable title: filler words dropped, camelCase and dashes split, first letter upper case
+    expect(defaultDocName("doc_dress.txt")).toBe("Dress");
+    expect(defaultDocName("employeeHandbook-final-v2.docx")).toBe("Employee Handbook");
+    expect(defaultDocName("doc.txt")).toBe("Doc");
     expect(fileProblem({ name: "a.exe", size: 3 }, caps)?.key).toBe("kbImport.errType");
     expect(fileProblem({ name: "a.pdf", size: 3 }, caps)?.key).toBe("kbImport.errPdf");
     expect(fileProblem({ name: "a.pdf", size: 3 }, { ...caps, pdf: true, types: [...caps.types, "pdf" as const] })).toBeNull();
@@ -135,13 +139,23 @@ describe("import form", () => {
     const calls = backend();
     mount(<ImportScreen />);
     await screen.findByRole("checkbox", { name: /Organize with AI/ });
-    await userEvent.upload(screen.getByTestId("import-file"), file("dress_code.txt", "سياسة اللباس"));
-    expect(screen.getByLabelText("Document name")).toHaveValue("dress code");
+    // the first line is a sentence, not a heading: the readable file-name title stays
+    await userEvent.upload(screen.getByTestId("import-file"), file("dress_code.txt", "سياسة اللباس."));
+    expect(screen.getByLabelText("Document name")).toHaveValue("Dress code");
+    expect(screen.getByLabelText("Document name")).toBeRequired();
     await userEvent.click(screen.getByRole("button", { name: /Upload and extract/ }));
     await waitFor(() => expect(window.location.hash).toBe(`#/admin/kb/import/${IMPORT}`));
     const post = calls.find((c) => c.method === "POST")!;
-    expect(post.body).toMatchObject({ filename: "dress_code.txt", document_name: "dress code", organize: false });
-    expect(atob(String(post.body!.content_b64)).length).toBe(new TextEncoder().encode("سياسة اللباس").length);
+    expect(post.body).toMatchObject({ filename: "dress_code.txt", document_name: "Dress code", organize: false });
+    expect(atob(String(post.body!.content_b64)).length).toBe(new TextEncoder().encode("سياسة اللباس.").length);
+  });
+
+  it("pre-fills the document name with a text file's own heading (P16.4)", async () => {
+    backend();
+    mount(<ImportScreen />);
+    await screen.findByRole("checkbox", { name: /Organize with AI/ });
+    await userEvent.upload(screen.getByTestId("import-file"), file("doc_dress.txt", "سياسة الزي الموحد\n\nيلتزم الموظفون بالزي."));
+    await waitFor(() => expect(screen.getByLabelText("Document name")).toHaveValue("سياسة الزي الموحد"));
   });
 
   it("LLM mode: ticking the AI option shows the release warning and sends organize", async () => {
@@ -262,7 +276,7 @@ describe("review screen", () => {
     await userEvent.clear(area);
     await userEvent.click(area);
     await userEvent.paste("ا".repeat(530));
-    expect(within(first!).getByText("530 of 600 characters")).toBeInTheDocument();
+    expect(within(first!).getByText("530 of 600")).toBeInTheDocument();
     await userEvent.clear(within(first!).getByLabelText("Topic"));
     await userEvent.click(within(first!).getByRole("button", { name: "Save" }));
     expect(within(first!).getByText("This field is required.")).toBeInTheDocument();

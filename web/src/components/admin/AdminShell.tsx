@@ -37,7 +37,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const signOut = () => {
     replace("/");
     adminLogout();
-    toast.show(t("uiAuth.signedOut"), "ok");
+    window.setTimeout(() => toast.show(t("uiAuth.signedOut"), "ok"), 0); // P16.4: after the route change
   };
 
   const links = (cls: string, on: string, off: string) =>

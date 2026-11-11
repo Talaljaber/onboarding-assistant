@@ -135,6 +135,23 @@ describe("admin intern detail", () => {
     expect(screen.getByText("From chat logs: ids only, never the chat text.")).toBeInTheDocument();
   });
 
+  it("names activities in the timeline and shows the newest 15 with «show more» (P16.4)", async () => {
+    const act = detailFx.timeline.find((e) => e.kind === "activity")!;
+    const acts: { id: string; title_ar: string }[] = detailFx.progress.milestones.flatMap((m) => [...m.activities]);
+    const title = acts.find((a) => a.id === act.ids[0])!.title_ar;
+    const many = { ...detailFx, timeline: Array.from({ length: 20 }, () => act) };
+    backend({ [`GET /api/admin/interns/${detailFx.intern.id}`]: () => json(many) });
+    mount(<InternDetailScreen />);
+    await screen.findByRole("heading", { level: 1, name: "Sara Al-Khatib" });
+    const items = () => document.querySelectorAll("[data-detail-timeline] > li");
+    expect(items()).toHaveLength(15);
+    expect(items()[0]!.textContent).toContain(title);
+    expect(items()[0]!.textContent).toContain(act.ids[0]!);
+    await userEvent.click(screen.getByRole("button", { name: "Show more (5)" }));
+    expect(items()).toHaveLength(20);
+    expect(screen.queryByRole("button", { name: /Show more/ })).toBeNull();
+  });
+
   it("edits the track and deactivates with a confirmation", async () => {
     const calls = backend();
     mount(<InternDetailScreen />);
