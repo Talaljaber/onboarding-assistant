@@ -37,6 +37,10 @@ from app.store.base import (
     intern_row,
     turn_log_record,
     valid_uuid,
+    DRAFT_COLUMNS,
+    IMPORT_COLUMNS,
+    draft_record,
+    import_record,
 )
 from app.store.local import LocalStore
 
@@ -49,6 +53,8 @@ _KB_SELECT = ",".join(KB_COLUMNS)
 _INTERN_SELECT = "id,name_ar,name_en,role,active,created_at,updated_at"
 _PROFILE_SELECT = "id,alias,role,intern_id,created_at"
 _IN_CHUNK = 80  # profile ids per `in.(...)` filter, so URLs stay short
+_IMPORT_SELECT = ",".join(IMPORT_COLUMNS)
+_DRAFT_SELECT = ",".join(DRAFT_COLUMNS)
 
 
 class _Conflict(Exception):
@@ -560,3 +566,107 @@ class SupabaseStore:
         except Exception as exc:  # noqa: BLE001
             log_event("store_error", store="supabase", op="purge_demo_profiles", error=failure_reason(exc))
             return {}
+
+    # Document import (P12.1) ------------------------------------------------------------------
+    # Never flips to the LocalStore: a project without migration 0003 (PostgREST 404) or a failing call
+    # only makes the import feature unavailable (None/False -> 503); chat and the KB keep using Supabase.
+
+    def _imports(self, op: str, remote: Callable[[], T], local: Callable[[LocalStore], T], failed: T) -> T:
+        if self._local is not None:
+            return local(self._local)
+        try:
+            return remote()
+        except _Conflict:
+            log_event("store_rejected", store="supabase", op=op, reason="http_409")
+            return failed
+        except Exception as exc:  # noqa: BLE001 - the store never raises to the API
+            log_event("store_error", store="supabase", op=op, error=failure_reason(exc))
+            return failed
+
+    def kb_import_create(self, record: dict[str, Any], drafts: list[dict[str, Any]]) -> bool:
+        rec = import_record(record)
+        rows = [draft_record(d) for d in drafts]
+        if rec is None or any(d is None for d in rows):
+            log_event("store_rejected", store="supabase", op="kb_import_create", reason="invalid_input")
+            return False
+
+        def remote() -> bool:
+            self._req("POST", "kb_imports", json=rec, prefer="return=minimal")
+            try:
+                if rows:
+                    self._req("POST", "kb_drafts", json=rows, prefer="return=minimal")
+            except Exception:
+                self._req("DELETE", "kb_imports", params={"id": f"eq.{rec['id']}"}, prefer="return=minimal")
+                raise
+            return True
+
+        return self._imports("kb_import_create", remote, lambda s: s.kb_import_create(record, drafts), False)
+
+    def kb_import_update(self, import_id: str, changes: dict[str, Any]) -> bool:
+        iid = valid_uuid(import_id)
+        clean = {k: v for k, v in changes.items()
+                 if (k == "status" and v in ("open", "done")) or (k == "organized" and isinstance(v, bool))}
+        if iid is None or not clean:
+            return False
+
+        def remote() -> bool:
+            self._req("PATCH", "kb_imports", params={"id": f"eq.{iid}"}, json=clean, prefer="return=minimal")
+            return True
+
+        return self._imports("kb_import_update", remote, lambda s: s.kb_import_update(iid, changes), False)
+
+    def kb_imports(self) -> list[dict[str, Any]] | None:
+        def remote() -> list[dict[str, Any]] | None:
+            return self._list("kb_imports", {"select": _IMPORT_SELECT, "order": "created_at.desc"})
+
+        return self._imports("kb_imports", remote, lambda s: s.kb_imports(), None)
+
+    def kb_import_get(self, import_id: str) -> dict[str, Any] | None:
+        iid = valid_uuid(import_id)
+        if iid is None:
+            return {}
+
+        def remote() -> dict[str, Any] | None:
+            rows = self._list("kb_imports", {"select": _IMPORT_SELECT, "id": f"eq.{iid}"})
+            return rows[0] if rows else {}
+
+        return self._imports("kb_import_get", remote, lambda s: s.kb_import_get(iid), None)
+
+    def kb_drafts(
+        self, *, import_id: str | None = None, status: str | None = None, ids: list[str] | None = None
+    ) -> list[dict[str, Any]] | None:
+        params = {"select": _DRAFT_SELECT, "order": "import_id.asc,ord.asc,created_at.asc"}
+        if import_id is not None:
+            params["import_id"] = f"eq.{valid_uuid(import_id) or '00000000-0000-0000-0000-000000000000'}"
+        if status is not None:
+            params["status"] = f"eq.{status}"
+        clean: list[str] = []
+        if ids is not None:
+            clean = [i for i in (valid_uuid(x) for x in ids) if i]
+            if not clean:
+                return []
+
+        def remote() -> list[dict[str, Any]] | None:
+            if ids is None:
+                return self._list("kb_drafts", params)
+            out: list[dict[str, Any]] = []
+            for n in range(0, len(clean), _IN_CHUNK):
+                out += self._list("kb_drafts", {**params, "id": f"in.{_in_list(clean[n:n + _IN_CHUNK])}"})
+            return out
+
+        return self._imports("kb_drafts", remote,
+                             lambda s: s.kb_drafts(import_id=import_id, status=status, ids=ids), None)
+
+    def kb_drafts_save(self, drafts: list[dict[str, Any]]) -> bool:
+        rows = [draft_record(d) for d in drafts]
+        if any(d is None for d in rows):
+            log_event("store_rejected", store="supabase", op="kb_drafts_save", reason="invalid_input")
+            return False
+
+        def remote() -> bool:
+            if rows:
+                self._req("POST", "kb_drafts", params={"on_conflict": "id"}, json=rows,
+                          prefer="resolution=merge-duplicates,return=minimal")
+            return True
+
+        return self._imports("kb_drafts_save", remote, lambda s: s.kb_drafts_save(drafts), False)
