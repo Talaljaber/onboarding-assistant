@@ -32,6 +32,7 @@ from app import __version__
 from app.agent import Agent
 from app import interns as interns_view
 from app import coverage
+from app import kb_impact  # P14.1
 from app import mentor_requests as requests_view
 from app.errors import ApiError
 from app.kb import Row
@@ -568,6 +569,15 @@ def build_router() -> APIRouter:
     def kb_coverage(request: Request) -> JSONResponse:
         """Aggregate and anonymous: cited rows, never-cited rows, turns vs refusals (no per-intern data)."""
         return _json(coverage.build(_store(request).turn_metrics(), _agent(request).kb.rows()))
+
+    # -------------------------------------------------------------------------- KB impact (P14.1)
+    @r.get("/admin/kb/{row_id}/impact", dependencies=ADMIN_ONLY)
+    def kb_impact_get(row_id: str, request: Request) -> JSONResponse:
+        """Interns whose answers cited this row, and the plan activities and quiz items that reference it."""
+        agent = _agent(request)
+        if not re.match(KB_ID_RE, row_id) or agent.kb.get(row_id) is None:
+            raise ApiError("not_found", 404, f"unknown KB id {row_id}")
+        return _json(kb_impact.build(row_id, _store(request), agent.features.plan, agent.features.quiz))
 
     # -------------------------------------------------------------------------- admin sign-in
     @r.post("/admin/login")

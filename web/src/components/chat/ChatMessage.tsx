@@ -10,8 +10,11 @@ import { AssistantBubble, AssistantFrame } from "./AssistantBubble";
 import { PlanCard, QuizCard } from "./PlanQuizCards";
 import { ProgressCard } from "./ProgressCard";
 import { ScenarioFeedbackCard, ScenarioStartCard } from "./ScenarioCard";
-import { cardKind, type ReplyItem } from "./model";
+import { cardKind, type CardKind, type ReplyItem } from "./model";
 import type { Option } from "@/api/types";
+import { surface } from "../ui/recipes";
+import { AskAgainHint, RecallNotice } from "./RecallNotice";
+import { askAgainHint, recallOf, type LiveKb } from "./recall";
 
 export interface ChatMessageProps {
   item: ReplyItem;
@@ -27,7 +30,14 @@ export interface ChatMessageProps {
   onCancel: (item: ReplyItem) => void;
   onTryAgain: () => void;
   onEnd: () => void;
+  /** P14.1 Answer Recall: the live KB (null until read), and the re-ask of this reply's question. */
+  liveKb?: LiveKb | null;
+  canReask?: boolean;
+  onReask?: () => void;
 }
+
+/** Cards that cite K-rows the recall compares (answers, the related row, the employment disclaimer's rows). */
+const RECALL_KINDS: ReadonlySet<CardKind> = new Set(["answer", "partial", "unconfirmed", "employment"]);
 
 const NO_PROPOSAL = { milestone: "Day 30", activity_ids: [], titles_ar: [], current_percent: 0, proposed_percent: 0 } as const;
 
@@ -115,6 +125,27 @@ export function ChatMessage(p: ChatMessageProps) {
       break;
     default:
       card = <AssistantBubble text={r.text_ar} textEn={r.text_en} />;
+  }
+
+  // P14.1: a saved answer whose cited row changed turns amber with the word diff; a non-guard refusal gets
+  // the "sources were added, ask again" hint once the KB holds added rows it did not have.
+  const live = p.liveKb ?? null;
+  const recall = RECALL_KINDS.has(kind) ? recallOf(r.sources, live) : [];
+  const reask = { canReask: Boolean(p.canReask && p.onReask), busy: p.busy, onReask: () => p.onReask?.() };
+  if (recall.length > 0) {
+    card = (
+      <div data-recall="changed" className={`${surface.amber} flex w-full min-w-0 flex-col gap-3 p-2 sm:p-3`}>
+        <RecallNotice recall={recall} at={item.at} {...reask} />
+        {card}
+      </div>
+    );
+  } else if (kind === "refusal" && (r as RefusalReply).reason === "out_of_scope" && askAgainHint(item.kbVersion, live)) {
+    card = (
+      <div className="flex w-full min-w-0 flex-col gap-2">
+        {card}
+        <AskAgainHint {...reask} />
+      </div>
+    );
   }
 
   // A picked option's feedback comes from the official checklist, not from "offline mode": label it so

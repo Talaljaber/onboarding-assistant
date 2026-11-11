@@ -368,3 +368,11 @@ export const deleteRequest = (id: string, signal?: AbortSignal) =>
     signal,
     admin: true,
   });
+
+// ---------------------------------------------------------------- KB impact (P14.1, admin only)
+
+import { isKbImpact, type KbImpact } from "./types";
+
+/** Interns whose answers cited the row, and the plan and quiz items that reference it (edit dialog). */
+export const getKbImpact = (id: string, signal?: AbortSignal) =>
+  request<KbImpact>(`/api/admin/kb/${q(id)}/impact`, { guard: isKbImpact, signal, admin: true });

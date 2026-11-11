@@ -98,6 +98,8 @@ FIXTURES: dict[str, type[BaseModel]] = {
     "mentor_request_status_request.json": s.MentorRequestStatusPatch,
     "mentor_request_deleted.json": s.MentorRequestDeleted,
     "error_503_requests.json": s.ErrorBody,
+    # P14.1 KB impact
+    "kb_impact.json": s.KbImpact,
 }
 
 # One response fixture per endpoint (the request fixtures are listed in FIXTURES above).
@@ -137,6 +139,7 @@ ENDPOINT_FIXTURES = {
     "POST /api/admin/requests": "mentor_requests_created.json",
     "PATCH /api/admin/requests/{id}": "mentor_request.json",
     "DELETE /api/admin/requests/{id}": "mentor_request_deleted.json",
+    "GET /api/admin/kb/{id}/impact": "kb_impact.json",  # P14.1
 }
 
 REQUEST_MODELS: dict[type[BaseModel], str] = {

@@ -39,6 +39,10 @@ export interface ReplyItem {
   resolved?: Resolved;
   /** `state.active_scenario` after this item; absent when the item does not change it. */
   active?: string | null;
+  /** P14.1: when the reply arrived (ISO time); absent on threads saved before Answer Recall. */
+  at?: string;
+  /** P14.1: KB version the reply was built on (`trace.retrieval.kb_version`, else the watcher's last known). */
+  kbVersion?: string;
 }
 export interface ErrorItem {
   id: string;
@@ -112,6 +116,8 @@ export function loadItems(raw: readonly unknown[]): ChatItem[] {
       else if (isObj(x.resolved) && x.resolved.state === "done" && typeof x.resolved.from === "number" && typeof x.resolved.to === "number")
         item.resolved = { state: "done", from: x.resolved.from, to: x.resolved.to };
       if (x.active === null || typeof x.active === "string") item.active = x.active;
+      if (typeof x.at === "string" && x.at.length <= 40) item.at = x.at;
+      if (typeof x.kbVersion === "string" && x.kbVersion.length <= 64) item.kbVersion = x.kbVersion;
       out.push(item);
     }
   }

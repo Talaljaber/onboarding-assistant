@@ -132,3 +132,11 @@ Titles and notes are illustrative; `kb_row` is the live K05 row verbatim; ids an
 | `error_500.json` | 500 | `internal_error` |
 | `error_503.json` | 503 | `imports_unavailable` (document import only: the store has no import tables or failed) |
 | `error_503_requests.json` | 503 | `requests_unavailable` (mentor requests only: no `mentor_requests` table, migration 0004) |
+
+## KB impact (P14.1, admin only)
+
+| File | Endpoint | Model |
+|---|---|---|
+| `kb_impact.json` | `GET /api/admin/kb/{id}/impact` (K02: Sara's answers cited it; two plan activities; no quiz item) | `KbImpact` |
+
+The intern is the seeded fictional demo persona. Ids only, from turn logs: no chat text, no count per intern.

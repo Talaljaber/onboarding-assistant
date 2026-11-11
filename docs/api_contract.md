@@ -516,6 +516,17 @@ store: "supabase"|"local", store_probe: Probe, uptime_s}` with `Probe` = `{ok, l
 `llm_available` equals `mode == "llm"`; `mode` is `offline` when the probe failed, the budget is spent or
 `OFFLINE=1`. `build` is the short git sha or `null`.
 
+## 6f. KB impact (P14.1, admin only)
+
+### GET /api/admin/kb/{id}/impact
+
+Shown in the editor's edit dialog before a row is saved. → `KbImpact` `{id, interns: InternPublic[],
+activity_ids[], quiz_ids[]}`: `interns` are the interns whose turn logs cite the row (through their linked
+profiles, roster order; a turn without a `profile_id` counts for nobody), `activity_ids` the plan activities of
+either track whose `refs` hold it, `quiz_ids` the quiz items whose explanation is this row. From cited ids
+only: never chat text, never a count per intern. `{id}` must match `K\d{2,3}` and exist in the live KB, else
+404 (so the path never collides with `/api/admin/kb/imports/...`). 401 without the admin token.
+
 ## 7. Fixed labels
 
 | constant | text |
@@ -552,6 +563,7 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
 - document import (P12.1): `import_capabilities.json`, `import_create_request.json`, `import_detail.json`,
   `imports_list.json`, `draft_patch_request.json`, `draft.json`, `approve_request.json`, `approve.json`;
 - KB coverage (P13.1): `kb_coverage.json`;
+- KB impact (P14.1): `kb_impact.json`;
 - mentor requests (P13.2): `mentor_request_create_request.json`, `mentor_requests_created.json`,
   `mentor_requests.json`, `mentor_request_status_request.json`, `mentor_request.json`,
   `mentor_request_patch_request.json`, `mentor_request_deleted.json`;

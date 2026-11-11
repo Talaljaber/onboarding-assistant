@@ -788,4 +788,17 @@ export const en: Dict = {
     prompt: "How do you answer? Type your reply now.",
     stuck: "Stuck?",
   },
+  // P14.1 Answer Recall
+  recall: {
+    title: "The source of this answer changed after you received it",
+    received: "Received {when}",
+    changedRow: "What changed in {id}",
+    removed: "This source no longer exists",
+    del: "removed:",
+    add: "added:",
+    reask: "Ask again",
+    addedHint: "New sources were added after this reply — ask again",
+    impact: "Cited in answers to {n} intern(s) ({names})",
+    impactNote: "When an answer's source changes, everyone who received it sees a notice with exactly what changed.",
+  },
 };
