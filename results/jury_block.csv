@@ -1,0 +1,1 @@
+﻿set,test_id,question,expected_behaviour,expected_ids,mode,tool,status,band,answer,cited_ids,ids_ok,content_ok,refusal_ok,behaviour_ok,correct,verifier_rejection,escalated,cached,latency_ms,request_id,category,expected_scenario,expected_milestone,must_match,must_not_match,kind,reason,router_tool,scenario_id,milestone,percent_before,percent_after,turn2_kind,top1_id
