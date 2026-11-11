@@ -1,6 +1,6 @@
 """LocalStore: the Store on a SQLite file (default `data/live/local.sqlite`).
 
-What it does: keeps the same tables as `supabase/migrations/0001`–`0003` (SQLite types; arrays and
+What it does: keeps the same tables as `supabase/migrations/0001`–`0004` (SQLite types; arrays and
 jsonb as JSON text) behind one lock, so the server works with no network and no Supabase.
 What it must never do: raise to the caller (every failure is logged and returns a safe default),
 store chat or answer text, or sync with Supabase (there is no sync; offline edits stay local).
@@ -38,6 +38,10 @@ from app.store.base import (
     IMPORT_COLUMNS,
     draft_record,
     import_record,
+    REQUEST_COLUMNS,
+    request_changes,
+    request_record,
+    request_row,
 )
 
 T = TypeVar("T")
@@ -150,6 +154,21 @@ create table if not exists kb_drafts (
     updated_at text not null
 );
 create index if not exists kb_drafts_import_idx on kb_drafts (import_id, ord);
+create table if not exists mentor_requests (
+    id text primary key,
+    intern_id text not null references interns (id) on delete cascade,
+    title text not null,
+    note text not null default '',
+    kind text not null check (kind in ('learn', 'do', 'read')),
+    kb_id text,
+    activity_id text,
+    due_date text,
+    status text not null default 'new' check (status in ('new', 'in_progress', 'done')),
+    created_at text not null,
+    updated_at text not null,
+    status_changed_at text not null
+);
+create index if not exists mentor_requests_intern_idx on mentor_requests (intern_id, created_at);
 """
 
 # Applied on open after SCHEMA (the same change as supabase/migrations/0002_interns.sql).
@@ -668,6 +687,72 @@ class LocalStore:
 
         return self._run("kb_drafts_save", False, op)
 
+    # Mentor requests (P13.2) -----------------------------------------------------------------
+
+    def mentor_requests(
+        self, *, intern_id: str | None = None, ids: list[str] | None = None
+    ) -> list[dict[str, Any]] | None:
+        where: list[str] = []
+        args: list[Any] = []
+        if intern_id is not None:
+            where.append("intern_id = ?")
+            args.append(valid_uuid(intern_id) or "")
+        if ids is not None:
+            clean = [i for i in (valid_uuid(x) for x in ids) if i]
+            if not clean:
+                return []
+            where.append(f"id in ({','.join('?' * len(clean))})")
+            args += clean
+        q = "select * from mentor_requests" + (" where " + " and ".join(where) if where else "")
+
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            return [request_row(dict(r)) for r in c.execute(q + " order by created_at desc, rowid desc", args)]
+
+        return self._run("mentor_requests", None, op)
+
+    def mentor_requests_create(self, records: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+        rows = [request_record(r) for r in records]
+        if any(r is None for r in rows):
+            log_event("store_rejected", store="local", op="mentor_requests_create", reason="invalid_input")
+            return None
+        cols = ", ".join(REQUEST_COLUMNS)
+        marks = ", ".join(f":{k}" for k in REQUEST_COLUMNS)
+
+        clean = [r for r in rows if r is not None]
+
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            c.executemany(f"insert into mentor_requests ({cols}) values ({marks})", clean)
+            return [request_row(r) for r in clean]
+
+        return self._run("mentor_requests_create", None, op)
+
+    def mentor_request_update(self, request_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        rid = valid_uuid(request_id)
+        if rid is None:
+            return {}
+
+        def op(c: sqlite3.Connection) -> dict[str, Any] | None:
+            cur = c.execute("select * from mentor_requests where id = ?", (rid,)).fetchone()
+            if not cur:
+                return {}
+            clean = request_changes(changes, cur["status"])
+            if clean is None:
+                log_event("store_rejected", store="local", op="mentor_request_update", reason="invalid_input")
+                return None
+            sets = ", ".join(f"{k} = :{k}" for k in clean)
+            c.execute(f"update mentor_requests set {sets} where id = :id", {**clean, "id": rid})
+            r = c.execute("select * from mentor_requests where id = ?", (rid,)).fetchone()
+            return request_row(dict(r))
+
+        return self._run("mentor_request_update", None, op)
+
+    def mentor_request_delete(self, request_id: str) -> bool | None:
+        rid = valid_uuid(request_id)
+        if rid is None:
+            return False
+        return self._run("mentor_request_delete", None,
+                         lambda c: c.execute("delete from mentor_requests where id = ?", (rid,)).rowcount > 0)
+
     # Used by tests and the integrator's smoke only.
     def table_rows(self, table: str) -> list[dict[str, Any]]:
         allowed = {
@@ -681,6 +766,7 @@ class LocalStore:
             "turn_logs",
             "kb_imports",
             "kb_drafts",
+            "mentor_requests",
         }
         if table not in allowed:
             return []

@@ -31,6 +31,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app import __version__
 from app.agent import Agent
 from app import interns as interns_view
+from app import mentor_requests as requests_view
 from app.errors import ApiError
 from app.kb import Row
 from app.kb_import import service as kb_import
@@ -77,6 +78,13 @@ from app.schemas import (
     QuizResponse,
     Role,
     ScenarioFeedbackRequest,
+)
+from app.schemas import (  # P13.2 mentor requests
+    MentorRequestCreate,
+    MentorRequestDeleted,
+    MentorRequestPatch,
+    MentorRequestStatusPatch,
+    Source,
 )
 from app.store import alias_problem, store_status
 
@@ -242,7 +250,7 @@ class RequestContextMiddleware:
 def _install_errors(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _api_error(request: Request, exc: ApiError) -> JSONResponse:
-        if exc.status >= 500 and exc.code != "imports_unavailable":
+        if exc.status >= 500 and exc.code not in ("imports_unavailable", "requests_unavailable"):
             log_event("api_error", request_id=_rid(request), code=exc.code)
             return _error("internal_error", 500, "Internal error", request)
         return _error(exc.code, exc.status, exc.message, request, exc.field)
@@ -370,6 +378,52 @@ def _progress_of(request: Request, store: Any, profile_id: str, prof: dict[str, 
     summary = _agent(request).features.plan.percent(role, completed)
     return ProgressResponse(completed_ids=completed, percent=summary.percent, done=summary.done,
                             total=summary.total)
+
+
+# ------------------------------------------------------------------ mentor requests (P13.2) helpers
+def _requests_or_503(value: Any) -> Any:
+    if value is None:
+        raise ApiError("requests_unavailable", 503, "mentor requests are not available on this store now")
+    return value
+
+
+def _kb_source(request: Request) -> Callable[[str], Source | None]:
+    kb = _agent(request).kb
+
+    def lookup(kid: str) -> Source | None:
+        row = kb.get(kid)
+        return Source.model_validate(row.as_source()) if row is not None else None
+
+    return lookup
+
+
+def _intern_roles(store: Any) -> dict[str, str]:
+    return {i["id"]: i["role"] for i in (store.list_interns() or [])}
+
+
+def _request_list(request: Request, recs: list[dict[str, Any]], status: int = 200) -> JSONResponse:
+    roles = _intern_roles(_store(request))
+    body = requests_view.listing(recs, _kb_source(request), _agent(request).features.plan, roles.get)
+    return _json(body, status)
+
+
+def _profile_intern(store: Any, profile_id: str) -> dict[str, Any]:
+    """The active intern a profile belongs to (the intern session's profile id scopes their requests)."""
+    if not re.match(PROFILE_ID_RE, profile_id):
+        raise ApiError("validation_error", 400, "profile_id must be a lowercase UUID", "profile_id")
+    owner = next((str(p["intern_id"]) for p in store.intern_profiles() if str(p["id"]) == profile_id), None)
+    intern = store.get_intern(owner) if owner else None
+    if not intern or not intern["active"]:
+        raise ApiError("not_found", 404, "unknown profile")
+    return intern  # type: ignore[no-any-return]
+
+
+def _own_request(store: Any, request_id: str, intern_id: str | None = None) -> dict[str, Any]:
+    """The stored request (404 when unknown, or when it belongs to another intern than `intern_id`)."""
+    found = _requests_or_503(store.mentor_requests(ids=[request_id])) if re.match(PROFILE_ID_RE, request_id) else []
+    if not found or (intern_id is not None and found[0]["intern_id"] != intern_id):
+        raise ApiError("not_found", 404, "unknown request")
+    return found[0]  # type: ignore[no-any-return]
 
 
 # ======================================================================================= routes
@@ -633,6 +687,77 @@ def build_router() -> APIRouter:
             return row.topic if row is not None else None
 
         return _json(interns_view.detail(intern, profiles, act, agent.features.plan, scenario_value, kb_topic))
+
+    # -------------------------------------------------------------------------- mentor requests (P13.2)
+    @r.get("/requests")
+    def requests_own(request: Request, profile_id: str | None = None) -> JSONResponse:
+        """The signed-in intern's requests, scoped by their session profile id (as progress is)."""
+        if not profile_id:
+            raise ApiError("validation_error", 400, "profile_id is required", "profile_id")
+        store = _store(request)
+        intern = _profile_intern(store, profile_id)
+        return _request_list(request, _requests_or_503(store.mentor_requests(intern_id=intern["id"])))
+
+    @r.patch("/requests/{request_id}")
+    def requests_own_status(request_id: str, body: MentorRequestStatusPatch, request: Request) -> JSONResponse:
+        """The intern moves one of their own requests between new, in progress and done (any direction)."""
+        store = _store(request)
+        intern = _profile_intern(store, body.profile_id)
+        _own_request(store, request_id, intern["id"])
+        rec = _requests_or_503(store.mentor_request_update(request_id, {"status": body.status}))
+        if not rec:
+            raise ApiError("not_found", 404, "unknown request")
+        return _json(requests_view.view(rec, _kb_source(request), _agent(request).features.plan, intern["role"]))
+
+    @r.get("/admin/requests", dependencies=ADMIN_ONLY)
+    def admin_requests(request: Request, intern_id: str | None = None) -> JSONResponse:
+        store = _store(request)
+        if intern_id is not None:
+            _intern_or_404(store, intern_id)
+        return _request_list(request, _requests_or_503(store.mentor_requests(intern_id=intern_id)))
+
+    @r.post("/admin/requests", status_code=201, dependencies=ADMIN_ONLY)
+    def admin_request_add(body: MentorRequestCreate, request: Request) -> JSONResponse:
+        store = _store(request)
+        if body.intern_id is not None:
+            targets = [_intern_or_404(store, body.intern_id)]
+        else:
+            targets = [i for i in (store.list_interns() or []) if i["active"] and i["role"] == body.track]
+            if not targets:
+                raise ApiError("validation_error", 400, f"no active interns on the {body.track} track", "track")
+        fields = body.model_dump(exclude={"intern_id", "track"})
+        requests_view.check_text(fields)
+        requests_view.check_links(fields, _kb_source(request), _agent(request).features.plan,
+                                  {t["role"] for t in targets})
+        created = _requests_or_503(store.mentor_requests_create([{**fields, "intern_id": t["id"]} for t in targets]))
+        log_event("requests_added", request_id=_rid(request), count=len(created), kind=body.kind,
+                  target="track" if body.track else "intern")
+        return _request_list(request, created, 201)
+
+    @r.patch("/admin/requests/{request_id}", dependencies=ADMIN_ONLY)
+    def admin_request_edit(request_id: str, body: MentorRequestPatch, request: Request) -> JSONResponse:
+        store = _store(request)
+        cur = _own_request(store, request_id)
+        changes = body.changes()
+        intern = store.get_intern(cur["intern_id"]) or {}
+        role = intern.get("role")
+        requests_view.check_text(changes)
+        requests_view.check_links(changes, _kb_source(request), _agent(request).features.plan,
+                                  [role] if role else [])
+        rec = _requests_or_503(store.mentor_request_update(request_id, changes))
+        if not rec:
+            raise ApiError("not_found", 404, "unknown request")
+        log_event("request_updated", request_id=_rid(request), fields=sorted(body.model_fields_set))
+        return _json(requests_view.view(rec, _kb_source(request), _agent(request).features.plan, role))
+
+    @r.delete("/admin/requests/{request_id}", dependencies=ADMIN_ONLY)
+    def admin_request_delete(request_id: str, request: Request) -> JSONResponse:
+        store = _store(request)
+        _own_request(store, request_id)
+        if not _requests_or_503(store.mentor_request_delete(request_id)):
+            raise ApiError("not_found", 404, "unknown request")
+        log_event("request_deleted", request_id=_rid(request))
+        return _json(MentorRequestDeleted(id=request_id, deleted=True))
 
     # -------------------------------------------------------------------------- health
     @r.get("/health")

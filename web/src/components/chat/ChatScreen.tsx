@@ -7,6 +7,7 @@ import { useT } from "@/i18n";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { LIMITS } from "@/api/types";
 import { useAppState } from "@/state/useAppState";
+import { MentorRequestsPanel } from "../requests/MentorRequestsPanel";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
 import { Icon } from "../ui/Icon";
@@ -177,6 +178,8 @@ function ChatInner() {
             </Button>
           )}
         </div>
+
+        <MentorRequestsPanel />
 
         <ol ref={listRef} aria-label={t("chat.thread")} className="flex flex-col gap-5 pb-5 sm:gap-6">
           <li data-kind="greeting">

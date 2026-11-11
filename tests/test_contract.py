@@ -88,6 +88,15 @@ FIXTURES: dict[str, type[BaseModel]] = {
     "draft.json": s.KbDraft,
     "approve_request.json": s.ApproveRequest,
     "approve.json": s.ApproveResponse,
+    # P13.2 mentor requests
+    "mentor_request_create_request.json": s.MentorRequestCreate,
+    "mentor_requests_created.json": s.MentorRequestList,
+    "mentor_requests.json": s.MentorRequestList,
+    "mentor_request.json": s.MentorRequest,
+    "mentor_request_patch_request.json": s.MentorRequestPatch,
+    "mentor_request_status_request.json": s.MentorRequestStatusPatch,
+    "mentor_request_deleted.json": s.MentorRequestDeleted,
+    "error_503_requests.json": s.ErrorBody,
 }
 
 # One response fixture per endpoint (the request fixtures are listed in FIXTURES above).
@@ -120,6 +129,12 @@ ENDPOINT_FIXTURES = {
     "GET /api/admin/kb/imports/{id}": "import_detail.json",
     "PATCH /api/admin/kb/drafts/{id}": "draft.json",
     "POST /api/admin/kb/imports/{id}/approve": "approve.json",
+    "GET /api/requests": "mentor_requests.json",
+    "PATCH /api/requests/{id}": "mentor_request.json",
+    "GET /api/admin/requests": "mentor_requests.json",
+    "POST /api/admin/requests": "mentor_requests_created.json",
+    "PATCH /api/admin/requests/{id}": "mentor_request.json",
+    "DELETE /api/admin/requests/{id}": "mentor_request_deleted.json",
 }
 
 REQUEST_MODELS: dict[type[BaseModel], str] = {
@@ -136,6 +151,9 @@ REQUEST_MODELS: dict[type[BaseModel], str] = {
     s.ImportCreate: "import_create_request.json",
     s.DraftPatch: "draft_patch_request.json",
     s.ApproveRequest: "approve_request.json",
+    s.MentorRequestCreate: "mentor_request_create_request.json",
+    s.MentorRequestPatch: "mentor_request_patch_request.json",
+    s.MentorRequestStatusPatch: "mentor_request_status_request.json",
 }
 
 
@@ -477,3 +495,41 @@ def test_imported_rows_are_added_rows_and_drafts_carry_no_score() -> None:
     banned = re.compile(r"score|grade|rating|confidence")
     keys = all_keys(load("import_detail.json")) | all_keys(approve)
     assert not [k for k in keys if banned.search(k)]
+
+
+def test_mentor_requests_are_text_only_and_carry_no_score() -> None:
+    """P13.2: one target, text limits, real due dates, ids for links (no files), no score anywhere."""
+    req = load("mentor_request_create_request.json")
+    s.MentorRequestCreate.model_validate({k: v for k, v in req.items() if k != "track"} | {"intern_id": UUID})
+    for bad in ({"intern_id": UUID}, {"track": None}, {"title": "t" * 121}, {"title": " "}, {"note": "n" * 1001},
+                {"kind": "watch"}, {"kb_id": "K1"}, {"activity_id": "bad id"}, {"due_date": "2026-02-30"},
+                {"due_date": "20-11-2026"}, {"file": "a.pdf"}):
+        with pytest.raises(ValidationError):
+            s.MentorRequestCreate.model_validate({**req, **bad})
+    with pytest.raises(ValidationError):
+        s.MentorRequestPatch.model_validate({})
+    for bad in ({"title": None}, {"kind": None}, {"status": None}, {"status": "graded"}):
+        with pytest.raises(ValidationError):
+            s.MentorRequestPatch.model_validate(bad)
+    assert s.MentorRequestPatch.model_validate({"note": None, "kb_id": None}).changes() == {"note": "", "kb_id": None}
+    with pytest.raises(ValidationError):
+        s.MentorRequestStatusPatch.model_validate({**load("mentor_request_status_request.json"), "title": "x"})
+    assert s.ERROR_STATUS["requests_unavailable"] == 503
+    banned = re.compile(r"score|grade|rating|correct|attachment|file|reply")
+    keys = all_keys(load("mentor_requests.json")) | all_keys(load("mentor_requests_created.json"))
+    keys |= {f for m in (s.MentorRequest, s.MentorRequestList, s.RequestCounts) for f in m.model_fields}
+    assert not [k for k in keys if banned.search(k)]
+    listing = load("mentor_requests.json")
+    assert {r["status"] for r in listing["requests"]} == set(s.REQUEST_STATUSES)
+    assert {r["kind"] for r in listing["requests"]} == set(s.REQUEST_KINDS)
+    assert listing["label_ar"] == s.REQUESTS_LABEL_AR
+    with (ROOT / "data" / "official" / "knowledge_base.csv").open(encoding="utf-8-sig", newline="") as fh:
+        kb = {r["id"]: r for r in csv.DictReader(fh)}
+    rows = [r["kb_row"] for n in ("mentor_requests.json", "mentor_requests_created.json")
+            for r in load(n)["requests"] if r["kb_row"]] + [load("mentor_request.json")["kb_row"]]
+    assert rows
+    for row in rows:
+        assert row["answer_ar"] == kb[row["id"]]["answer_ar"]
+
+
+UUID = "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14"

@@ -10,6 +10,7 @@ import { translate, useLang, useServerLabel, useT, type DictKey } from "@/i18n";
 import { formatDay, formatWhen, internName, internNameLang } from "@/lib/intern";
 import { usePath } from "@/router";
 import { ProgressRing } from "../progress/ProgressRing";
+import { AdminRequestsSection } from "../requests/AdminRequestsSection";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
 import { Dialog } from "../ui/Dialog";
@@ -290,6 +291,8 @@ export default function InternDetailScreen() {
                   )}
                 </Section>
               </div>
+
+              <AdminRequestsSection intern={d.intern} />
 
               <Section title={t("uiIntern.secTimeline")} icon="clock">
                 {d.timeline.length === 0 ? (

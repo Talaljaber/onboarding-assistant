@@ -78,7 +78,7 @@ export interface ApiError {
 export type Result<T, E = ApiError> = { ok: true; value: T } | { ok: false; error: E };
 
 export interface RequestOptions<T> {
-  method?: "GET" | "POST" | "PUT" | "PATCH";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   timeoutMs?: number;
   signal?: AbortSignal;
@@ -307,3 +307,57 @@ export function adminLogout(): void {
 
 export const getHealth = (probe = false, signal?: AbortSignal) =>
   request<Health>(`/api/health${probe ? "?probe=1" : ""}`, { guard: isHealth, signal, timeoutMs: 8000 });
+
+// ---------------------------------------------------------------- mentor requests (P13.2)
+// Imported here (not in the list above) to keep this block self-contained.
+import {
+  isMentorRequest,
+  isMentorRequestDeleted,
+  isMentorRequestList,
+  type MentorRequest,
+  type MentorRequestCreate,
+  type MentorRequestDeleted,
+  type MentorRequestList,
+  type MentorRequestPatch,
+  type RequestStatus,
+} from "./types";
+
+/** The signed-in intern's own requests (scoped by their session profile id). */
+export const getMyRequests = (profileId: string, signal?: AbortSignal) =>
+  request<MentorRequestList>(`/api/requests?profile_id=${q(profileId)}`, { guard: isMentorRequestList, signal });
+
+/** The intern moves one of their own requests (new / in progress / done, any direction). */
+export const setMyRequestStatus = (id: string, profileId: string, status: RequestStatus, signal?: AbortSignal) =>
+  request<MentorRequest>(`/api/requests/${q(id)}`, {
+    method: "PATCH",
+    body: { profile_id: profileId, status },
+    guard: isMentorRequest,
+    signal,
+  });
+
+export const getAdminRequests = (internId?: string, signal?: AbortSignal) =>
+  request<MentorRequestList>(`/api/admin/requests${internId ? `?intern_id=${q(internId)}` : ""}`, {
+    guard: isMentorRequestList,
+    signal,
+    admin: true,
+  });
+
+export const createRequests = (body: MentorRequestCreate, signal?: AbortSignal) =>
+  request<MentorRequestList>("/api/admin/requests", {
+    method: "POST",
+    body,
+    guard: isMentorRequestList,
+    signal,
+    admin: true,
+  });
+
+export const patchRequest = (id: string, body: MentorRequestPatch, signal?: AbortSignal) =>
+  request<MentorRequest>(`/api/admin/requests/${q(id)}`, { method: "PATCH", body, guard: isMentorRequest, signal, admin: true });
+
+export const deleteRequest = (id: string, signal?: AbortSignal) =>
+  request<MentorRequestDeleted>(`/api/admin/requests/${q(id)}`, {
+    method: "DELETE",
+    guard: isMentorRequestDeleted,
+    signal,
+    admin: true,
+  });

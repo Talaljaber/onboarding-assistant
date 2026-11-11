@@ -1,8 +1,8 @@
 """Store protocol and the validation shared by every store.
 
 What it does: defines the `Store` interface the server uses for KB rows + history, interns (added by
-the admin), their profiles, progress, practice attempts, turn logs and the admin's per-intern records,
-plus pure helpers that validate and shape records before any store writes them.
+the admin), their profiles, progress, practice attempts, turn logs, the admin's per-intern records and
+mentor requests (P13.2), plus pure helpers that validate and shape records before any store writes them.
 What it must never do: touch the network or a database, accept chat/answer text for a turn log,
 or accept an alias shaped like an email or a phone number.
 """
@@ -186,6 +186,28 @@ class Store(Protocol):
 
     def kb_drafts_save(self, drafts: list[dict[str, Any]]) -> bool:
         """Upsert whole draft records (validated with `draft_record`)."""
+        ...
+
+    # Mentor requests (P13.2) -------------------------------------------------------------------
+    # Same failure rule as the import tables: None (or False) means "the requests table cannot be used now"
+    # (e.g. Supabase without migration 0004) and never flips the store; the API answers 503.
+
+    def mentor_requests(
+        self, *, intern_id: str | None = None, ids: list[str] | None = None
+    ) -> list[dict[str, Any]] | None:
+        """Requests matching every given filter, newest first (REQUEST_COLUMNS); None when unavailable."""
+        ...
+
+    def mentor_requests_create(self, records: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+        """Insert validated requests (all or nothing as far as the store allows). The stored rows, or None."""
+        ...
+
+    def mentor_request_update(self, request_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        """Apply a partial update (see `request_changes`). The stored row; {} when unknown; None on failure."""
+        ...
+
+    def mentor_request_delete(self, request_id: str) -> bool | None:
+        """True when deleted, False when unknown, None on failure."""
         ...
 
     def close(self) -> None: ...
@@ -525,4 +547,96 @@ def draft_record(rec: object) -> dict[str, Any] | None:
     at = now_iso()
     out["created_at"] = out["created_at"] if isinstance(out["created_at"], str) and out["created_at"] else at
     out["updated_at"] = out["updated_at"] if isinstance(out["updated_at"], str) and out["updated_at"] else at
+    return out
+
+
+# Mentor requests (P13.2) ---------------------------------------------------------------------------
+# Text-only "learn / do / read" requests from the admin to one intern: no files, no replies. A request may
+# link one K-row id and one plan activity id (the API checks them against the KB and the intern's plan).
+REQUEST_COLUMNS = ("id", "intern_id", "title", "note", "kind", "kb_id", "activity_id", "due_date", "status",
+                   "created_at", "updated_at", "status_changed_at")
+REQUEST_KINDS = frozenset({"learn", "do", "read"})
+REQUEST_STATUSES = frozenset({"new", "in_progress", "done"})
+REQUEST_TITLE_MAX = 120
+REQUEST_NOTE_MAX = 1000
+_ACTIVITY_ID_RE = re.compile(r"^[A-Z]{1,2}-[A-Za-z0-9-]{1,32}$")
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _valid_due(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, str) or not _DATE_RE.match(value):
+        return False
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        return False
+    return True
+
+
+def _request_field_ok(key: str, val: object) -> bool:
+    if key == "title":
+        return isinstance(val, str) and 1 <= len(val.strip()) <= REQUEST_TITLE_MAX
+    if key == "note":
+        return isinstance(val, str) and len(val) <= REQUEST_NOTE_MAX
+    if key == "kind":
+        return val in REQUEST_KINDS
+    if key == "status":
+        return val in REQUEST_STATUSES
+    if key == "kb_id":
+        return val is None or (isinstance(val, str) and bool(KB_ID_RE.match(val)))
+    if key == "activity_id":
+        return val is None or (isinstance(val, str) and bool(_ACTIVITY_ID_RE.match(val)))
+    if key == "due_date":
+        return _valid_due(val)
+    return False
+
+
+def request_record(rec: object) -> dict[str, Any] | None:
+    """A new request to store (exactly REQUEST_COLUMNS; id and timestamps filled in), or None when invalid."""
+    if not isinstance(rec, dict):
+        return None
+    out = {k: rec.get(k) for k in REQUEST_COLUMNS}
+    out["id"] = valid_uuid(out["id"]) or str(uuid.uuid4())
+    out["intern_id"] = valid_uuid(out["intern_id"])
+    out["note"] = out["note"] if out["note"] is not None else ""
+    out["status"] = out["status"] or "new"
+    if out["intern_id"] is None:
+        return None
+    for key in ("title", "note", "kind", "status", "kb_id", "activity_id", "due_date"):
+        if not _request_field_ok(key, out[key]):
+            return None
+    at = now_iso()
+    for key in ("created_at", "updated_at", "status_changed_at"):
+        out[key] = out[key] if isinstance(out[key], str) and out[key] else at
+    return out
+
+
+def request_changes(changes: dict[str, Any], current_status: str | None = None) -> dict[str, Any] | None:
+    """Validated partial update of a request (updated_at set; status_changed_at set when the status changes),
+    or None when anything is invalid or unknown."""
+    allowed = ("title", "note", "kind", "status", "kb_id", "activity_id", "due_date")
+    out: dict[str, Any] = {}
+    for key, val in changes.items():
+        if key not in allowed:
+            return None
+        v = "" if key == "note" and val is None else val
+        if not _request_field_ok(key, v):
+            return None
+        out[key] = v
+    at = now_iso()
+    out["updated_at"] = at
+    if "status" in out and out["status"] != current_status:
+        out["status_changed_at"] = at
+    return out
+
+
+def request_row(r: dict[str, Any]) -> dict[str, Any]:
+    out = {k: r.get(k) for k in REQUEST_COLUMNS}
+    out["id"] = str(out["id"])
+    out["intern_id"] = str(out["intern_id"])
+    out["note"] = out["note"] or ""
+    if out["due_date"] is not None:
+        out["due_date"] = str(out["due_date"])[:10]
     return out
