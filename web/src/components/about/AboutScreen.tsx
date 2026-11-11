@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getHealth } from "@/api/client";
 import type { Health } from "@/api/types";
+import { linkButton } from "@/components/plan/shared";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -18,7 +19,7 @@ import { useAppState } from "@/state/useAppState";
 
 export default function AboutScreen() {
   const t = useT();
-  const { clearBrowserData } = useAppState();
+  const { role, clearBrowserData } = useAppState();
   const [health, setHealth] = useState<Health | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [tick, setTick] = useState(0);
@@ -50,7 +51,20 @@ export default function AboutScreen() {
   return (
     <section data-screen="about" className="min-w-0">
       <Page>
-        <PageHeader icon="info" title={t("about.title")} />
+        <PageHeader
+          icon="info"
+          title={t("about.title")}
+          actions={
+            // Without a track (first visit, or after clearing this browser) the shell has no
+            // navigation: give a clear way back to the welcome screen.
+            !role && (
+              <a href="#/" data-testid="about-start" className={linkButton("primary")}>
+                {t("uiQa.aboutStart")}
+                <Icon name="arrow-end" size={18} className="shrink-0" />
+              </a>
+            )
+          }
+        />
 
         <section aria-labelledby="about-how" className="flex flex-col gap-4">
           {group("about-how", t("uiAdmin.aboutGroupHow"))}

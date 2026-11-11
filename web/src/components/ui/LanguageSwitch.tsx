@@ -5,6 +5,8 @@ import { segmented } from "./recipes";
 /** Props for {@link LanguageSwitch}. */
 export interface LanguageSwitchProps {
   className?: string;
+  /** Extra classes for each button (the header makes them taller for touch). */
+  itemClassName?: string;
 }
 
 /**
@@ -12,7 +14,7 @@ export interface LanguageSwitchProps {
  * language so it is recognisable regardless of the current UI language. `aria-pressed`
  * marks the active one.
  */
-export function LanguageSwitch({ className = "" }: LanguageSwitchProps) {
+export function LanguageSwitch({ className = "", itemClassName }: LanguageSwitchProps) {
   const { lang, setLang } = useLang();
   const t = useT();
   return (
@@ -29,7 +31,7 @@ export function LanguageSwitch({ className = "" }: LanguageSwitchProps) {
             aria-pressed={active}
             aria-label={t("lang.switchTo", { name })}
             onClick={() => setLang(l)}
-            className={cn(segmented.item, active ? segmented.on : segmented.off)}
+            className={cn(segmented.item, itemClassName, active ? segmented.on : segmented.off)}
           >
             {name}
           </button>
