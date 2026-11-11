@@ -483,7 +483,7 @@ export const en: Dict = {
   uiAuth: {
     navSignIn: "Admin sign-in",
     title: "Admin sign-in",
-    intro: "The knowledge editor and the manager view are for the admin only. Enter the admin password to continue.",
+    intro: "The interns screens and the knowledge editor are for the admin only. Enter the admin password to continue.",
     password: "Admin password",
     submit: "Sign in",
     wrong: "Wrong password.",
