@@ -60,7 +60,11 @@ def one(agent: Agent, text: str) -> tuple[str, str | None]:
         ("عنا 20 معرض بالأردن", "differs", "K02"),
         ("الإجازة بتطلبها عالواتساب", "related", "K16"),
         ("الراتب بينزل يوم 25", "guarded", None),
-        ("الإجازة بتطلبها عالواتساب من المدير", "guarded", None),
+        # P16.1 (journey #4): a channel word alone is no contact detail; a number or «رقم» still is
+        ("الإجازة بتطلبها عالواتساب من المدير", "related", "K16"),
+        ("طلب الإجازة بتبعته للمدير على الواتساب وخلص", "related", "K16"),
+        ("رقم المدير عالواتساب 0791234567", "guarded", None),
+        ("ابعتلي ايميل المدير", "guarded", None),
     ],
 )
 def test_offline_table(agent: Agent, text: str, label: str, row: str | None) -> None:
@@ -136,7 +140,7 @@ def test_split_is_on_sentence_marks_only_and_keeps_user_substrings() -> None:
     assert [c.text for c in claims] == ["أ ب", "ج د", "هـ و و ز", "ح", "ط"] and truncated
     text = "  عنا 17 معرض ، , ... ؟؟ "
     claims, truncated = factcheck.split_claims(text)
-    assert [c.text for c in claims] == ["عنا 17 معرض"]  # an ASCII comma is not a split mark; no-word pieces drop
+    assert [c.text for c in claims] == ["عنا 17 معرض"]  # no-word pieces drop
     assert all(text[c.start:c.start + len(c.text)] == c.text for c in claims) and not truncated
 
 
@@ -497,3 +501,51 @@ def test_year_after_its_marker_word_is_compared() -> None:
     assert differs.label == "differs"
     assert compare_claim("الشركة مش من عام 1991", row).label == "related"  # hedge word the row lacks
     assert compare_claim("فترة التجربة سنة كاملة", "فترة التجربة 90 يوماً").label != "supported"
+
+
+# ------------------------------------------------------------------ P16.1 (U7, journey #14)
+
+def test_split_on_ascii_comma_and_between_clauses() -> None:
+    text = "سمعت إن عدد المعارض 25 معرض وإن الإجازة السنوية 40 يوم وإن المدير اسمه أحمد"
+    claims, truncated = factcheck.split_claims(text)
+    assert [c.text for c in claims] == ["سمعت إن عدد المعارض 25 معرض", "الإجازة السنوية 40 يوم", "المدير اسمه أحمد"]
+    assert all(text[c.start:c.start + len(c.text)] == c.text for c in claims) and not truncated
+    text = "عنا 17 معرض, وفترة التجربة 60 يوم, وعنا 1,000 موظف"
+    assert [c.text for c in factcheck.split_claims(text)[0]] == ["عنا 17 معرض", "وفترة التجربة 60 يوم", "وعنا 1,000 موظف"]
+    text = "We have 20 showrooms and the probation is 60 days"
+    assert [c.text for c in factcheck.split_claims(text)[0]] == ["We have 20 showrooms", "the probation is 60 days"]
+    # not two clauses: one claim
+    for one_claim in ("Sales and Delivery teams work together", "وإن شاء الله خير", "قالوا وإن"):
+        assert len(factcheck.split_claims(one_claim)[0]) == 1, one_claim
+    many = " وإن ".join(f"عنا {n} معرض بالمدينة" for n in range(10, 17))
+    claims, truncated = factcheck.split_claims(many)
+    assert len(claims) == factcheck.MAX_CLAIMS and truncated
+
+
+def test_multi_fact_message_gets_one_card_per_fact(agent: Agent) -> None:
+    resp = check(agent, "سمعت إن عدد المعارض 25 معرض وإن الإجازة السنوية 40 يوم وإن المدير اسمه أحمد")
+    assert len(resp.claims) == 3
+    first = resp.claims[0]
+    assert (first.label, first.source.id if first.source else None) == ("differs", "K02")
+
+
+@pytest.mark.parametrize(
+    ("text", "label", "row", "numbers"),
+    [
+        ("The number of showrooms is 20.", "differs", "K02", ("20", "17")),
+        ("We have 20 showrooms", "differs", "K02", ("20", "17")),
+        ("The probation period is 60 days", "differs", "K14", ("60", "90")),
+        ("The probation period is 90 days", "supported", "K14", None),
+    ],
+)
+def test_english_number_and_unit(agent: Agent, text: str, label: str, row: str, numbers: Any) -> None:
+    c = check(agent, text).claims[0]
+    assert (c.label, c.source.id if c.source else None) == (label, row)
+    got = (c.numbers.claim, c.numbers.row) if c.numbers else None
+    assert got == numbers
+
+
+def test_english_units_in_number_spans() -> None:
+    assert [(s.value, s.unit) for s in number_spans("The number of showrooms is 20")] == [("20", "معرض")]
+    assert [(s.value, s.unit) for s in number_spans("probation is 90 days")] == [("90", "يوم")]
+    assert [(s.value, s.unit) for s in number_spans("founded in 1991")] == [("1991", "عام")]

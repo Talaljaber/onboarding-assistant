@@ -9,7 +9,7 @@
    "finish_reason": "stop",
    "message": {
     "role": "assistant",
-    "content": "{\"met\": [\"S02-C1\", \"S02-C2\"], \"missing\": [\"S02-C3\"], \"value\": \"Integrity\", \"tip_ar\": \"أخبر الزبون أنك ستعود إليه بالمعلومة المؤكدة بعد التحقق منها.\"}"
+    "content": "{\"met\": [\"S02-C1\", \"S02-C2\"], \"missing\": [\"S02-C3\"], \"value\": \"Integrity\", \"tip_ar\": \"اشرح للزبون بهدوء لماذا تفضّل التأكد قبل الإجابة.\"}"
    }
   }
  ],

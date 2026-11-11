@@ -95,7 +95,7 @@ def ask(agent: Agent, message: str = "", **kw: Any) -> ChatResponse:
 
 def test_llm_choice_starts_scenario_without_options(agent: Agent, fake: Any) -> None:
     client = fake(content("agent_start_s02"))
-    r = ask(agent, "عميل يسألني عن ميزة في المنتج لست متأكداً منها، كيف أتصرف؟", role="Sales")
+    r = ask(agent, "تدريب: عميل يسألني عن ميزة في المنتج لست متأكداً منها", role="Sales")
     assert r.reply.kind == "scenario_start" and r.state.active_scenario == "S02"
     assert r.mode == "llm" and r.trace.model == MODEL
     assert r.trace.agent.used and r.trace.agent.tool == "start_scenario" and r.trace.agent.fallback_reason is None
@@ -108,7 +108,14 @@ def test_a_generic_practice_request_follows_the_role_not_the_model(agent: Agent,
     fake(choice("start_scenario", scenario_id="S01", role_override=None))  # a Sales scenario, cached role-free
     r = ask(agent, "تدريب", role="Delivery")
     assert r.reply.kind == "scenario_start" and r.state.active_scenario == "S04"
-    assert r.trace.agent.fallback_reason == "router_practice_request"
+    assert r.trace.agent.fallback_reason == "scenario_other_track"  # P16.1 (journey #3)
+    fake(choice("start_scenario", scenario_id="S01", role_override=None))
+    r = ask(agent, "I want to practise", role="Delivery")
+    assert r.reply.kind == "scenario_start" and r.state.active_scenario == "S04"
+    assert r.trace.agent.fallback_reason == "scenario_other_track"
+    fake(choice("start_scenario", scenario_id="S05", role_override=None))  # own track, but the router's pick wins
+    r = ask(agent, "تدريب", role="Delivery")
+    assert r.state.active_scenario == "S04" and r.trace.agent.fallback_reason == "router_practice_request"
     fake(choice("greet", kind="greeting"))
     r = ask(agent, "تدريب", role="Delivery")
     assert r.reply.kind == "scenario_start" and r.state.active_scenario == "S04"
@@ -270,3 +277,48 @@ def test_redact_masks_supabase_and_jwt_shapes() -> None:
     jwt = "e" + "yJhbGciOiJIUzI1NiJ9." + "e" + "yJyb2xlIjoieCJ9.c2lnbmF0dXJl"
     out = redact(f"a {sb} b {jwt} c sk-or-v1-abc")
     assert sb not in out and jwt not in out and "sk-or-v1-abc" not in out and out.count("[redacted]") == 3
+
+
+# ------------------------------------------------------------------ P16.1 (journey audit #1, #5, #10)
+
+@pytest.mark.parametrize(
+    ("q", "role"),
+    [("شو بعمل إذا الزبون مش موجود بالبيت وقت التوصيل؟", "Delivery"),
+     ("عميل يسألني عن ميزة في المنتج لست متأكداً منها، كيف أتصرف؟", "Sales"),
+     ("Can a customer return a product after a week?", "Sales")],
+)
+def test_the_model_cannot_start_practice_on_a_question(agent: Agent, fake: Any, q: str, role: str) -> None:
+    fake(choice("start_scenario", scenario_id="S02" if role == "Sales" else "S04", role_override=None))
+    r = ask(agent, q, role=role)
+    assert r.reply.kind in ("answer", "refusal") and r.state.active_scenario is None
+    assert r.trace.agent.fallback_reason == "router_not_practice"
+    assert agent.llm is not None and agent.llm.chat is not None
+    assert agent.llm.chat._cache.data == {}  # type: ignore[union-attr]  # a refused choice is never cached
+
+
+def test_the_model_plan_pick_does_not_swallow_the_first_day_question(agent: Agent, fake: Any) -> None:
+    fake(choice("show_plan", milestone=None))
+    r = ask(agent, "شو لازم أعمل أول يوم دوام؟", role="Sales")
+    assert r.reply.kind == "answer" and [s.id for s in r.reply.sources] == ["K12"]
+    assert r.trace.agent.fallback_reason == "router_knowledge_question"
+    fake(choice("show_plan", milestone=None))
+    r = ask(agent, "شو الخطة المقترحة إلي لأول 90 يوم؟", role="Sales")
+    assert r.reply.kind == "plan"
+
+
+def test_a_new_question_leaves_practice_and_is_answered(agent: Agent, fake: Any) -> None:
+    client = fake()
+    r = ask(agent, "كم معرض عنا بالزرقاء؟", role="Delivery", state={"active_scenario": "S04"})
+    assert r.reply.kind == "answer" and r.state.active_scenario is None
+    assert [s.id for s in r.reply.sources] == ["K02"]
+    assert all("You route one message" not in m for m in client.prompts())  # no tool-choice call during practice
+
+
+def test_the_end_reply_invites_the_question_in_english_too(agent: Agent, fake: Any) -> None:
+    fake()
+    r = ask(agent, "سؤال ثاني", state={"active_scenario": "S02"})
+    assert r.reply.kind == "scenario_end" and "اسأل سؤالك" in r.reply.text_ar and r.reply.text_en is None
+    r = ask(agent, "another question", lang="en", state={"active_scenario": "S02"})
+    assert r.reply.text_en == "Practice on this situation has ended. Go ahead and ask your question."
+    r = ask(agent, "end practice", state={"active_scenario": "S02"})
+    assert r.reply.text_en is not None and "start another one" in r.reply.text_en

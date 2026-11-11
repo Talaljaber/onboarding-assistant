@@ -252,13 +252,25 @@ def _accept_feedback(
         return None, INVALID_JSON
     ids = [c["id"] for c in _checklist(checklist)]
     allowed_texts = [str(scenario.get("scenario_ar") or ""), str(scenario.get("suggested_good_response_ar") or "")]
-    v = verify_feedback(parsed, ids, allowed_texts, user_text=user_text)
+    # P16.1: the tip may not repeat a checklist line or name a fact outside the scenario (journey #8c/d)
+    lines = [str(c.get(k) or "") for c in checklist for k in ("text_ar", "done_ar", "add_ar")]
+    v = verify_feedback(parsed, ids, allowed_texts, user_text=user_text, checklist_texts=[t for t in lines if t])
     if not v.ok:
         return None, v.reason or BAD_SHAPE
     _fill(info, tip_dropped=bool(v.tip_reason), tip_reason=v.tip_reason)
     if v.tip_reason:
         log_event("feedback_tip_dropped", reason=v.tip_reason)
     return {"met": v.met, "missing": v.missing, "value": v.value, "tip_ar": v.tip_ar}, ""
+
+
+def _feedback_to_store(content: str, result: Mapping[str, Any]) -> str:
+    """The reply as cached: a dropped tip is removed first, so an unverified tip never sits in the cache."""
+    if result.get("tip_ar") is not None:
+        return content
+    parsed = parse_json_object(content)
+    if not isinstance(parsed, dict) or not parsed.get("tip_ar"):
+        return content
+    return json.dumps({**parsed, "tip_ar": None}, ensure_ascii=False)
 
 
 def llm_feedback(
@@ -304,7 +316,7 @@ def llm_feedback(
         if result is None:
             log_event("verifier_rejection", prompt=FEEDBACK_PROMPT, key=ex.key[:12], reason=reason, model=chat.model_id)
             return None, reason
-        ex.store(content)
+        ex.store(_feedback_to_store(content, result))
         return result, None
     except Exception as exc:  # noqa: BLE001
         log_event("llm_path_error", prompt=FEEDBACK_PROMPT, error=type(exc).__name__)

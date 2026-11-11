@@ -222,8 +222,12 @@ class Features:
             QuizBook.from_files(data_official),
         )
 
-    def match(self, text: str, *, min_cos: float = SCENARIO_MIN_COS) -> tuple[str, float] | None:
-        return self.scenarios.match(text, min_cos=min_cos)
+    def match(self, text: str, *, min_cos: float = SCENARIO_MIN_COS, role: str | None = None) -> tuple[str, float] | None:
+        return self.scenarios.match(text, min_cos=min_cos, role=role)
+
+    def department(self, scenario_id: str) -> str | None:
+        """The scenario's department (track), or None for an unknown id."""
+        return self.scenarios.get(scenario_id).department if self.scenarios.has(scenario_id) else None
 
     def first_for_role(self, role: str) -> str:
         found = self.scenarios.for_role(role)
@@ -492,8 +496,13 @@ def give_scenario_feedback(scenario_id: str, *, features: Features, user_text: s
                       feedback=trace_fb, mode=mode, attempt=attempt)
 
 
-def end_scenario() -> ToolResult:
-    return ToolResult(_reply("scenario_end", scen_mod.END_TEXT_AR), ClientState(active_scenario=None), ["render"])
+def end_scenario(*, next_question: bool = False, english: bool = False) -> ToolResult:
+    """Practice ends. P16.1: after «سؤال ثاني» / "another question" the line invites the question; the English
+    UI (or an English message) also gets the fixed English line in `text_en`."""
+    text_ar, text_en = (scen_mod.END_NEXT_Q_AR, scen_mod.END_NEXT_Q_EN) if next_question else (
+        scen_mod.END_TEXT_AR, scen_mod.END_TEXT_EN)
+    reply = _reply("scenario_end", text_ar, text_en=text_en if english else None)
+    return ToolResult(reply, ClientState(active_scenario=None), ["render"])
 
 
 def propose_progress(milestone: str, *, role: str, completed_ids: list[str], features: Features,

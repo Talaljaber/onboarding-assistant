@@ -290,6 +290,59 @@ def verify_tip(tip_ar: object, question: str, rows: Sequence[object] = ()) -> Ve
     return _reject(reason) if reason is not None else Verdict(True)
 
 
+#: P16.1 (journey #8c/d): a tip that repeats a checklist line, or names a situation fact (a delay, damage, a
+#: mismatch, a return, a discount, a warranty, an appliance, the family) the scenario, its checklist and the
+#: trainee's reply never mention, is dropped like any other failing tip (and is not cached).
+TIP_REPEATS_CHECKLIST = "tip_repeats_checklist"
+TIP_OFF_SCENARIO = "tip_off_scenario"
+_P = r"(?<![\w])(?:و|ب|ل|ال|بال|لل|وال|ع)?"
+_TIP_FACTS: tuple[re.Pattern[str], ...] = tuple(
+    re.compile(_P + r"(?:" + words + r")(?![\w])")
+    for words in (
+        r"تاخر\w*|تاخير\w*|متاخر\w*|يتاخر\w*|بتتاخر|delay\w*|late",
+        r"ضرر|اضرار|مضروب\w*|تالف\w*|مكسور\w*|خدش\w*|damage\w*|broken",
+        r"تعارض\w*|اختلاف\w*|mismatch\w*",
+        r"ارجاع|استرجاع|استبدال|ترجيع|refund\w*|return\w*",
+        r"خصم|تخفيض\w*|discount\w*",
+        r"كفاله|ضمان|warranty",
+        r"ثلاجه|ثلاجات|غساله|غسالات|تلفزيون|شاشه|مكيف|فرن|fridge|washer|tv",
+        r"اسره|عيله|عائله|family",
+    )
+)
+_TIP_TOKEN = re.compile(r"[^\W_]+")
+_TIP_PREFIX = re.compile(r"^(?:وال|بال|لل|ال|و)(?=\w{3})")
+_TIP_STOP = frozenset({"في", "من", "علي", "الي", "عن", "مع", "ان", "او", "ثم", "قبل", "بعد", "اي", "كل", "هذا", "هذه",
+                       "ما", "لا", "قد", "حتي", "اذا", "the", "a", "to", "and", "of"})
+#: Share of the shorter text's content words that the other text holds for a "repeat" (and at least 3 words).
+TIP_REPEAT_SHARE = 0.6
+
+
+def _tip_words(text: str) -> set[str]:
+    out = set()
+    for w in _TIP_TOKEN.findall(_normalize(text)):
+        w = _TIP_PREFIX.sub("", w)
+        if len(w) > 2 and w not in _TIP_STOP:
+            out.add(w)
+    return out
+
+
+def tip_scope_reason(tip_ar: str, context_texts: Sequence[str], checklist_texts: Sequence[str]) -> str | None:
+    """`tip_off_scenario` / `tip_repeats_checklist` / None. `context_texts`: the scenario, its suggested response
+    and the trainee's reply; `checklist_texts`: every checklist item's text, done and add lines."""
+    tip = _normalize(tip_ar)
+    context = _normalize(" ".join([*context_texts, *checklist_texts]))
+    for rx in _TIP_FACTS:
+        if rx.search(tip) and not rx.search(context):
+            return TIP_OFF_SCENARIO
+    words = _tip_words(tip_ar)
+    for line in checklist_texts:
+        other = _tip_words(line)
+        shared = words & other
+        if len(shared) >= 3 and len(shared) >= TIP_REPEAT_SHARE * min(len(words), len(other)):
+            return TIP_REPEATS_CHECKLIST
+    return None
+
+
 @dataclass(frozen=True)
 class FeedbackVerdict:
     ok: bool
@@ -307,9 +360,11 @@ def verify_feedback(
     allowed_texts: Sequence[str],
     *,
     user_text: str = "",
+    checklist_texts: Sequence[str] | None = None,
 ) -> FeedbackVerdict:
     """`{"met","missing","value","tip_ar"}`: met/missing ⊆ checklist ids and disjoint, value ∈ VALUES.
-    A failing tip is dropped (`tip_ar=None`, `tip_reason` set); the rest is still accepted."""
+    A failing tip is dropped (`tip_ar=None`, `tip_reason` set); the rest is still accepted. With
+    `checklist_texts` (P16.1) the tip must also pass `tip_scope_reason`."""
     if not isinstance(reply, Mapping):
         return FeedbackVerdict(False, INVALID_JSON)
     met, missing, value = reply.get("met"), reply.get("missing"), reply.get("value")
@@ -332,7 +387,12 @@ def verify_feedback(
     if tip is not None and not (isinstance(tip, str) and not tip.strip()):
         verdict = verify_tip(tip, user_text, allowed_texts)
         if verdict.ok and isinstance(tip, str):
-            tip_ok = tip.strip()
+            scope = (tip_scope_reason(tip, [*allowed_texts, user_text], checklist_texts)
+                     if checklist_texts is not None else None)
+            if scope is None:
+                tip_ok = tip.strip()
+            else:
+                tip_reason = scope
         else:
             tip_reason = verdict.reason
     met_out = list(dict.fromkeys(met_ids))
@@ -723,7 +783,10 @@ def _count_value(token_norm: str) -> str | None:
 
 
 #: Words that mark the 4-digit number after them as a year (normalised, with and without the final ة/ه).
-_YEAR_WORDS = frozenset({"عام", "سنه", "سنة", "العام", "السنه", "السنة"})
+_YEAR_WORDS = frozenset({"عام", "سنه", "سنة", "العام", "السنه", "السنة", "year", "in", "since"})
+#: P16.1 (journey #14): English unit words map to the Arabic unit stem of the KB rows («17 معرضاً», «90 يوماً»).
+_EN_CHECK_UNITS = {"showroom": "معرض", "showrooms": "معرض", "day": "يوم", "days": "يوم"}
+_EN_COPULA = frozenset({"is", "are", "was", "were"})
 _YEAR_UNIT = "عام"
 
 
@@ -750,7 +813,10 @@ def number_spans(text: str) -> list[NumberSpan]:
         if j + 1 < len(toks):
             nxt = toks[j + 1][2]
             if _CHECK_LETTER.search(nxt) and not _NUMBER.search(_number_words_to_digits(nxt)):
-                unit = nxt
+                unit = _EN_CHECK_UNITS.get(nxt, nxt)
+        # P16.1: English "the number of showrooms is 20": the unit stands before "is / are / was / were".
+        if unit is None and i >= 2 and toks[i - 1][2] in _EN_COPULA and toks[i - 2][2] in _EN_CHECK_UNITS:
+            unit = _EN_CHECK_UNITS[toks[i - 2][2]]
         # A year has its marker before it, not after: «عام 1991», «سنة 1995» (any year word counts as one unit).
         if value.isdigit() and len(value) == 4 and i > 0 and toks[i - 1][2] in _YEAR_WORDS:
             unit = _YEAR_UNIT
