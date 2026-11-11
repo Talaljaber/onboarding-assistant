@@ -865,6 +865,12 @@ export const ar = {
     unavailable: "الردود غير متاحة الآن.",
     downloadFailed: "تعذّر تنزيل الملف.",
   },
+  /** P16.3: bilingual learning content (English UI shows authored English; Arabic stays the reference). */
+  contentEn: {
+    arabicOnly: "بالعربية فقط",
+    arabicOnlyHint: "هذه الملاحظة كتبها النموذج بالعربية ولا تُترجم.",
+    sourceArabic: "نص المصدر بالعربية",
+  },
 };
 
 /** Dictionary shape: the same nesting as `ar`, every leaf a string. */

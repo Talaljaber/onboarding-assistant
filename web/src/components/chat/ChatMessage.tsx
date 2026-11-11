@@ -4,7 +4,7 @@ import type { AnswerReply, PlanReply, ProgressProposalReply, QuizReply, RefusalR
 import { planActivityIds, wouldBe } from "@/state/progress";
 import { useAppState } from "@/state/useAppState";
 import { MILESTONE_TITLE } from "@/components/plan/shared";
-import { useT } from "@/i18n";
+import { useLang, useT } from "@/i18n";
 import { AnswerCard, EmploymentCard, RefusalCard, UnconfirmedCard } from "./AnswerCards";
 import { AssistantBubble, AssistantFrame } from "./AssistantBubble";
 import { PlanCard, QuizCard } from "./PlanQuizCards";
@@ -46,6 +46,7 @@ export function ChatMessage(p: ChatMessageProps) {
   const app = useAppState();
   const health = useHealthInfo();
   const t = useT();
+  const { lang } = useLang();
   const kind = cardKind(item);
   const r = item.reply;
 
@@ -83,7 +84,8 @@ export function ChatMessage(p: ChatMessageProps) {
     case "scenario_end":
       card = (
         <div data-kind="scenario_end">
-          <AssistantBubble text={r.text_ar} />
+          {/* P16.3: the fixed exit reply's authored English, in the English UI only. */}
+          <AssistantBubble text={r.text_ar} textEn={lang === "en" ? r.text_en : null} />
         </div>
       );
       break;

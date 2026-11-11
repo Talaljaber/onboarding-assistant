@@ -5,6 +5,7 @@ import { useT } from "@/i18n";
 import { pct } from "@/lib/format";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
+import { ContentText } from "../ui/ContentText";
 import { Icon } from "../ui/Icon";
 import { IconTile } from "../ui/IconTile";
 import { ProgressBar } from "../ui/ProgressBar";
@@ -100,8 +101,8 @@ export function ProgressCard({ proposal, label, resolved, busy, currentPercent, 
                     onChange={() => toggle(id)}
                   />
                   {/* The activity id is for code only (data-activity-id); people read the title. */}
-                  <span lang="ar" dir="rtl" data-activity-id={id} className="min-w-0 flex-1 text-base leading-7 text-fg-1">
-                    {proposal.titles_ar[i] ?? id}
+                  <span data-activity-id={id} className="min-w-0 flex-1 text-start text-base leading-7 text-fg-1">
+                    <ContentText ar={proposal.titles_ar[i] ?? id} en={proposal.titles_en?.[i]} />
                   </span>
                 </label>
               </li>

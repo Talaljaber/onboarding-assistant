@@ -2,6 +2,7 @@ import { useId } from "react";
 import type { Role, ScenarioOut } from "@/api/types";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
+import { contentProps, useContent } from "@/components/ui/ContentText";
 import { Icon } from "@/components/ui/Icon";
 import { pressable, surface } from "@/components/ui/recipes";
 import { ValueTag } from "@/components/ui/ValueLabel";
@@ -23,6 +24,7 @@ export interface ScenarioCardProps {
  */
 export function ScenarioCard({ scenario, done, otherRole }: ScenarioCardProps) {
   const t = useT();
+  const situation = useContent()(scenario.scenario_ar, scenario.scenario_en);
   const titleId = useId();
   const roleName = otherRole ? t(otherRole === "Sales" ? "role.sales" : "role.delivery") : "";
   return (
@@ -44,8 +46,8 @@ export function ScenarioCard({ scenario, done, otherRole }: ScenarioCardProps) {
             </Badge>
           )}
         </div>
-        <h3 id={titleId} lang="ar" dir="rtl" className="m-0 text-start text-lg font-bold leading-relaxed text-fg-1">
-          {scenario.scenario_ar}
+        <h3 id={titleId} {...contentProps(situation)} className="m-0 text-start text-lg font-bold leading-relaxed text-fg-1">
+          {situation.text}
         </h3>
         {otherRole && (
           <p className="m-0 flex items-center gap-1.5 text-sm text-fg-2">

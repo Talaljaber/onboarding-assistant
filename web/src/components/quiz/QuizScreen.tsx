@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ChipGroup } from "@/components/ui/Chip";
 import { cn } from "@/components/ui/cn";
+import { ContentText, contentProps, useContent } from "@/components/ui/ContentText";
 import { Icon } from "@/components/ui/Icon";
 import { Loadable } from "@/components/ui/Loadable";
 import { Notice } from "@/components/ui/Notice";
@@ -30,6 +31,7 @@ const KEYS: QuizOptionKey[] = ["A", "B", "C"];
 
 export default function QuizScreen() {
   const t = useT();
+  const pick = useContent();
   const toast = useToast();
   const { role, profileId, plan, progress, quiz } = useAppState();
   const [status, setStatus] = useState<Status>("loading");
@@ -63,6 +65,11 @@ export default function QuizScreen() {
 
   const item = items[index];
   const total = items.length;
+  // P16.3: the question and its options always share one language and direction (the server sends the
+  // English question and options together, or neither).
+  const question = item ? pick(item.question_ar, item.options_en ? item.question_en : null) : null;
+  const optionText = (k: QuizOptionKey) =>
+    item && question?.lang === "en" && item.options_en ? item.options_en[k] : item?.options[k] ?? "";
 
   // After "check", bring the verdict and its explanation into the band between the sticky header and
   // the sticky action bar (phones), so the bar never hides it. Instant when motion is reduced.
@@ -164,7 +171,9 @@ export default function QuizScreen() {
                 <ul className="m-0 flex list-none flex-col gap-3 border-t border-line p-0 pt-5">
                   {wrong.map((q) => (
                     <li key={q.id} className={cn(surface.panel, "flex flex-col gap-3 p-4")}>
-                      <span lang="ar" dir="rtl" className="text-start font-medium text-fg-1">{q.question_ar}</span>
+                      <span className="text-start font-medium text-fg-1">
+                        <ContentText ar={q.question_ar} en={q.options_en ? q.question_en : null} />
+                      </span>
                       {ask(q)}
                     </li>
                   ))}
@@ -182,7 +191,9 @@ export default function QuizScreen() {
                 <p className="m-0 text-sm font-semibold text-accent">{t("quiz.question", { n: index + 1, total })}</p>
                 <ProgressBar value={total ? ((index + 1) / total) * 100 : 0} label={t("uiLearning.quizProgress")} showValue={false} />
               </div>
-              <h2 lang="ar" dir="rtl" className="text-start text-xl font-bold leading-relaxed text-fg-1">{item.question_ar}</h2>
+              <h2 {...(question ? contentProps(question) : {})} className="text-start text-xl font-bold leading-relaxed text-fg-1">
+                {question?.text}
+              </h2>
               <div className="flex flex-col gap-2">
                 <p className="m-0 text-sm text-fg-3" aria-hidden="true">{t("uiLearning.quizPick")}</p>
                 <ChipGroup
@@ -194,9 +205,9 @@ export default function QuizScreen() {
                   }}
                   items={KEYS.map((k) => ({
                     id: k,
-                    label: item.options[k],
-                    lang: "ar",
-                    dir: "rtl" as const,
+                    label: optionText(k),
+                    lang: question?.lang ?? "ar",
+                    dir: question?.dir ?? "rtl",
                     disabled: result !== null && result.correct_option !== k && picked !== k,
                     tone: result ? (result.correct_option === k ? "ok" : picked === k ? "danger" : "neutral") : "neutral",
                     ...(result && result.correct_option === k

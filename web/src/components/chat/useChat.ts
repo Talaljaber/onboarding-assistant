@@ -216,7 +216,9 @@ export function useChat(): UseChat {
     (option: Option) => {
       if (busyRef.current) return;
       const lastUser = lastUserText();
-      commit((cur) => [...cur, { id: newId(), type: "user", text: option.text_ar }]);
+      // P16.3: the user's bubble repeats the option as it was shown (English UI: its authored English).
+      const shown = langRef.current === "en" && option.text_en ? option.text_en : option.text_ar;
+      commit((cur) => [...cur, { id: newId(), type: "user", text: shown }]);
       void run({ message: "", lastUser, confirm: null, optionId: option.id, resolveId: null });
     },
     [commit, run],

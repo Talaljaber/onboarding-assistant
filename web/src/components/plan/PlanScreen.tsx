@@ -9,6 +9,7 @@ import { Loadable } from "@/components/ui/Loadable";
 import { Page, PageHeader } from "@/components/ui/Page";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { surface } from "@/components/ui/recipes";
+import { contentProps, useContent } from "@/components/ui/ContentText";
 import { useT } from "@/i18n";
 import { useAppState } from "@/state/useAppState";
 import { ActivityChecklist } from "./ActivityChecklist";
@@ -17,6 +18,7 @@ import { currentMilestone, MILESTONE_TITLE } from "./shared";
 
 export default function PlanScreen() {
   const t = useT();
+  const pick = useContent();
   const { plan, planStatus, reloadPlan, progress } = useAppState();
   const [summary, setSummary] = useState(false);
   const state = planStatus === "ready" && plan ? "ready" : planStatus === "error" ? "error" : "loading";
@@ -62,6 +64,7 @@ export default function PlanScreen() {
                   const complete = total > 0 && doneN === total;
                   const isCurrent = i === current;
                   const last = i === plan.milestones.length - 1;
+                  const goal = pick(m.learning_goal_ar, m.learning_goal_en);
                   return (
                     <li key={m.name} data-milestone={m.name} className="relative flex gap-3 sm:gap-5">
                       {/* timeline rail: a marker per milestone and a line down to the next one */}
@@ -117,8 +120,8 @@ export default function PlanScreen() {
                           </div>
                           <span className="text-sm text-fg-3">{t("progress.ofTotal", { done: doneN, total })}</span>
                         </header>
-                        <p lang="ar" dir="rtl" className="mb-4 text-start text-base leading-relaxed text-fg-2">
-                          {m.learning_goal_ar}
+                        <p {...contentProps(goal)} className="mb-4 text-start text-base leading-relaxed text-fg-2">
+                          {goal.text}
                         </p>
                         <h3 className="sr-only">{t("plan.activities")}</h3>
                         <ActivityChecklist milestone={m} onOpenSummary={() => setSummary(true)} />

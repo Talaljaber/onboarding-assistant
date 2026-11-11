@@ -1,6 +1,6 @@
 import type { Dict } from "./ar";
 
-/** English dictionary. Changes UI chrome only; data rows always render in Arabic. */
+/** English dictionary. Changes UI chrome only; K-rows always render in Arabic, fixed learning content shows its authored English (P16.3). */
 export const en: Dict = {
   app: {
     name: "Onboarding Academy",
@@ -852,5 +852,11 @@ export const en: Dict = {
     failed: "The reply could not be sent.",
     unavailable: "Replies are not available right now.",
     downloadFailed: "The file could not be downloaded.",
+  },
+  /** P16.3: bilingual learning content (English UI shows authored English; Arabic stays the reference). */
+  contentEn: {
+    arabicOnly: "Arabic only",
+    arabicOnlyHint: "The model wrote this note in Arabic; it is not translated.",
+    sourceArabic: "Source text in Arabic",
   },
 };

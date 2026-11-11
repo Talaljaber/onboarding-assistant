@@ -21,6 +21,7 @@ import { isoDay } from "@/lib/format";
 import { practisedScenarios } from "@/state/progress";
 import { useAppState } from "@/state/useAppState";
 import { ProgressRing } from "./ProgressRing";
+import { ContentText } from "@/components/ui/ContentText";
 
 /**
  * One milestone as a compact summary row linking to the plan (the plan screen owns ticking):
@@ -132,7 +133,7 @@ export default function ProgressScreen() {
                 <h2 className="text-sm font-semibold text-accent">{t("uiLearning.nextUp")}</h2>
                 {nextActivity && current >= 0 ? (
                   <p className="m-0 text-base font-bold text-fg-1">
-                    <span lang="ar" dir="rtl">{nextActivity.title_ar}</span>
+                    <ContentText ar={nextActivity.title_ar} en={nextActivity.title_en} />
                     <span className="font-normal text-fg-2"> · {t(MILESTONE_TITLE[milestones[current]!.name])}</span>
                   </p>
                 ) : (

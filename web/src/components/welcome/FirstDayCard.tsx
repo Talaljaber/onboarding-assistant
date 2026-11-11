@@ -13,6 +13,7 @@ import { Icon } from "@/components/ui/Icon";
 import { link, surface } from "@/components/ui/recipes";
 import { useT } from "@/i18n";
 import { useAppState } from "@/state/useAppState";
+import { ContentText } from "@/components/ui/ContentText";
 
 /** Onboarding policy rows about the time before and right after the first day: K11 (prepared before
  * you start), K12 (first-day orientation), K13 (welcome email in the first three days). */
@@ -94,8 +95,8 @@ export function FirstDayCard() {
                 {week.activities.map((a) => (
                   <li key={a.id} data-activity={a.id} className={cn(surface.card, "flex items-center gap-3 px-3 py-2.5")}>
                     <Icon name={KIND_ICON[a.kind]} size={18} className="shrink-0 text-accent" />
-                    <span lang="ar" dir="rtl" className="min-w-0 flex-1 text-start text-base text-fg-1">
-                      {a.title_ar}
+                    <span className="min-w-0 flex-1 text-start text-base text-fg-1">
+                      <ContentText ar={a.title_ar} en={a.title_en} />
                     </span>
                   </li>
                 ))}
