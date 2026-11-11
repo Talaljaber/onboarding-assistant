@@ -33,6 +33,8 @@ from app.store.base import (
     intern_input,
     intern_row,
     turn_log_record,
+    turn_metric_row,
+    TURN_METRIC_FIELDS,
     valid_uuid,
     DRAFT_COLUMNS,
     IMPORT_COLUMNS,
@@ -422,6 +424,13 @@ class LocalStore:
             return True
 
         return self._run("add_turn_log", False, op)
+
+    def turn_metrics(self) -> list[dict[str, Any]]:
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            cur = c.execute(f"select {', '.join(TURN_METRIC_FIELDS)} from turn_logs order by at, id")
+            return [turn_metric_row({**dict(r), "cited_ids": json.loads(r["cited_ids"] or "[]")}) for r in cur]
+
+        return self._run("turn_metrics", [], op)
 
     # Interns ------------------------------------------------------------------------------------
 

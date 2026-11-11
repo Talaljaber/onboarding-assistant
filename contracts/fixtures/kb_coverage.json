@@ -1,0 +1,109 @@
+{
+  "total_turns": 19,
+  "kb_rows": 18,
+  "top_cited": [
+    {
+      "id": "K16",
+      "topic": "Policy",
+      "keyword_en": "Leave approval",
+      "count": 4
+    },
+    {
+      "id": "K14",
+      "topic": "Onboarding",
+      "keyword_en": "Probation",
+      "count": 2
+    },
+    {
+      "id": "K15",
+      "topic": "Policy",
+      "keyword_en": "Attendance",
+      "count": 2
+    },
+    {
+      "id": "K01",
+      "topic": "Company",
+      "keyword_en": "1991",
+      "count": 1
+    },
+    {
+      "id": "K02",
+      "topic": "Company",
+      "keyword_en": "17 showrooms",
+      "count": 1
+    },
+    {
+      "id": "K05",
+      "topic": "Values",
+      "keyword_en": "Integrity",
+      "count": 1
+    },
+    {
+      "id": "K06",
+      "topic": "Values",
+      "keyword_en": "One Team",
+      "count": 1
+    },
+    {
+      "id": "K07",
+      "topic": "Values",
+      "keyword_en": "Perseverance",
+      "count": 1
+    }
+  ],
+  "never_cited": [
+    {
+      "id": "K03",
+      "topic": "Company",
+      "keyword_en": "Vision",
+      "count": 0
+    },
+    {
+      "id": "K04",
+      "topic": "Company",
+      "keyword_en": "Mission",
+      "count": 0
+    },
+    {
+      "id": "K08",
+      "topic": "Values",
+      "keyword_en": "Customer Centricity",
+      "count": 0
+    },
+    {
+      "id": "K09",
+      "topic": "Values",
+      "keyword_en": "Social Responsibility",
+      "count": 0
+    },
+    {
+      "id": "K10",
+      "topic": "Onboarding",
+      "keyword_en": "HR owns onboarding",
+      "count": 0
+    },
+    {
+      "id": "K13",
+      "topic": "Onboarding",
+      "keyword_en": "Welcome email",
+      "count": 0
+    }
+  ],
+  "windows": [
+    {
+      "days": 7,
+      "turns": 8,
+      "questions": 6,
+      "refusals": 2,
+      "refusal_share": 0.3333
+    },
+    {
+      "days": 30,
+      "turns": 17,
+      "questions": 15,
+      "refusals": 3,
+      "refusal_share": 0.2
+    }
+  ],
+  "since": "2026-10-01T21:00:00+00:00"
+}

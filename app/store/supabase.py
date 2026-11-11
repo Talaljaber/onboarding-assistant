@@ -36,6 +36,8 @@ from app.store.base import (
     intern_input,
     intern_row,
     turn_log_record,
+    turn_metric_row,
+    TURN_METRIC_FIELDS,
     valid_uuid,
     DRAFT_COLUMNS,
     IMPORT_COLUMNS,
@@ -55,6 +57,9 @@ _PROFILE_SELECT = "id,alias,role,intern_id,created_at"
 _IN_CHUNK = 80  # profile ids per `in.(...)` filter, so URLs stay short
 _IMPORT_SELECT = ",".join(IMPORT_COLUMNS)
 _DRAFT_SELECT = ",".join(DRAFT_COLUMNS)
+_METRICS_SELECT = ",".join(TURN_METRIC_FIELDS)
+_PAGE = 1000  # PostgREST's default max rows per response
+_METRICS_MAX_PAGES = 100  # KB coverage reads at most 100k turn logs
 
 
 class _Conflict(Exception):
@@ -408,6 +413,19 @@ class SupabaseStore:
         return self._call(
             "add_turn_log", lambda: self._insert("turn_logs", rec), lambda s: s.add_turn_log(**fields), False
         )
+
+    def turn_metrics(self) -> list[dict[str, Any]]:
+        def remote() -> list[dict[str, Any]]:
+            out: list[dict[str, Any]] = []
+            for page in range(_METRICS_MAX_PAGES):
+                rows = self._list("turn_logs", {"select": _METRICS_SELECT, "order": "at.asc,id.asc",
+                                                "limit": str(_PAGE), "offset": str(page * _PAGE)})
+                out += [turn_metric_row(r) for r in rows]
+                if len(rows) < _PAGE:
+                    break
+            return out
+
+        return self._call("turn_metrics", remote, lambda s: s.turn_metrics(), [])
 
     # Interns ------------------------------------------------------------------------------------
 

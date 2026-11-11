@@ -31,6 +31,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app import __version__
 from app.agent import Agent
 from app import interns as interns_view
+from app import coverage
 from app.errors import ApiError
 from app.kb import Row
 from app.kb_import import service as kb_import
@@ -507,6 +508,12 @@ def build_router() -> APIRouter:
                                                                                list(body.draft_ids)))
         return _json(ApproveResponse(rows=[_kb_row(x) for x in rows], drafts=drafts, version=agent.kb.version(),
                                      reindex_ms=ms, oos_disabled=list(agent.retriever.last_disabled)))
+
+    # -------------------------------------------------------------------------- KB coverage (P13.1)
+    @r.get("/admin/kb/coverage", dependencies=ADMIN_ONLY)
+    def kb_coverage(request: Request) -> JSONResponse:
+        """Aggregate and anonymous: cited rows, never-cited rows, turns vs refusals (no per-intern data)."""
+        return _json(coverage.build(_store(request).turn_metrics(), _agent(request).kb.rows()))
 
     # -------------------------------------------------------------------------- admin sign-in
     @r.post("/admin/login")

@@ -428,6 +428,20 @@ consecutive next free ids, and the drafts now `approved` with their `row_id`. Sa
 draft is not a valid row. `POST /api/kb/reset` removes these rows like every added row and puts their drafts
 back to `draft` with `row_id: null`.
 
+## 6d. KB coverage (P13.1, admin only)
+
+### GET /api/admin/kb/coverage
+
+→ `KbCoverage` `{total_turns, kb_rows, top_cited: CoverageRow[], never_cited: CoverageRow[],
+windows: CoverageWindow[], since}` with `CoverageRow` = `{id, topic, keyword_en, count}` and
+`CoverageWindow` = `{days, turns, questions, refusals, refusal_share}`. Aggregate and anonymous, computed
+from the turn logs' `status`, `band`, `cited_ids` and `at` only: never a profile id, a name, a per-intern
+count or chat text. `top_cited`: at most 8 K-rows, most cited first (ties by id; a row counts once per
+turn); `topic`/`keyword_en` are null for a cited id no longer in the KB. `never_cited`: current KB rows
+with no citation in any log (`count: 0`), in id order. `windows`: the last 7 and 30 days; `questions` =
+turns with an answer status, `refusals` = `unsupported` turns, `refusal_share` = refusals / questions
+(4 decimals, null when no questions). `since` = oldest log counted, null with none. 401 without the admin token.
+
 ### GET /api/health
 
 Always 200 once the app is up; `?probe=1` re-runs the LLM probe. → `Health`:
@@ -471,6 +485,7 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
   `admin_session.json`;
 - document import (P12.1): `import_capabilities.json`, `import_create_request.json`, `import_detail.json`,
   `imports_list.json`, `draft_patch_request.json`, `draft.json`, `approve_request.json`, `approve.json`;
+- KB coverage (P13.1): `kb_coverage.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,
   `error_423.json`, `error_500.json`, `error_401.json`, `error_429.json`, `error_503.json`.
 

@@ -88,6 +88,7 @@ FIXTURES: dict[str, type[BaseModel]] = {
     "draft.json": s.KbDraft,
     "approve_request.json": s.ApproveRequest,
     "approve.json": s.ApproveResponse,
+    "kb_coverage.json": s.KbCoverage,
 }
 
 # One response fixture per endpoint (the request fixtures are listed in FIXTURES above).
@@ -120,6 +121,7 @@ ENDPOINT_FIXTURES = {
     "GET /api/admin/kb/imports/{id}": "import_detail.json",
     "PATCH /api/admin/kb/drafts/{id}": "draft.json",
     "POST /api/admin/kb/imports/{id}/approve": "approve.json",
+    "GET /api/admin/kb/coverage": "kb_coverage.json",
 }
 
 REQUEST_MODELS: dict[type[BaseModel], str] = {
@@ -477,3 +479,17 @@ def test_imported_rows_are_added_rows_and_drafts_carry_no_score() -> None:
     banned = re.compile(r"score|grade|rating|confidence")
     keys = all_keys(load("import_detail.json")) | all_keys(approve)
     assert not [k for k in keys if banned.search(k)]
+
+
+def test_kb_coverage_is_aggregate_and_anonymous() -> None:
+    """P13.1: no per-intern field, no score or ranking word, no text; shares stay within 0..1."""
+    banned = re.compile(r"profile|intern|name|alias|score|rank|behind|attention|text|message|answer")
+    models = (s.KbCoverage, s.CoverageRow, s.CoverageWindow)
+    keys = all_keys(load("kb_coverage.json")) | {f for m in models for f in m.model_fields}
+    assert not [k for k in keys if banned.search(k)]
+    cov = s.KbCoverage.model_validate(load("kb_coverage.json"))
+    assert len(cov.top_cited) <= s.COVERAGE_TOP
+    assert [w.days for w in cov.windows] == list(s.COVERAGE_WINDOWS)
+    assert all(r.count == 0 for r in cov.never_cited)
+    with pytest.raises(ValidationError):
+        s.CoverageWindow.model_validate({"days": 7, "turns": 1, "questions": 1, "refusals": 1, "refusal_share": 1.5})
