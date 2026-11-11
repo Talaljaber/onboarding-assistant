@@ -10,11 +10,12 @@ import { AssistantBubble, AssistantFrame } from "./AssistantBubble";
 import { PlanCard, QuizCard } from "./PlanQuizCards";
 import { ProgressCard } from "./ProgressCard";
 import { ScenarioFeedbackCard, ScenarioStartCard } from "./ScenarioCard";
-import { cardKind, type CardKind, type ReplyItem } from "./model";
+import { cardKind, type ReplyItem } from "./model";
 import type { Option } from "@/api/types";
 import { surface } from "../ui/recipes";
 import { AskAgainHint, RecallNotice } from "./RecallNotice";
 import { askAgainHint, recallOf, type LiveKb } from "./recall";
+import { RECALL_KINDS } from "./attention";
 
 export interface ChatMessageProps {
   item: ReplyItem;
@@ -34,10 +35,9 @@ export interface ChatMessageProps {
   liveKb?: LiveKb | null;
   canReask?: boolean;
   onReask?: () => void;
+  /** P16.5: the user's question before this reply (the premise line's Rumour Check link prefills it). */
+  question?: string | null;
 }
-
-/** Cards that cite K-rows the recall compares (answers, the related row, the employment disclaimer's rows). */
-const RECALL_KINDS: ReadonlySet<CardKind> = new Set(["answer", "partial", "unconfirmed", "employment"]);
 
 const NO_PROPOSAL = { milestone: "Day 30", activity_ids: [], titles_ar: [], current_percent: 0, proposed_percent: 0 } as const;
 
@@ -53,10 +53,10 @@ export function ChatMessage(p: ChatMessageProps) {
   switch (kind) {
     case "answer":
     case "partial":
-      card = <AnswerCard reply={r as AnswerReply} partial={kind === "partial"} mode={item.mode} />;
+      card = <AnswerCard reply={r as AnswerReply} partial={kind === "partial"} mode={item.mode} question={p.question} />;
       break;
     case "unconfirmed":
-      card = <UnconfirmedCard reply={r as AnswerReply} />;
+      card = <UnconfirmedCard reply={r as AnswerReply} question={p.question} />;
       break;
     case "refusal":
       card = <RefusalCard reply={r as RefusalReply} />;
@@ -134,7 +134,7 @@ export function ChatMessage(p: ChatMessageProps) {
   const reask = { canReask: Boolean(p.canReask && p.onReask), busy: p.busy, onReask: () => p.onReask?.() };
   if (recall.length > 0) {
     card = (
-      <div data-recall="changed" className={`${surface.amber} flex w-full min-w-0 flex-col gap-3 p-2 sm:p-3`}>
+      <div data-recall="changed" tabIndex={-1} className={`${surface.amber} flex w-full min-w-0 flex-col gap-3 p-2 outline-none sm:p-3`}>
         <RecallNotice recall={recall} at={item.at} {...reask} />
         {card}
       </div>

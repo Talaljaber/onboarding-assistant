@@ -5,6 +5,7 @@ import { useLang, useT, type DictKey } from "@/i18n";
 import { Icon } from "../ui/Icon";
 import { Notice } from "../ui/Notice";
 import { surface } from "../ui/recipes";
+import { PremiseLine } from "./PremiseLine";
 import { SourceRow, SourcesBlock } from "./SourceRow";
 
 /** Mirror of the server's `PARTIAL_NOTE_AR` (app/answer.py), which ends the text of a partial answer. */
@@ -33,7 +34,18 @@ const REFUSAL_EN: Partial<Record<RefusalReason, DictKey>> = {
  * An answer from K-rows. `partial` adds the fixed trailer. The English helper translation (English UI, or a
  * question asked in English) shows above, never instead of, the Arabic.
  */
-export function AnswerCard({ reply, partial, mode = null }: { reply: AnswerReply; partial: boolean; mode?: Mode | null }) {
+export function AnswerCard({
+  reply,
+  partial,
+  mode = null,
+  question,
+}: {
+  reply: AnswerReply;
+  partial: boolean;
+  mode?: Mode | null;
+  /** P16.5: the user's question (the premise line's Rumour Check link prefills it). */
+  question?: string | null;
+}) {
   const t = useT();
   const { lang } = useLang();
   // The server already ends a partial text with its note: split on it to keep the divider styling,
@@ -76,13 +88,13 @@ export function AnswerCard({ reply, partial, mode = null }: { reply: AnswerReply
         </p>
       )}
       {/* "Built only from the rows listed" is the Sources heading's hint and the greeting's promise. */}
-      <SourcesBlock sources={reply.sources} answer={reply.text_ar} />
+      <SourcesBlock sources={reply.sources} answer={reply.text_ar} premise={reply.premise} question={question} />
     </article>
   );
 }
 
 /** The offline middle band: no confirmed answer, one possibly related row folded away. */
-export function UnconfirmedCard({ reply }: { reply: AnswerReply }) {
+export function UnconfirmedCard({ reply, question }: { reply: AnswerReply; question?: string | null }) {
   const t = useT();
   const { lang } = useLang();
   const related = reply.sources[0];
@@ -93,6 +105,12 @@ export function UnconfirmedCard({ reply }: { reply: AnswerReply }) {
           {reply.text_ar || t("chat.unconfirmed")}
         </p>
         {lang === "en" && reply.text_ar && <EnHelper text={t("chatEn.notConfirmed")} />}
+        {/* P16.5: the number difference is visible even while the related row stays folded. */}
+        {related && reply.premise?.row_id === related.id && (
+          <div className="mt-2">
+            <PremiseLine premise={reply.premise} question={question} />
+          </div>
+        )}
         {related && (
           <details className="mt-2">
             <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-accent [&::-webkit-details-marker]:hidden">

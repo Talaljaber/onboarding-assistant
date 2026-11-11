@@ -21,11 +21,13 @@ export const FIRST_DAY_ROWS = ["K11", "K12", "K13"] as const;
 /** The chat hand-off: `?ask=` prefills the composer and never sends by itself (ChatScreen). */
 export const askHref = (q: string) => `#/chat?ask=${encodeURIComponent(q)}`;
 
-export function FirstDayCard() {
+/** P16.5: collapsed it is one compact line (so the chat greeting stays in view); `defaultOpen` when the person
+ * asked for it from the chat header link after the first message. */
+export function FirstDayCard({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
   const t = useT();
   const { plan } = useAppState();
   const panel = useId();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [rows, setRows] = useState<KbRow[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
@@ -49,16 +51,27 @@ export function FirstDayCard() {
   const question = t("firstDay.question");
 
   return (
-    <section data-first-day aria-labelledby={`${panel}-title`} className={cn(surface.soft, "flex flex-col gap-4 p-4 sm:p-5")}>
-      <div className="flex items-start gap-3">
-        <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-md bg-surface-0 text-accent">
-          <Icon name="calendar" size={20} />
+    <section
+      data-first-day
+      data-open={open || undefined}
+      aria-labelledby={`${panel}-title`}
+      className={cn(surface.soft, "flex flex-col", open ? "gap-4 p-4 sm:p-5" : "ps-3 pe-1")}
+    >
+      <div className={cn("flex gap-3", open ? "items-start" : "items-center gap-2")}>
+        <span
+          aria-hidden="true"
+          className={cn(
+            "grid shrink-0 place-items-center rounded-md text-accent",
+            open ? "size-10 bg-surface-0" : "size-4",
+          )}
+        >
+          <Icon name="calendar" size={open ? 20 : 16} />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 id={`${panel}-title`} className="text-lg font-bold leading-snug text-fg-1">
+          <h2 id={`${panel}-title`} className={cn("font-bold leading-snug text-fg-1", open ? "text-lg" : "truncate text-base")}>
             {t("firstDay.title")}
           </h2>
-          <p className="m-0 mt-0.5 text-sm text-fg-2">{t("firstDay.intro")}</p>
+          {open && <p className="m-0 mt-0.5 text-sm text-fg-2">{t("firstDay.intro")}</p>}
         </div>
         <button
           type="button"

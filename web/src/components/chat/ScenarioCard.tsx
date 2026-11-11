@@ -7,6 +7,7 @@ import { cn } from "../ui/cn";
 import { Icon, type IconName } from "../ui/Icon";
 import { sourceQuote, surface } from "../ui/recipes";
 import { ValueTag } from "../ui/ValueLabel";
+import { revealSoon } from "./reveal";
 
 /** Card title with a small inline flask (no icon tile: the thread already gives context). */
 function CardTitle({ children }: { children: ReactNode }) {
@@ -227,7 +228,11 @@ export function ScenarioFeedbackCard({ feedback, live, customer = false, onTryAg
             className="-ms-3"
             aria-expanded={open}
             aria-controls={suggestedId}
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => {
+              setOpen(!open);
+              // P16.5 (U12): the suggested reply opens below the fold on phones: bring it into view.
+              if (!open) revealSoon(() => document.getElementById(suggestedId));
+            }}
           >
             {t("pushback.stuck")}
           </Button>

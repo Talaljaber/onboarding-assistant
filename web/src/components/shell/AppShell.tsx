@@ -5,6 +5,7 @@ import { ServiceBanner } from "@/components/ui/ServiceBanner";
 import { useT } from "@/i18n";
 import { usePath } from "@/router";
 import { useAppState } from "@/state/useAppState";
+import { AttentionWatcher } from "./AttentionWatcher";
 import { Header } from "./Header";
 import { BottomNav, NavTabs } from "./NavBars";
 
@@ -72,6 +73,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </div>
       {role && <BottomNav />}
+      {role && <AttentionWatcher />}
     </>
   );
 }

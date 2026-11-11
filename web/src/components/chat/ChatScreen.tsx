@@ -1,6 +1,9 @@
 // The assistant screen `#/chat` (plan D2): thread, cards, starters, practice mode, progress cards,
 // trace panel (side column at >= 1024 px with the trace toggle on, inline below), error states.
 // `#/chat?scenario=<id>` starts practice mode for that scenario (hand-off from the scenarios screen).
+// P16.5: the greeting and starters stay in view on first load (compact mentor bar, collapsed first-day card,
+// reachable later from a small header link), a recall banner when saved answers' sources changed, and the
+// Rumour Check chip first.
 import { useEffect, useRef, useState } from "react";
 import { currentPath, navigate, replace } from "@/router";
 import { useT } from "@/i18n";
@@ -22,6 +25,8 @@ import { TracePanel } from "./TracePanel";
 import { TypingIndicator } from "./TypingIndicator";
 import { UserBubble } from "./UserBubble";
 import { activeValue, cardKind, customerTurnIds, type ReplyItem } from "./model";
+import { recalledItemIds } from "./attention";
+import { revealSoon } from "./reveal";
 import { STARTERS } from "./starters";
 import { useChat } from "./useChat";
 
@@ -137,13 +142,29 @@ function ChatInner() {
       setSelected(id);
       return;
     }
+    const opening = !inlineShown(id);
     setToggled((cur) => {
       const next = new Set(cur);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+    // P16.5 (U12): the trace opens under the card, often below the fold on phones.
+    if (opening) revealSoon(() => document.querySelector(`[data-trace-for="${CSS.escape(id)}"]`));
   };
+
+  // ---- P16.5 Answer Recall banner: saved answers whose cited rows changed; "Show" goes to the first one.
+  const recalled = recalledItemIds(items, chat.live);
+  const showFirstRecalled = () => {
+    const first = recalled[0];
+    if (!first) return;
+    const li = document.querySelector<HTMLElement>(`[data-item-id="${CSS.escape(first)}"]`);
+    li?.scrollIntoView({ block: "start", behavior: reducedMotion ? "auto" : "smooth" });
+    li?.querySelector<HTMLElement>('[data-recall="changed"]')?.focus({ preventScroll: true });
+  };
+
+  // ---- P16.5 first-day card: on the empty thread (collapsed); after the first message from a header link.
+  const [firstDayOpen, setFirstDayOpen] = useState(false);
 
   // ---- practice mode
   const liveId = [...items]
@@ -163,6 +184,7 @@ function ChatInner() {
   // P14.2: one more first-turn chip opens the Rumour Check with the sample instead of asking.
   const checkChip = t("check.chip");
   const pickFirst = (q: string) => (q === checkChip ? navigate("/check?sample=1") : chat.send(q));
+  // P16.5: the Rumour Check chip comes first (it is the product's story), then the five questions.
   const lastIsReply = lastItem?.type === "reply";
 
   return (
@@ -178,16 +200,47 @@ function ChatInner() {
           <h1 className="text-xl font-bold leading-snug text-fg-1 sm:text-2xl">{t("chat.title")}</h1>
           {/* Only offered once there is something to clear (a disabled ghost button read as broken). */}
           {items.length > 0 && (
-            <Button variant="ghost" icon="refresh" className="-me-3" disabled={busy} onClick={chat.clear}>
-              {t("chat.clear")}
-            </Button>
+            <div className="-me-3 flex shrink-0 items-center">
+              <Button
+                variant="ghost"
+                icon="calendar"
+                aria-expanded={firstDayOpen}
+                aria-label={t("chatUx.firstDayLink")}
+                data-first-day-link
+                onClick={() => setFirstDayOpen((o) => !o)}
+              >
+                <span className="max-sm:sr-only">{t("chatUx.firstDayLink")}</span>
+              </Button>
+              <Button variant="ghost" icon="refresh" disabled={busy} onClick={chat.clear}>
+                {t("chat.clear")}
+              </Button>
+            </div>
           )}
         </div>
 
+        {recalled.length > 0 && (
+          <div
+            data-recall-banner
+            role="status"
+            className={cn(surface.amber, "mb-3 flex min-h-11 items-center gap-2 ps-3 pe-1")}
+          >
+            <Icon name="alert" size={16} className="shrink-0 text-amber-ink" />
+            <p className="min-w-0 flex-1 text-sm font-semibold text-fg-1">
+              {t("chatUx.recallBanner", { n: recalled.length })}
+            </p>
+            <button
+              type="button"
+              onClick={showFirstRecalled}
+              className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-3 text-sm font-semibold text-accent transition-colors duration-(--da-motion-fast) hover:bg-surface-0"
+            >
+              {t("chatUx.recallShow")}
+            </button>
+          </div>
+        )}
         <MentorRequestsPanel />
-        {items.length === 0 && !active && (
-          <div className="mb-5">
-            <FirstDayCard />
+        {((items.length === 0 && !active) || (items.length > 0 && firstDayOpen)) && (
+          <div className="mb-4">
+            <FirstDayCard key={items.length === 0 ? "home" : "link"} defaultOpen={items.length > 0} />
           </div>
         )}
 
@@ -198,7 +251,7 @@ function ChatInner() {
                 text={t("chat.greeting", { role: t(role === "Delivery" ? "role.delivery" : "role.sales") })}
               />
               {items.length === 0 && (
-                <StarterChips questions={[...starters, checkChip]} disabled={busy} onPick={pickFirst} />
+                <StarterChips questions={[checkChip, ...starters]} disabled={busy} onPick={pickFirst} />
               )}
             </AssistantFrame>
           </li>
@@ -219,7 +272,11 @@ function ChatInner() {
             }
             const shown = sideMode ? selectedItem?.id === item.id : inlineShown(item.id);
             return (
-              <li key={item.id} className="flex min-w-0 flex-col gap-3">
+              <li
+                key={item.id}
+                data-item-id={item.id}
+                className="flex min-w-0 scroll-mt-[calc(var(--da-header-h)+0.75rem)] flex-col gap-3"
+              >
                 <ChatMessage
                   item={item}
                   busy={busy}
@@ -235,9 +292,12 @@ function ChatInner() {
                   liveKb={chat.live}
                   canReask={chat.questionOf(item) !== null}
                   onReask={() => chat.reask(item)}
+                  question={chat.questionOf(item)}
                 />
                 {!sideMode && item.trace && inlineShown(item.id) && (
-                  <TracePanel trace={item.trace} citedIds={item.reply.sources.map((s) => s.id)} />
+                  <div data-trace-for={item.id} className="min-w-0">
+                    <TracePanel trace={item.trace} citedIds={item.reply.sources.map((s) => s.id)} />
+                  </div>
                 )}
                 {followUps && item.id === lastItem?.id && (
                   <StarterChips questions={starters} disabled={busy} onPick={chat.send} />
@@ -254,6 +314,7 @@ function ChatInner() {
 
         <div
           ref={dockRef}
+          data-chat-dock
           className={cn(
             "sticky bottom-(--da-bottom-nav) z-10 -mx-4 bg-page px-4 pb-2 pt-2 sm:-mx-6 sm:px-6 md:pb-5",
             "lg:-mx-8 lg:px-8",

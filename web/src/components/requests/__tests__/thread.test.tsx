@@ -71,7 +71,18 @@ function mount(node: ReactNode, lang: Lang = "en") {
   );
 }
 
-async function openThread(): Promise<HTMLElement> {
+/** P16.5: the panel is a collapsed one-line bar until tapped. */
+async function expand(): Promise<void> {
+  const bar = await waitFor(() => {
+    const el = document.querySelector<HTMLButtonElement>('[data-mentor-requests] button[aria-expanded="false"]');
+    if (!el) throw new Error("not yet");
+    return el;
+  });
+  await userEvent.click(bar);
+}
+
+async function openThread(intern = true): Promise<HTMLElement> {
+  if (intern) await expand();
   const card = await waitFor(() => {
     const el = document.querySelector(`[data-request-thread="${RID}"]`);
     if (!el) throw new Error("not yet");
@@ -185,6 +196,7 @@ describe("intern: replies on their own request", () => {
   it("is Arabic first", async () => {
     backend();
     mount(<MentorRequestsPanel />, "ar");
+    await expand();
     const card = await waitFor(() => {
       const el = document.querySelector(`[data-request-thread="${RID}"]`);
       if (!el) throw new Error("not yet");
@@ -202,7 +214,7 @@ describe("admin: the same thread on the intern page", () => {
     vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:x"), revokeObjectURL: vi.fn() }));
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     mount(<AdminRequestsSection intern={INTERN} />);
-    const card = await openThread();
+    const card = await openThread(false);
     const get = calls.find((c) => c.url.includes("/comments"))!;
     expect(get.url).toBe(`/api/admin/requests/${RID}/comments`);
     expect(get.auth).toBe("Bearer 4102444800.sig");
@@ -232,7 +244,7 @@ describe("admin: the same thread on the intern page", () => {
         json({ error: { code: "requests_unavailable", message: "m", request_id: "r", field: null } }, 503),
     });
     mount(<AdminRequestsSection intern={INTERN} />);
-    const card = await openThread();
+    const card = await openThread(false);
     await userEvent.type(within(card).getByLabelText("Your reply"), "x");
     await userEvent.click(within(card).getByTestId("thread-send"));
     expect(await within(card).findByText("Replies are not available right now.")).toBeInTheDocument();

@@ -865,6 +865,15 @@ export const ar = {
     unavailable: "الردود غير متاحة الآن.",
     downloadFailed: "تعذّر تنزيل الملف.",
   },
+  chatUx: {
+    // P16.5 chat screen: recall banner, first-day link, nav dot, premise correction («ذكرتَ 20، والمصدر يذكر 17»).
+    recallBanner: "تغيّرت مصادر إجابة سابقة ({n})",
+    recallShow: "عرض",
+    firstDayLink: "قبل يومك الأول",
+    navAttention: "فيه جديد: إجابة تغيّرت مصادرها أو طلب من مشرفك",
+    premise: "ذكرتَ {claim}، والمصدر يذكر {row}",
+    premiseCheck: "افحص ما سمعت",
+  },
 };
 
 /** Dictionary shape: the same nesting as `ar`, every leaf a string. */
