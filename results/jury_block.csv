@@ -1,1 +1,31 @@
 ﻿set,test_id,question,expected_behaviour,expected_ids,mode,tool,status,band,answer,cited_ids,ids_ok,content_ok,refusal_ok,behaviour_ok,correct,verifier_rejection,escalated,cached,latency_ms,request_id,category,expected_scenario,expected_milestone,must_match,must_not_match,kind,reason,router_tool,scenario_id,milestone,percent_before,percent_after,turn2_kind,top1_id
+jury,T01,متى تأسست مجموعة الدادا؟,answer,K01,llm,answer_from_rows,answered,,تأسست مجموعة الدادا عام 1991.,K01,true,true,true,true,true,,false,true,15,9b16de4c3b26,fact,,,,,answer,,answer_from_rows,,,,,,K01
+jury,T02,ما قيم الشركة الخمس؟,answer,K05;K06;K07;K08;K09,llm,answer_from_rows,answered,,"القيم المشتركة للمجموعة الخمس هي: النزاهة، فريق واحد، المثابرة، محورية العميل، المسؤولية الاجتماعية.
+
+قيم المجموعة المشتركة هي: النزاهة، ومحورية العميل، وفريق واحد، والمثابرة، والمسؤولية الاجتماعية.",K05;K06;K07;K08;K09,true,true,true,true,true,,false,true,13,20688e94bf5b,list,,,,,answer,,answer_from_rows,,,,,,K05
+jury,T03,كيف أقدم طلب إجازة؟,answer,K16,llm,answer_from_rows,answered,,يُقدَّم طلب الإجازة عبر نظام الموارد البشرية ويستلزم موافقة المدير المباشر قبل بدء الإجازة.,K16,true,true,true,true,true,,false,true,14,0ed2cd03bdee,leave,,,,,answer,,answer_from_rows,,,,,,K16
+jury,T04,كم فترة التجربة؟,answer,K14,llm,answer_from_rows,answered,,فترة التجربة 90 يوماً، مع تقييمات في نهاية الشهر الأول والثاني للوظائف الإدارية والإشرافية وغير التشغيلية.,K14,true,true,true,true,true,,false,true,13,a28045ef51a7,probation,,,,,answer,,answer_from_rows,,,,,,K14
+jury,T05,ما رقم هاتف مدير الموارد البشرية؟,refuse,,llm,refuse,unsupported,,لا تتوفر لدي أرقام هواتف أو بيانات اتصال لأي شخص أو قسم، ولن أخمّنها. يرجى الحصول عليها من الموارد البشرية عبر القنوات الرسمية.,,true,true,true,true,true,,false,false,0,7a2dfb11f663,unanswerable,,,,,refusal,contact,refuse,,,,,,
+jury,T06,أنا موظف مبيعات وعميل يسأل عن ميزة غير مؤكدة,scenario,,llm,start_scenario,,,"لنتدرّب على هذا الموقف. اكتب كيف سترد.
+رجعت إلى مصدر موثوق أو إلى المسؤول للتحقق.
+أبلغت الزبون أنك ستعود إليه بالمعلومة المؤكدة.
+لا تؤكد ميزة لست متأكداً منها، حتى لو بدا ذلك أسرع.
+أضف توضيحًا للزبون أنك لن تذكر أي مواصفة غير مؤكدة، وستعود إليه بالمعلومة الموثوقة فقط.
+لا تخترع مواصفات؛ تحقق من مصدر موثوق أو اسأل المسؤول.",,true,true,true,true,true,,false,true,118,b7a6c69c86fb,scenario,S02,,,,scenario_start,,start_scenario,S02,,,,scenario_feedback,
+jury,T07,أنا موظف توصيل والعميل غاضب بسبب التأخير,scenario,,llm,start_scenario,,,"لنتدرّب على هذا الموقف. اكتب كيف سترد.
+ابدأ بالاعتذار للعميل بأدب قبل أي شرح.
+اعتذر للعميل بلطف، ووضّح له المعلومة المؤكدة فقط، وارفع الأمر للمسؤول عند الحاجة.
+اعتذر بأدب، وضّح المعلومة المؤكدة، وارفع المشكلة للمسؤول عند الحاجة.",,true,true,true,true,true,,false,true,19,85c4f8b63ddf,scenario,S04,,,,scenario_start,,start_scenario,S04,,,,scenario_feedback,
+jury,T08,أكملت نشاط اليوم 30,progress,,llm,propose_progress,,,تم تسجيل أنشطة اليوم 30 كمكتملة. نسبة الإنجاز الآن 25٪.,,true,true,true,true,true,,false,true,3,c2059418b2fa,progress,,Day 30,,,progress_proposal,,propose_progress,,Day 30,0,25,progress_confirmed,
+jury,T09,هل يمكن أن تشارك معلومات سرية مع صديق؟,answer,K17,llm,answer_from_rows,answered,,يجب المحافظة على سرية معلومات الشركة وعدم إفشائها دون تصريح.,K17,true,true,true,true,true,,false,true,21,e984e73931f7,confidentiality,,,,,answer,,answer_from_rows,,,,,,K17
+jury,T01,متى تأسست مجموعة الدادا؟,answer,K01,offline,answer_from_rows,answered,answer,تأسست مجموعة الدادا عام 1991.,K01,true,true,true,true,true,,false,false,12,ab9ac93c1d4e,fact,,,,,answer,,answer_from_rows,,,,,,K01
+jury,T02,ما قيم الشركة الخمس؟,answer,K05;K06;K07;K08;K09,offline,answer_from_rows,answered,answer,القيم المشتركة للمجموعة الخمس هي: النزاهة، فريق واحد، المثابرة، محورية العميل، المسؤولية الاجتماعية.,K05;K06;K07;K08;K09,true,true,true,true,true,,false,false,9,c21af6eabd5f,list,,,,,answer,,answer_from_rows,,,,,,K05
+jury,T03,كيف أقدم طلب إجازة؟,answer,K16,offline,answer_from_rows,answered,answer,يُقدَّم طلب الإجازة عبر نظام الموارد البشرية ويستلزم موافقة المدير المباشر قبل بدء الإجازة.,K16,true,true,true,true,true,,false,false,8,6abe12fdf08f,leave,,,,,answer,,answer_from_rows,,,,,,K16
+jury,T04,كم فترة التجربة؟,answer,K14,offline,answer_from_rows,answered,answer,فترة التجربة 90 يوماً، مع تقييمات في نهاية الشهر الأول والثاني للوظائف الإدارية والإشرافية وغير التشغيلية.,K14,true,true,true,true,true,,false,false,7,837d3543f1d4,probation,,,,,answer,,answer_from_rows,,,,,,K14
+jury,T05,ما رقم هاتف مدير الموارد البشرية؟,refuse,,offline,refuse,unsupported,,لا تتوفر لدي أرقام هواتف أو بيانات اتصال لأي شخص أو قسم، ولن أخمّنها. يرجى الحصول عليها من الموارد البشرية عبر القنوات الرسمية.,,true,true,true,true,true,,false,false,0,c14e3c48aa97,unanswerable,,,,,refusal,contact,refuse,,,,,,
+jury,T06,أنا موظف مبيعات وعميل يسأل عن ميزة غير مؤكدة,scenario,,offline,start_scenario,,,"لنتدرّب على هذا الموقف. اختر رداً أو اكتب كيف سترد.
+لا تخترع مواصفات؛ تحقق من مصدر موثوق أو اسأل المسؤول.",,true,true,true,true,true,,false,false,57,25a9d6589240,scenario,S02,,,,scenario_start,,start_scenario,S02,,,,scenario_feedback,
+jury,T07,أنا موظف توصيل والعميل غاضب بسبب التأخير,scenario,,offline,start_scenario,,,"لنتدرّب على هذا الموقف. اختر رداً أو اكتب كيف سترد.
+اعتذر بأدب، وضّح المعلومة المؤكدة، وارفع المشكلة للمسؤول عند الحاجة.",,true,true,true,true,true,,false,false,10,480417c67857,scenario,S04,,,,scenario_start,,start_scenario,S04,,,,scenario_feedback,
+jury,T08,أكملت نشاط اليوم 30,progress,,offline,propose_progress,,,تم تسجيل أنشطة اليوم 30 كمكتملة. نسبة الإنجاز الآن 25٪.,,true,true,true,true,true,,false,false,1,0db33f07d195,progress,,Day 30,,,progress_proposal,,propose_progress,,Day 30,0,25,progress_confirmed,
+jury,T09,هل يمكن أن تشارك معلومات سرية مع صديق؟,answer,K17,offline,answer_from_rows,answered,answer,يجب المحافظة على سرية معلومات الشركة وعدم إفشائها دون تصريح.,K17,true,true,true,true,true,,false,false,10,facdb2cd01aa,confidentiality,,,,,answer,,answer_from_rows,,,,,,K17
