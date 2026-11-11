@@ -47,7 +47,7 @@ export function linkButton(variant: "primary" | "secondary" | "soft" = "primary"
 
 /** Compact action under a checklist row (open rows, practise a scenario, take the quiz). */
 export const rowAction =
-  "inline-flex min-h-11 items-center gap-1.5 rounded-md px-2.5 text-sm font-semibold text-accent transition-colors duration-(--da-motion-fast) ease-da hover:bg-accent-soft sm:min-h-9";
+  "inline-flex min-h-11 items-center gap-1.5 rounded-md px-2.5 text-sm font-semibold text-accent transition-colors duration-(--da-motion-fast) ease-da hover:bg-accent-soft";
 
 /** A K-row quoted verbatim: K-id badge, document and page, then the row text. Keeps `data-source-id`. */
 export function KRowQuote({

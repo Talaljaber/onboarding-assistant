@@ -137,8 +137,8 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
         className={cn(
           "mt-1 flex min-h-4 justify-between gap-3 px-2 text-xs leading-4",
           tooLong ? "font-semibold text-danger" : "text-fg-3",
-          // Phones keep the bar short: the counter appears once there is text.
-          text.length === 0 && "max-sm:hidden",
+          // The counter only appears near the limit (80%), at every width.
+          text.length < maxLength * 0.8 && "hidden",
         )}
       >
         <span role={tooLong ? "alert" : undefined}>{tooLong ? t("chat.tooLong", { max: maxLength }) : ""}</span>

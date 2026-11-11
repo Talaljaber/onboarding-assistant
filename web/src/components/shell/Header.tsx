@@ -1,56 +1,69 @@
-﻿import { useEffect, useState, type ReactNode } from "react";
+﻿import { useState, type ReactNode } from "react";
+import { useIsAdmin } from "@/api/adminToken";
 import type { Health } from "@/api/types";
-import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
 import { Dialog } from "@/components/ui/Dialog";
-import { Icon } from "@/components/ui/Icon";
+import { Icon, type IconName } from "@/components/ui/Icon";
 import { LanguageSwitch } from "@/components/ui/LanguageSwitch";
 import { segmented } from "@/components/ui/recipes";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { useLang, useT } from "@/i18n";
+import { translate, useLang, useT } from "@/i18n";
 import { useAppState } from "@/state/useAppState";
 import { BrandMark } from "./BrandMark";
 import { RoleDialog } from "./RoleDialog";
 
-/**
- * Below this width the header keeps only the brand, the role chip and a settings button; the mode
- * switch, trace toggle, status badges and language live in the settings sheet. Inline they need
- * about 1150px in Arabic and about 1360px in English (longer labels), so English switches later.
- */
-const COMPACT = { ar: "(max-width: 1279px)", en: "(max-width: 1439px)" } as const;
-
-/** Header segmented buttons: 40px on a desktop pointer, 44px in the settings sheet. */
-const SEG_DESKTOP = "min-h-10";
+/** Segmented buttons in the settings sheet: 44px tall for touch. */
 const SEG_SHEET = "min-h-11 px-5";
 
 const pill =
-  "inline-flex min-h-10 items-center gap-2 rounded-full border text-sm font-semibold transition-[background-color,border-color,color] duration-(--da-motion-fast) ease-da";
+  "inline-flex min-h-11 items-center gap-2 rounded-full border text-sm font-semibold transition-[background-color,border-color,color] duration-(--da-motion-fast) ease-da";
+
+const roundBtn =
+  "relative grid size-11 shrink-0 place-items-center rounded-full border border-line bg-surface-0 text-fg-1 shadow-1 transition-colors hover:border-accent-line hover:bg-accent-soft";
 
 /** One labelled row of the settings sheet. */
 function SettingRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-2 border-b border-line py-4 first:pt-0 last:border-b-0">
+    <div className="flex flex-col gap-2 border-b border-line py-4 first:pt-0">
       <p className="text-sm font-semibold text-fg-1">{label}</p>
       <div className="flex flex-wrap items-center gap-2">{children}</div>
     </div>
   );
 }
 
-/** Sticky header: brand, prototype badge, role chip, mode switch, trace toggle, status badges, language. */
+/** A navigation row at the bottom of the settings sheet (about, admin sign-in or knowledge base). */
+function SheetLink({ href, icon, label, onGo }: { href: string; icon: IconName; label: string; onGo: () => void }) {
+  return (
+    <li>
+      <a
+        href={href}
+        onClick={onGo}
+        className="flex min-h-12 items-center gap-3 rounded-md px-2 text-sm font-semibold text-fg-1 transition-colors hover:bg-surface-2"
+      >
+        <Icon name={icon} size={20} className="shrink-0 text-fg-2" />
+        <span className="flex-1">{label}</span>
+        <Icon name="chevron-end" size={18} className="shrink-0 text-fg-3" />
+      </a>
+    </li>
+  );
+}
+
+/**
+ * Sticky header: brand, role chip, a one-tap language toggle and the settings button. Everything
+ * else (answer mode, trace, service status, about, admin sign-in) lives in the settings sheet so the
+ * header stays calm at every width. A small dot on the settings button shows a forced offline mode.
+ */
 export function Header({ health }: { health: Health | null }) {
   const t = useT();
+  const { lang, setLang } = useLang();
   const { role, mode, setMode, forceOffline, trace, setTrace, practiceActive } = useAppState();
+  const isAdmin = useIsAdmin();
   const [roleOpen, setRoleOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const llmOn = !forceOffline && health?.llm_available === true;
   const roleName = role ? t(role === "Sales" ? "role.sales" : "role.delivery") : "";
-  const { lang } = useLang();
-  const compact = useMediaQuery(COMPACT[lang]);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  // The sheet exists only in the compact header: forget it when the window grows, so it does not
-  // reopen by itself when the window shrinks again.
-  useEffect(() => {
-    if (!compact) setSettingsOpen(false);
-  }, [compact]);
+  const roleShort = role ? t(role === "Sales" ? "uiUat.roleShortSales" : "uiUat.roleShortDelivery") : "";
+  const other = lang === "ar" ? "en" : "ar";
+  const close = () => setSettingsOpen(false);
 
   const roleChip = role && (
     <button
@@ -63,16 +76,16 @@ export function Header({ health }: { health: Health | null }) {
       onClick={() => setRoleOpen(true)}
       className={cn(
         pill,
-        "min-h-11 min-w-0 border-line bg-surface-0 ps-1.5 pe-3 text-fg-1 shadow-1 hover:border-accent-line hover:bg-accent-soft",
-        "max-sm:pe-2.5 max-sm:text-xs disabled:cursor-not-allowed disabled:opacity-55",
+        "min-w-0 border-line bg-surface-0 ps-1.5 pe-3 text-fg-1 shadow-1 hover:border-accent-line hover:bg-accent-soft",
+        "disabled:cursor-not-allowed disabled:opacity-55",
       )}
       data-testid="role-chip"
     >
       <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-soft text-accent">
         <Icon name={role === "Sales" ? "briefcase" : "map"} size={16} />
       </span>
-      <span className="truncate">{roleName}</span>
-      <Icon name="chevron-down" size={14} className="shrink-0 text-fg-3 max-sm:hidden" />
+      <span className="truncate">{roleShort}</span>
+      <Icon name="chevron-down" size={14} className="shrink-0 text-fg-3" />
     </button>
   );
   const modeSwitch = role && (
@@ -83,17 +96,12 @@ export function Header({ health }: { health: Health | null }) {
           type="button"
           aria-pressed={mode === m}
           onClick={() => setMode(m)}
-          className={cn(segmented.item, compact ? SEG_SHEET : SEG_DESKTOP, mode === m ? segmented.on : segmented.off)}
+          className={cn(segmented.item, SEG_SHEET, mode === m ? segmented.on : segmented.off)}
         >
           {t(m === "auto" ? "mode.auto" : "mode.offline")}
         </button>
       ))}
     </div>
-  );
-  const llmBadge = role && (
-    <Badge tone={llmOn ? "info" : "neutral"} className="whitespace-nowrap">
-      {t(forceOffline ? "mode.forcedOffline" : llmOn ? "mode.llmOn" : "mode.llmOff")}
-    </Badge>
   );
   // The switch knob position (not only its colour) shows the state; aria-pressed carries it to AT.
   const traceToggle = role && (
@@ -104,7 +112,6 @@ export function Header({ health }: { health: Health | null }) {
       className={cn(
         pill,
         "px-3 whitespace-nowrap",
-        compact && "min-h-11",
         trace ? "border-accent bg-accent-soft text-accent" : "border-line bg-surface-0 text-fg-2 hover:border-accent-line hover:text-fg-1",
       )}
     >
@@ -126,14 +133,13 @@ export function Header({ health }: { health: Health | null }) {
       </span>
     </button>
   );
-  const storeBadge = health && (
-    <Badge tone="neutral" icon={null} className="whitespace-nowrap">
-      {t(health.store === "supabase" ? "extra.storeSupabase" : "extra.storeLocal")}
-    </Badge>
-  );
+  const statusLines = [
+    role ? t(forceOffline ? "mode.forcedOffline" : llmOn ? "mode.llmOn" : "mode.llmOff") : null,
+    health ? t(health.store === "supabase" ? "extra.storeSupabase" : "extra.storeLocal") : null,
+  ].filter((s): s is string => s !== null);
 
   // The dialogs are siblings of <header>, not children: its backdrop-filter would make it the
-  // containing block of their fixed overlays and clip them to the 64px bar.
+  // containing block of their fixed overlays and clip them to the bar.
   return (
     <>
       <header
@@ -141,61 +147,67 @@ export function Header({ health }: { health: Health | null }) {
         className="sticky top-0 z-30 h-(--da-header-h) border-b border-line bg-band/90 text-on-band backdrop-blur-md"
       >
         <div className="flex h-full items-center gap-2 px-3 sm:gap-3 sm:px-6">
-          <div className="flex shrink-0 items-center gap-2.5">
-            {/* The mark repeats the wordmark link for pointer users only (one tab stop). */}
-            <a href="#/" tabIndex={-1} aria-hidden="true" className="shrink-0">
-              <BrandMark size={compact ? 34 : 38} />
-            </a>
-            <div className="flex flex-col items-start gap-0.5 leading-tight sm:flex-row sm:items-center sm:gap-2.5">
-              {/* Padding grows the tap target to 44px without moving the layout. */}
-              <a href="#/" className="-my-3 rounded-sm py-3 text-sm font-bold whitespace-nowrap text-fg-1 sm:-my-2 sm:py-2 sm:text-lg">
-                {t("app.name")}
-              </a>
-              <Badge tone="value" icon={null} size="sm" className="sm:px-2.5 sm:py-0.5 sm:text-xs">
-                {t("app.prototype")}
-              </Badge>
-            </div>
+          {/* One link: the mark everywhere, the wordmark from sm (on phones it is the link's hidden name). */}
+          <a href="#/" className="flex min-h-11 shrink-0 items-center gap-2.5 rounded-md">
+            <BrandMark size={34} className="sm:hidden" />
+            <BrandMark size={38} className="max-sm:hidden" />
+            <span className="text-lg font-bold whitespace-nowrap text-fg-1 max-sm:sr-only">{t("app.name")}</span>
+          </a>
+          <div className="ms-auto flex min-w-0 items-center gap-2">
+            {roleChip}
+            <button
+              type="button"
+              lang={other}
+              aria-label={translate(other, "lang.switchTo", { name: translate(other, other === "en" ? "lang.en" : "lang.ar") })}
+              onClick={() => setLang(other)}
+              data-testid="lang-toggle"
+              className={cn(roundBtn, "text-sm font-bold")}
+            >
+              {t("uiCalm.langToggle")}
+            </button>
+            <button
+              type="button"
+              aria-haspopup="dialog"
+              aria-label={forceOffline ? `${t("extra.settings")}. ${t("mode.forcedOffline")}` : t("extra.settings")}
+              onClick={() => setSettingsOpen(true)}
+              data-testid="header-more"
+              className={roundBtn}
+            >
+              <Icon name="settings" size={20} />
+              {forceOffline && (
+                <span aria-hidden="true" className="absolute end-1.5 top-1.5 size-2 rounded-full bg-amber ring-2 ring-surface-0" />
+              )}
+            </button>
           </div>
-          {compact ? (
-            <div className="ms-auto flex min-w-0 items-center gap-2">
-              {roleChip}
-              <button
-                type="button"
-                aria-haspopup="dialog"
-                aria-label={t("extra.settings")}
-                onClick={() => setSettingsOpen(true)}
-                data-testid="header-more"
-                className="grid size-11 shrink-0 place-items-center rounded-full border border-line bg-surface-0 text-fg-1 shadow-1 transition-colors hover:border-accent-line hover:bg-accent-soft"
-              >
-                <Icon name="settings" size={20} />
-              </button>
-            </div>
-          ) : (
-            <div className="ms-auto flex items-center gap-2.5">
-              {roleChip}
-              {modeSwitch}
-              {traceToggle}
-              {(llmBadge || storeBadge) && <span aria-hidden="true" className="mx-1 h-6 w-px bg-line" />}
-              {llmBadge}
-              {storeBadge}
-              <LanguageSwitch itemClassName={SEG_DESKTOP} />
-            </div>
-          )}
         </div>
       </header>
-      <Dialog open={compact && settingsOpen} onClose={() => setSettingsOpen(false)} title={t("extra.settings")}>
+      <Dialog open={settingsOpen} onClose={close} title={t("extra.settings")}>
         <div className="flex flex-col">
           {role && <SettingRow label={t("mode.label")}>{modeSwitch}</SettingRow>}
           {role && <SettingRow label={t("uiShell.display")}>{traceToggle}</SettingRow>}
           <SettingRow label={t("lang.label")}>
             <LanguageSwitch itemClassName={SEG_SHEET} />
           </SettingRow>
-          {(llmBadge || storeBadge) && (
+          {statusLines.length > 0 && (
             <SettingRow label={t("uiShell.status")}>
-              {llmBadge}
-              {storeBadge}
+              <ul className="flex w-full flex-col gap-1 text-sm text-fg-2">
+                {statusLines.map((s) => (
+                  <li key={s} className="flex items-center gap-2">
+                    <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-fg-3" />
+                    {s}
+                  </li>
+                ))}
+              </ul>
             </SettingRow>
           )}
+          <ul className="flex flex-col pt-2">
+            <SheetLink href="#/about" icon="info" label={t("nav.about")} onGo={close} />
+            {isAdmin ? (
+              <SheetLink href="#/kb" icon="book" label={t("nav.kb")} onGo={close} />
+            ) : (
+              <SheetLink href="#/admin" icon="lock" label={t("uiAuth.navSignIn")} onGo={close} />
+            )}
+          </ul>
         </div>
       </Dialog>
       <RoleDialog open={roleOpen} onClose={() => setRoleOpen(false)} />

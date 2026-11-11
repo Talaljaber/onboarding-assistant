@@ -1,12 +1,12 @@
 // Manager view: demo-profile counts from GET /api/manager/summary. Counts only, never correctness or
-// scores; the server's label is shown verbatim above the table.
+// scores; the server's label is shown verbatim above the table in Arabic UI (its English equivalent
+// in English UI, so labels follow the UI language).
 import { useCallback, useEffect, useState } from "react";
 import { getManagerSummary } from "@/api/client";
 import type { ManagerProfileRow, ManagerSummaryResponse } from "@/api/types";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { useT } from "@/i18n";
+import { useLang, useServerLabel, useT } from "@/i18n";
 import { pct } from "@/lib/format";
-import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { DataTable, type Column, type SortState } from "../ui/DataTable";
 import { Loadable } from "../ui/Loadable";
@@ -58,8 +58,10 @@ function ProfileCards({ rows, roleName, empty }: { rows: ManagerProfileRow[]; ro
 export function ManagerView() {
   const phone = useMediaQuery("(max-width: 767px)");
   const t = useT();
+  const { lang } = useLang();
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [data, setData] = useState<ManagerSummaryResponse | null>(null);
+  const label = useServerLabel(data?.label_ar, "uiCalm.mgrLabel");
   const [sort, setSort] = useState<SortState>(null);
   const [tick, setTick] = useState(0);
 
@@ -171,14 +173,14 @@ export function ManagerView() {
         {data && (
           <>
             <Notice tone="suggest" icon="info">
-              <p data-manager-label lang="ar" dir="rtl" className="font-semibold">
-                {data.label_ar}
-              </p>
-              <p className="mt-1 flex flex-wrap items-center gap-2 text-fg-2">
-                <Badge tone="neutral" icon={null} size="sm">
-                  {t("kb.managerBadge")}
-                </Badge>
-                {t("extra.mgrCountsOnly")}
+              <p className="m-0">
+                <span data-manager-label lang={lang} dir={lang === "ar" ? "rtl" : "ltr"} className="font-semibold">
+                  {label}
+                </span>
+                <span aria-hidden="true" className="text-fg-3">
+                  {" · "}
+                </span>
+                <span className="text-fg-2">{t("extra.mgrCountsOnly")}</span>
               </p>
             </Notice>
             <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">

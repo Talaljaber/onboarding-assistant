@@ -37,7 +37,10 @@ export function ActivityRows({ ids }: { ids: string[] }) {
         className={cn(rowAction, "self-start py-1 text-start")}
       >
         <Icon name="book" size={16} className="shrink-0" />
-        <span className="min-w-0">{t("plan.readRows", { ids: ids.join(", ") })}</span>
+        {/* A short list names its ids; a long one shows a count (the rows show their ids when opened). */}
+        <span className="min-w-0">
+          {ids.length <= 3 ? t("plan.readRows", { ids: ids.join(", ") }) : t("uiCalm.readCount", { n: ids.length })}
+        </span>
         <Icon
           name="chevron-down"
           size={16}

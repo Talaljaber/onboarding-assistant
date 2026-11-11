@@ -1,12 +1,11 @@
-// #/plan: suggested (not official) 90-day plan: banner, four-milestone timeline with the role's
-// checklist, the Day 30 note (not the K14 review), and the printable Day 90 summary.
+// #/plan: suggested (not official) 90-day plan: header badge and description, four-milestone
+// timeline with the role's checklist (the Day 30 quiz note and the Day 90 summary sit on their
+// activity rows), and the printable Day 90 summary.
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { Icon } from "@/components/ui/Icon";
 import { Loadable } from "@/components/ui/Loadable";
-import { Notice } from "@/components/ui/Notice";
 import { Page, PageHeader } from "@/components/ui/Page";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { surface } from "@/components/ui/recipes";
@@ -27,6 +26,7 @@ export default function PlanScreen() {
     <section data-screen="plan">
       <Page>
         <div className={cn("flex flex-col gap-4", summary && "print:hidden")}>
+          {/* "Suggested" once: the badge by the h1, explained by the description (no boxed notice). */}
           <PageHeader
             icon="calendar"
             title={t("plan.title")}
@@ -35,12 +35,12 @@ export default function PlanScreen() {
                 {t("uiLearning.suggested")}
               </Badge>
             }
+            description={
+              <span title={plan?.status} dir="auto">
+                {t("plan.banner")}
+              </span>
+            }
           />
-          <Notice tone="suggest" role="note" className="min-w-0 break-words">
-            <p className="m-0 font-medium" title={plan?.status} dir="auto">
-              {t("plan.banner")}
-            </p>
-          </Notice>
         </div>
         <Loadable state={state} onRetry={reloadPlan} lines={8}>
           {plan && (
@@ -48,7 +48,7 @@ export default function PlanScreen() {
               {summary && <Day90Summary onClose={() => setSummary(false)} />}
               <div className={cn(surface.card, "flex flex-col gap-2 p-4 sm:p-5", summary && "print:hidden")}>
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                  <h2 className="text-base font-bold text-fg-1">{t("uiLearning.planProgress")}</h2>
+                  <h2 className="text-base font-bold text-fg-1">{t("nav.progress")}</h2>
                   <span className="text-sm text-fg-2">
                     {t("progress.ofTotal", { done: progress.doneCount, total: progress.total })}
                   </span>
@@ -120,21 +120,6 @@ export default function PlanScreen() {
                         <p lang="ar" dir="rtl" className="mb-4 text-start text-base leading-relaxed text-fg-2">
                           {m.learning_goal_ar}
                         </p>
-                        {m.name === "Day 30" && (
-                          <Notice tone="neutral" role="note" className="mb-4">
-                            {t("plan.quizNote")}
-                          </Notice>
-                        )}
-                        {m.name === "Day 90" && (
-                          <Notice tone="neutral" icon="shield" className="mb-4">
-                            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-                              <p className="m-0">{t("plan.day90Note")}</p>
-                              <Button variant="secondary" icon="print" className="shrink-0" onClick={() => setSummary(true)}>
-                                {t("plan.viewSummary")}
-                              </Button>
-                            </div>
-                          </Notice>
-                        )}
                         <h3 className="sr-only">{t("plan.activities")}</h3>
                         <ActivityChecklist milestone={m} onOpenSummary={() => setSummary(true)} />
                       </article>

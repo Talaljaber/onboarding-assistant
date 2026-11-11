@@ -206,7 +206,7 @@ def storyboard(r: Run) -> None:
     expect(plan.locator("[data-activity] input:checked").first).to_be_visible()
     r.no_overflow("11")
     r.shot("11_plan")
-    plan.get_by_role("button", name="عرض الملخص").click()
+    plan.get_by_role("button", name="اعرض ملخص التعلم").click()
     summary = page.locator('[data-summary="day90"]')
     expect(summary).to_be_visible()
     r.no_overflow("12")
@@ -300,13 +300,10 @@ def storyboard(r: Run) -> None:
     r.shot("19_scenario_s04", card)
     page.get_by_role("button", name=END_PRACTICE).first.click()
 
-    # 20. offline mode: K01 again with the offline chip
-    if r.vp == "360":
-        page.get_by_test_id("header-more").click()
-        page.get_by_role("button", name="بلا اتصال", exact=True).click()
-        page.keyboard.press("Escape")
-    else:
-        page.get_by_role("button", name="بلا اتصال", exact=True).click()
+    # 20. offline mode (in the settings sheet at every width): K01 again with the offline chip
+    page.get_by_test_id("header-more").click()
+    page.get_by_role("button", name="بلا اتصال", exact=True).click()
+    page.keyboard.press("Escape")
     n_before = r.cards("answer").count()
     r.send(Q_FOUNDED)
     expect(r.cards("answer")).to_have_count(n_before + 1)

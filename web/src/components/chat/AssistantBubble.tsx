@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import type { Mode } from "@/api/types";
+import { useHealthInfo } from "@/api/health";
 import { useT } from "@/i18n";
+import { useAppStateOptional } from "@/state/useAppState";
 import { textDir } from "@/lib/textDir";
 import { BrandMark } from "../shell/BrandMark";
 import { Badge } from "../ui/Badge";
@@ -35,11 +37,18 @@ export function AssistantAvatar() {
 }
 
 /**
- * The header row every assistant item shares (avatar, label, mode chip and, at the end, the
+ * The header row every assistant item shares (avatar, label, state chips and, at the end, the
  * "How I answered" button) with the body underneath at full width, so cards keep the whole line on phones.
  */
 export function AssistantFrame({ mode, cached, fixed, material, hasTrace, traceShown, onToggleTrace, children }: AssistantFrameProps) {
   const t = useT();
+  const forceOffline = useAppStateOptional()?.forceOffline ?? false;
+  const health = useHealthInfo();
+  // The app's current answer mode is stated once (settings sheet); a message only carries the mode
+  // chip when it differs from that (e.g. an AI answer after switching to offline), or when the user
+  // forced offline mode on purpose (the demo moment that switch exists for).
+  const current: Mode = !forceOffline && health?.llm_available === true ? "llm" : "offline";
+  const showMode = mode != null && (mode !== current || (forceOffline && mode === "offline"));
   return (
     <div className="da-rise-in flex w-full min-w-0 flex-col gap-2">
       <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1">
@@ -59,7 +68,7 @@ export function AssistantFrame({ mode, cached, fixed, material, hasTrace, traceS
             </Badge>
           </span>
         )}
-        {mode && !fixed && !material && (
+        {showMode && !fixed && !material && (
           <Badge size="sm" tone={mode === "llm" ? "info" : "neutral"} icon={mode === "llm" ? "sparkle" : null}>
             {mode === "llm" ? t("chat.modeLlm") : t("chat.modeOffline")}
           </Badge>

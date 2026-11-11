@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { HealthContext, useHealth } from "@/api/health";
 import { Icon } from "@/components/ui/Icon";
 import { ServiceBanner } from "@/components/ui/ServiceBanner";
@@ -19,8 +19,14 @@ import { BottomNav, NavTabs } from "./NavBars";
 export function AppShell({ children }: { children: ReactNode }) {
   const t = useT();
   const path = usePath();
-  const { role, demoBannerSeen, setDemoBannerSeen } = useAppState();
+  const { role, demoBannerSeen, setDemoBannerSeen, practiceActive } = useAppState();
   const { health, state } = useHealth();
+  // The bottom bar is hidden during practice: `data-practice` zeroes --da-bottom-nav (index.css)
+  // so the sticky composer sits on the screen edge instead of above an empty gap.
+  useEffect(() => {
+    document.documentElement.toggleAttribute("data-practice", practiceActive);
+    return () => document.documentElement.removeAttribute("data-practice");
+  }, [practiceActive]);
   const showBanner = role !== null && path === "/chat" && !demoBannerSeen;
   return (
     <>

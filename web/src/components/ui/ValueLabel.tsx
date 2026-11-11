@@ -19,3 +19,16 @@ export function ValueLabel({ ar, en }: { ar: ReactNode; en?: string | null }) {
     </span>
   );
 }
+
+/**
+ * A company value as quiet text with a coloured dot (not a bordered pill): the value is meaning,
+ * not status, so it never competes with the per-item state badges.
+ */
+export function ValueTag({ ar, en, className }: { ar: ReactNode; en?: string | null; className?: string }) {
+  return (
+    <span className={`inline-flex items-baseline gap-1.5 text-sm font-medium text-fg-2 ${className ?? ""}`}>
+      <span aria-hidden="true" className="size-2 shrink-0 translate-y-[-0.1em] self-center rounded-full bg-value" />
+      <ValueLabel ar={ar} en={en} />
+    </span>
+  );
+}

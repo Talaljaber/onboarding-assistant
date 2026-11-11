@@ -16,7 +16,7 @@ describe("QuizScreen", () => {
     renderScreen(<QuizScreen />);
     expect(await screen.findByText(first.question_ar)).toBeInTheDocument();
     expect(screen.getByText("اختبار تدريبي، ليس تقييماً")).toBeInTheDocument();
-    expect(screen.getByText("الترتيب حسب المسار")).toBeInTheDocument();
+    expect(screen.queryByText("الترتيب حسب المسار")).toBeNull();
     expect(screen.getByText("السؤال 1 من 5")).toBeInTheDocument();
     expect(screen.getAllByRole("radio")).toHaveLength(3);
     expect(JSON.stringify(quiz)).not.toContain("correct_option");

@@ -137,17 +137,25 @@ END_PRACTICE = "إنهاء التدريب"
 TRACE_TOGGLE = "عرض التتبع"
 
 
+def set_trace(page: Page, on: bool) -> None:
+    """The trace switch lives in the header's settings sheet: open it, set the switch, close it."""
+    page.get_by_test_id("header-more").click()
+    toggle = page.get_by_role("dialog").get_by_role("button", name=TRACE_TOGGLE)
+    if (toggle.get_attribute("aria-pressed") == "true") != on:
+        toggle.click()
+    page.keyboard.press("Escape")
+    page.wait_for_selector('[role="dialog"]', state="detached")
+
+
 def chat_fresh(page: Page) -> None:
     """Open the chat with an empty thread and practice mode off."""
     go(page, "#/chat", '[data-kind="greeting"]')
     end = page.get_by_role("button", name=END_PRACTICE)
     if end.count() and end.first.is_enabled():
         end.first.click()
-    toggle = page.get_by_role("button", name=TRACE_TOGGLE)
-    if toggle.count() and toggle.first.is_visible() and toggle.first.get_attribute("aria-pressed") == "true":
-        toggle.first.click()
-    clear = page.get_by_role("button", name=CHAT_CLEAR)
-    if clear.is_enabled():
+    set_trace(page, False)
+    clear = page.get_by_role("button", name=CHAT_CLEAR)  # only rendered once the thread has messages
+    if clear.count() and clear.is_enabled():
         clear.click()
     page.wait_for_selector('[data-kind="starters"]', state="visible")
 
@@ -206,12 +214,12 @@ def chat_trace(page: Page) -> None:
 
 
 def chat_trace_side(page: Page) -> None:
-    """Trace beside the thread: at 1280 the header trace switch on (side column; chat_fresh turns it off
-    again); narrower widths open the same trace inline with "How I answered"."""
+    """Trace beside the thread: at 1280 the settings-sheet trace switch on (side column; chat_fresh turns it
+    off again); narrower widths open the same trace inline with "How I answered"."""
     wide = bool(page.viewport_size and page.viewport_size["width"] >= 1280)
     chat_fresh(page)
     if wide:
-        page.get_by_role("button", name=TRACE_TOGGLE).click()
+        set_trace(page, True)
     chat_send(page, "ما قيم الشركة الخمس؟", "answer")
     if not wide:
         page.get_by_role("button", name="كيف أجبت؟").last.click()
@@ -287,7 +295,7 @@ def learning_plan(page: Page) -> None:
 def learning_day90(page: Page) -> None:
     go(page, "#/plan", "[data-milestone]")
     _tick_some(page)
-    page.locator('[data-screen="plan"]').get_by_role("button", name="عرض الملخص").click()
+    page.locator('[data-screen="plan"]').get_by_role("button", name="اعرض ملخص التعلم").click()
     page.wait_for_selector('[data-summary="day90"]', state="visible")
     page.evaluate("window.scrollTo(0, 0)")
 

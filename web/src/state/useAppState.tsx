@@ -112,6 +112,11 @@ export function useAppState(): AppState {
   return v;
 }
 
+/** The app state when a provider is present, else `null` (for parts also rendered standalone). */
+export function useAppStateOptional(): AppState | null {
+  return useContext(AppStateContext);
+}
+
 export interface AppStateProviderProps {
   children: ReactNode;
   /** Tests: start from this state instead of reading localStorage. */
