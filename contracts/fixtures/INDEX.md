@@ -91,6 +91,15 @@ the not-confirmed / out-of-scope questions are illustrative placeholders until
 
 The passage texts, keywords and suggested questions are illustrative placeholders (not official rows).
 
+## KB coverage (P13.1, admin only)
+
+| File | Endpoint | Model |
+|---|---|---|
+| `kb_coverage.json` | `GET /api/admin/kb/coverage` (19 illustrative turns over the official 18 rows) | `KbCoverage` |
+
+Counts and timestamps are illustrative; topics and keywords are the official rows'. Aggregate only: no
+profile id, name or per-intern figure.
+
 ## Errors (`ErrorBody`)
 
 | File | Status | Code |

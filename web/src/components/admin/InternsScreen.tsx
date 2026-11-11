@@ -21,6 +21,7 @@ import { surface } from "../ui/recipes";
 import { StatTile } from "../ui/StatTile";
 import { useToast } from "../ui/Toast";
 import { InternDialog } from "./InternDialog";
+import { KbCoverageCard } from "./KbCoverageCard";
 
 const STATUS: Record<InternStatus, { key: DictKey; tone: "ok" | "neutral" | "warn" }> = {
   active: { key: "uiIntern.statusActive", tone: "ok" },
@@ -208,6 +209,7 @@ export default function InternsScreen() {
             />
           )}
         </Loadable>
+        <KbCoverageCard />
       </Page>
       {adding && (
         <InternDialog

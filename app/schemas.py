@@ -849,6 +849,50 @@ class ApproveResponse(_Model):
 
 
 # --------------------------------------------------------------------------------------
+# KB coverage (P13.1, admin only): aggregate and anonymous, from turn-log ids and labels
+# --------------------------------------------------------------------------------------
+
+#: How many most-cited rows `GET /api/admin/kb/coverage` lists.
+COVERAGE_TOP = 8
+#: The rolling windows (days) of the turns-vs-refusals counts.
+COVERAGE_WINDOWS: tuple[int, ...] = (7, 30)
+
+
+class CoverageRow(_Model):
+    """One K-row with how often answers cited it. `topic`/`keyword_en` are null for an id that was
+    cited but is no longer in the knowledge base."""
+
+    id: KbId
+    topic: str | None
+    keyword_en: str | None
+    count: NonNeg
+
+
+class CoverageWindow(_Model):
+    """Turns in the last `days` days. `questions` = turns with an answer status (answered, partial or
+    unsupported); `refusals` = unsupported turns; `refusal_share` = refusals / questions (null when 0)."""
+
+    days: Annotated[int, Field(ge=1, le=366)]
+    turns: NonNeg
+    questions: NonNeg
+    refusals: NonNeg
+    refusal_share: Annotated[float, Field(ge=0, le=1)] | None
+
+
+class KbCoverage(_Model):
+    """Where the knowledge base is used and where it has gaps. Counts over every turn log; never per
+    intern, never chat text."""
+
+    total_turns: NonNeg
+    kb_rows: NonNeg
+    top_cited: Annotated[list[CoverageRow], Field(max_length=COVERAGE_TOP)]
+    never_cited: list[CoverageRow]
+    windows: list[CoverageWindow]
+    #: Oldest turn-log timestamp counted (null with no logs).
+    since: str | None
+
+
+# --------------------------------------------------------------------------------------
 # Profiles, progress, manager summary (plan §A12.4)
 # --------------------------------------------------------------------------------------
 
@@ -1174,6 +1218,11 @@ __all__ = [
     "ImportListResponse",
     "KbDraft",
     "KbImport",
+    "COVERAGE_TOP",
+    "COVERAGE_WINDOWS",
+    "CoverageRow",
+    "CoverageWindow",
+    "KbCoverage",
     "OrganizeSummary",
     "BANDS",
     "ERROR_CODES",

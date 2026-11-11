@@ -117,6 +117,11 @@ class Store(Protocol):
         """Metadata only; any key naming message/answer/text (or prompt/reply) rejects the log."""
         ...
 
+    def turn_metrics(self) -> list[dict[str, Any]]:
+        """Every turn log as {status, band, cited_ids, at}, oldest first (P13.1 KB coverage). Never the
+        profile id and never text: aggregate counts only. [] on failure."""
+        ...
+
     # Interns (P11.2) ------------------------------------------------------------------------
 
     def list_interns(self) -> list[dict[str, Any]] | None:
@@ -400,6 +405,20 @@ def turn_log_record(fields: dict[str, Any]) -> tuple[dict[str, Any] | None, str]
     rec.setdefault("cited_ids", [])
     rec["at"] = now_iso()
     return rec, ""
+
+
+TURN_METRIC_FIELDS = ("status", "band", "cited_ids", "at")
+
+
+def turn_metric_row(r: dict[str, Any]) -> dict[str, Any]:
+    """A stored turn log reduced to what the KB coverage counts (labels, cited ids, time)."""
+    ids = r.get("cited_ids") or []
+    return {
+        "status": r.get("status") if isinstance(r.get("status"), str) else None,
+        "band": r.get("band") if isinstance(r.get("band"), str) else None,
+        "cited_ids": [i for i in ids if isinstance(i, str)] if isinstance(ids, list) else [],
+        "at": str(r["at"]) if r.get("at") is not None else None,
+    }
 
 
 def progress_input(profile_id: object, activity_ids: object) -> tuple[str, list[str]] | None:

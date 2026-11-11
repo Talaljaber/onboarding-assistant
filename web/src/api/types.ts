@@ -595,6 +595,38 @@ export interface ApproveResponse {
   oos_disabled: string[];
 }
 
+// ---------------------------------------------------------------- KB coverage (P13.1, admin only)
+
+/** A K-row and how often answers cited it; topic/keyword_en are null for a row no longer in the KB. */
+export interface CoverageRow {
+  id: string;
+  topic: string | null;
+  keyword_en: string | null;
+  count: number;
+}
+
+/** Turns in the last `days` days; refusal_share = refusals / questions (0..1), null with no questions. */
+export interface CoverageWindow {
+  days: number;
+  turns: number;
+  questions: number;
+  refusals: number;
+  refusal_share: number | null;
+}
+
+/** GET /api/admin/kb/coverage: aggregate and anonymous (never per intern, never chat text). */
+export interface KbCoverage {
+  total_turns: number;
+  kb_rows: number;
+  /** at most 8, most cited first */
+  top_cited: CoverageRow[];
+  /** current rows with no citation, in id order */
+  never_cited: CoverageRow[];
+  windows: CoverageWindow[];
+  /** oldest turn log counted, null with none */
+  since: string | null;
+}
+
 // ---------------------------------------------------------------- profiles, progress, manager
 
 export interface ProfileCreate {
@@ -1049,6 +1081,33 @@ export function isApproveResponse(x: unknown): x is ApproveResponse {
     isStr(x.version) &&
     isNum(x.reindex_ms) &&
     isArrayOf(x.oos_disabled, isStr)
+  );
+}
+
+function isCoverageRow(x: unknown): x is CoverageRow {
+  return isObj(x) && isStr(x.id) && isStrOrNull(x.topic) && isStrOrNull(x.keyword_en) && isNum(x.count);
+}
+
+function isCoverageWindow(x: unknown): x is CoverageWindow {
+  return (
+    isObj(x) &&
+    isNum(x.days) &&
+    isNum(x.turns) &&
+    isNum(x.questions) &&
+    isNum(x.refusals) &&
+    (x.refusal_share === null || isNum(x.refusal_share))
+  );
+}
+
+export function isKbCoverage(x: unknown): x is KbCoverage {
+  return (
+    isObj(x) &&
+    isNum(x.total_turns) &&
+    isNum(x.kb_rows) &&
+    isArrayOf(x.top_cited, isCoverageRow) &&
+    isArrayOf(x.never_cited, isCoverageRow) &&
+    isArrayOf(x.windows, isCoverageWindow) &&
+    isStrOrNull(x.since)
   );
 }
 
