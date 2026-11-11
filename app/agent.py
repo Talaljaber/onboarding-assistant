@@ -48,6 +48,8 @@ from app.schemas import (
 from app.textnorm import normalize, tokens
 
 TURN_BUDGET_S = 5.0
+#: P8: the answer panel (judges + an escalation call of up to 6 s) gets a 9 s turn; 5 s with the panel off.
+PANEL_TURN_BUDGET_S = 9.0
 FOLLOWUP_MAX_TOKENS = 4
 # Follow-up cues on the normalised text: a leading و/ف/طيب/and, or a referring pronoun ending (عليها، عندها…).
 FOLLOWUP_CUE = re.compile(
@@ -123,7 +125,7 @@ class TraceBuilder:
             guards=TraceGuards(**self.guards),
             router=TraceRouter(tool=r.tool, confidence=r.confidence, reason=r.reason),  # type: ignore[arg-type]
             agent=self.agent, retrieval=result.retrieval, answer=result.answer, feedback=result.feedback,
-            injection_suspected=self.injection_suspected,
+            injection_suspected=self.injection_suspected, panel=result.panel,
             steps=self.steps + result.steps or ["render"], latency_ms=latency_ms,
         )
 
@@ -197,7 +199,7 @@ class Agent:
     def run_turn(self, req: ChatRequest, *, request_id: str | None = None) -> tuple[ChatResponse, tools.ToolResult]:
         """One chat turn; also returns the tool result (the API stores practice records from it)."""
         t0 = time.perf_counter()
-        budget = TurnBudget(self.settings.llm_deadline_s or TURN_BUDGET_S)
+        budget = TurnBudget(self._turn_s(not req.force_offline))  # the budget only matters when the LLM is on
         tb = TraceBuilder(request_id=request_id or uuid.uuid4().hex[:12])
         state = ClientState(active_scenario=req.state.active_scenario)
         if not req.force_offline:
@@ -369,6 +371,13 @@ class Agent:
         return chosen, "llm"
 
     # ------------------------------------------------------------------ execution
+    def _turn_s(self, use_llm: bool) -> float:
+        """Turn budget: 9 s when the answer panel can run (LLM_PANEL=1), else LLM_DEADLINE_S (5 s)."""
+        base = self.settings.llm_deadline_s or TURN_BUDGET_S
+        if use_llm and self.llm is not None and getattr(self.llm, "panel", None) is not None:
+            return max(base, PANEL_TURN_BUDGET_S)
+        return base
+
     @staticmethod
     def _answer_s(budget: TurnBudget) -> float:
         """`answer_llm` takes the seconds left in the turn and keeps its own 0.3 s margin (§C6)."""
@@ -459,4 +468,4 @@ def build_default_agent() -> Agent:
     return build_agent(s, store=get_store(s))
 
 
-__all__ = ["AGENT_MIN_S", "Agent", "TraceBuilder", "TurnBudget", "build_agent", "build_default_agent"]
+__all__ = ["AGENT_MIN_S", "PANEL_TURN_BUDGET_S", "Agent", "TraceBuilder", "TurnBudget", "build_agent", "build_default_agent"]

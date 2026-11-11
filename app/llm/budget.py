@@ -18,6 +18,7 @@ from app.logging_setup import log_event
 PRICES_PER_MTOK: dict[str, tuple[float, float]] = {
     "deepseek/deepseek-v4.1-flash": (0.30, 1.20),
     "google/gemini-3.5-flash-lite": (0.30, 2.50),
+    "z-ai/glm-5.3": (0.07, 1.40),  # P8 escalation model (reasoning on; reasoning tokens bill as output)
 }
 # Unknown model (e.g. an escalation model not yet priced here): over-count on purpose.
 UNKNOWN_PRICE_PER_MTOK: tuple[float, float] = (3.00, 15.00)

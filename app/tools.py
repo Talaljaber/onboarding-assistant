@@ -46,6 +46,7 @@ from app.schemas import (
     TraceFeedback,
     TraceHit,
     TraceMargin,
+    TracePanel,
     TraceRetrieval,
     TraceVerifier,
 )
@@ -81,6 +82,7 @@ class ToolResult:
     feedback: TraceFeedback | None = None
     mode: str | None = None
     attempt: dict[str, Any] | None = None
+    panel: TracePanel | None = None
 
 
 def _reply(kind: str, text_ar: str, **kw: Any) -> Reply:
@@ -298,9 +300,31 @@ def _int_or_none(v: Any) -> int | None:
         return None
 
 
+def _panel_trace(info: dict[str, Any]) -> TracePanel | None:
+    """`trace.panel` from the answer path's info (None when the panel did not run or the shape is off)."""
+    raw = info.get("panel")
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return TracePanel.model_validate(raw)
+    except ValueError as exc:
+        log_event("panel_trace_invalid", error=type(exc).__name__)
+        return None
+
+
+def _panel_step(panel: TracePanel | None) -> list[str]:
+    if panel is None:
+        return []
+    if panel.single_call:
+        return ["panel:single_call"]
+    return ["panel:accepted" if panel.accepted else ("panel:escalated" if panel.escalated_to else "panel:draft")]
+
+
 def _llm_answer_reply(res: Any, kb: KnowledgeBase) -> Reply | None:
     """The reply for an accepted LLM answer, or None when it cannot be rendered (falls back offline)."""
     status = getattr(res, "status", None)
+    if status == "unsupported" and getattr(res, "reason", None) == "injection":
+        return _reply("refusal", ans.INJECTION_AR, status="unsupported", reason="injection")
     if status == "unsupported":
         return _reply("refusal", ans.REFUSAL_AR, status="unsupported", reason="out_of_scope")
     if status not in ("answered", "partial"):
@@ -331,26 +355,36 @@ def answer_from_rows(question: str, *, query: str, retriever: Retriever, kb: Kno
     steps = [f"retrieve:{len(hits)}"]
     is_list = retriever.is_list_question(query)
     fallback_tr: TraceAnswer | None = None
+    panel_tr: TracePanel | None = None
     if llm is not None:
         info: dict[str, Any] = {}
         top = kb.get(hits[0].id) if hits else None
-        topic = list_topic or (ans.LIST_TOPIC if is_list and top is not None and top.topic == ans.LIST_TOPIC
-                               else None)
+        # The chooser's list_topic is honoured only for a list question: a single named value
+        # («هل النزاهة من قيم الشركة؟») answers its own row, not the whole list (P8 DEV error analysis).
+        chosen_topic = list_topic if list_topic and retriever.is_list_question(question) else None
+        topic = chosen_topic or (ans.LIST_TOPIC if is_list and top is not None and top.topic == ans.LIST_TOPIC
+                                 else None)
+        band = retriever.band(margin) if hits else "refuse"
         res = call_llm_path(getattr(ans, "answer_llm", None), question, kb.rows(), hits, llm, budget_s,
-                            info=info, previous=previous, list_topic=topic)
+                            info=info, previous=previous, list_topic=topic, band=band)
         reply = _llm_answer_reply(res, kb) if res is not None else None
         cached = bool(info.get("cached"))
         latency = _int_or_none(info.get("latency_ms"))
         escalated = bool(info.get("escalated"))
+        panel_tr = _panel_trace(info)
         if reply is not None:
+            steps += _panel_step(panel_tr)
             steps += ["cache:answer" if cached else "llm:answer", "verify:ok"]
+            if reply.reason == "injection":
+                steps.append("refuse:injection")
             steps.append("render:partial" if reply.status == "partial" else "render")
             retrieval = trace_retrieval(query, hits, margin, kb.version(), list_question=is_list,
                                         topic_expanded=getattr(res, "topic_expanded", None))
             answer_tr = TraceAnswer(llm_status=getattr(res, "status", None), verifier=TraceVerifier(ok=True),
                                     escalated=escalated, latency_ms=latency, cached=cached)
-            return ToolResult(reply, state, steps, retrieval, answer_tr, mode="llm")
+            return ToolResult(reply, state, steps, retrieval, answer_tr, mode="llm", panel=panel_tr)
         reason = _info_reason(info) or ("unrenderable" if res is not None else "unavailable")
+        steps += _panel_step(panel_tr)
         steps += ["llm:answer", f"verify:{reason}"]
         fallback_tr = TraceAnswer(llm_status=info.get("llm_status"),  # type: ignore[arg-type]
                                   verifier=TraceVerifier(ok=False, reason=reason), escalated=escalated,
@@ -360,7 +394,7 @@ def answer_from_rows(question: str, *, query: str, retriever: Retriever, kb: Kno
                                         topic_expanded=None)
             steps.append("refuse:injection")
             reply = _reply("refusal", ans.INJECTION_AR, status="unsupported", reason="injection")
-            return ToolResult(reply, state, steps, retrieval, fallback_tr)
+            return ToolResult(reply, state, steps, retrieval, fallback_tr, panel=panel_tr)
         steps.append("fallback:offline")
     res_off = ans.answer_offline(query, hits, margin, kb, bands=retriever.bands)
     steps.append(f"list:{res_off.topic_expanded}" if res_off.topic_expanded else f"band:{res_off.band}")
@@ -378,7 +412,8 @@ def answer_from_rows(question: str, *, query: str, retriever: Retriever, kb: Kno
         reply = _reply("answer", res_off.text_ar, status=res_off.status, band=res_off.band,
                        sources=[src.model_dump() for src in ans.render_sources(res_off.ids, kb)])
     steps.append("render")
-    return ToolResult(reply, state, steps, retrieval, answer_tr, mode="offline" if llm is not None else None)
+    return ToolResult(reply, state, steps, retrieval, answer_tr, mode="offline" if llm is not None else None,
+                      panel=panel_tr)
 
 
 def refuse(reason: str, *, state: ClientState, retriever: Retriever | None = None, kb: KnowledgeBase | None = None,
