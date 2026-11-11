@@ -135,7 +135,7 @@ def storyboard(r: Run) -> None:
     page.get_by_test_id("intern-signin").click()
     expect(page).to_have_url(re.compile(r"#/chat"))
     expect(page.locator('[data-kind="greeting"]')).to_be_visible()
-    expect(page.locator('[data-kind="starters"] button')).to_have_count(5)
+    expect(page.locator('[data-kind="starters"] button')).to_have_count(6)  # five question starters + the Rumour Check chip (P14.2)
     expect(page.get_by_test_id("role-chip")).to_contain_text("المبيعات")
     expect(page.get_by_test_id("role-chip")).to_contain_text(sales_ar.split()[0])
     r.no_overflow("02")
