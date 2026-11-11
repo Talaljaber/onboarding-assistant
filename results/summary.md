@@ -1,11 +1,11 @@
-# Results (2026-11-11 03:51, commit de6c7a9)
+# Results (2026-11-11 04:01, commit 575302a)
 
 ## DEV — llm mode: correct 142/154 (92.2%)
 - answerable: answered correctly 68 · answered wrong 12 · not attempted (refused) 0 — of 80
 - unanswerable: refused 43/43 (100.0%) · refused or not-confirmed 43/43 (100.0%)
 - guards 13/13 · greet 3/3 · plan 3/3 · progress 6/6 · scenario 6/6
 - invented contacts: 0 · errors: 0
-- latency p50 / p95: 8 / 506 ms · cached 136 · escalated 0
+- latency p50 / p95: 7 / 12 ms · cached 137 · escalated 0
 - LLM-vs-router disagreement: 4 rows (D032, D042, D113, D118)
 - gate: correct 142/154 (92.2%) (≥ 90%) → PASS
 - gate: answerable refused = 0 → PASS
@@ -37,7 +37,7 @@ Not correct: D004 (ids_ok); D007 (ids_ok); D009 (ids_ok); D013 (ids_ok); D022 (i
 - unanswerable: refused 13/43 (30.2%) · refused or not-confirmed 40/43 (93.0%)
 - guards 13/13 · greet 3/3 · plan 3/3 · progress 6/6 · scenario 6/6
 - invented contacts: 0 · errors: 0
-- latency p50 / p95: 11 / 34 ms · cached 0 · escalated 0
+- latency p50 / p95: 10 / 25 ms · cached 0 · escalated 0
 - gate: answerable refused = 0 → PASS
 - gate: unanswerable refused or not-confirmed 40/43 (93.0%) (≥ 90%) → PASS
 - gate: invented contacts = 0 → PASS

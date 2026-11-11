@@ -205,3 +205,16 @@ def test_health_matches_contract() -> None:
 def test_force_offline_is_honoured(agent: Agent) -> None:
     r = ask(agent, "كيف أقدم طلب إجازة؟", force_offline=True)
     assert r.mode == "offline" and r.trace.agent.used is False
+
+
+def test_self_contained_question_is_not_merged_with_previous() -> None:
+    """Demo step 3 (D-W4-followup): the values chip right after the K01 question lists K05–K09."""
+    from app.agent import build_default_agent
+    from app.schemas import ChatRequest
+
+    agent = build_default_agent()
+    r = agent.turn(ChatRequest(message="ما قيم الشركة الخمس؟", role="Sales",
+                               last_user_message="متى تأسست مجموعة الدادا؟"))
+    assert [s.id for s in r.reply.sources] == ["K05", "K06", "K07", "K08", "K09"]
+    r2 = agent.turn(ChatRequest(message="كم عدد المعارض؟", role="Sales", last_user_message="كيف أقدم طلب إجازة؟"))
+    assert [s.id for s in r2.reply.sources] == ["K02"]

@@ -45,10 +45,15 @@ from app.schemas import (
     TraceGuards,
     TraceRouter,
 )
-from app.textnorm import tokens
+from app.textnorm import normalize, tokens
 
 TURN_BUDGET_S = 5.0
 FOLLOWUP_MAX_TOKENS = 4
+# Follow-up cues on the normalised text: a leading و/ف/طيب/and, or a referring pronoun ending (عليها، عندها…).
+FOLLOWUP_CUE = re.compile(
+    r"^(?:و|ف|طيب|طب|and\b|what about\b)"
+    r"|(?<!\w)(?:عليها|عليه|عندها|عنده|عندهم|عنها|عنه|فيها|فيه|منها|منه|لها|له|الها|اله)(?!\w)"
+)
 DEFAULT_ROLE = tools.DEFAULT_ROLE
 AGENT_RESERVE_S = 2.5  # §2.2: the tool choice gets min(1.5 s, remaining - 2.5 s)
 RECOVERY_AFTER_S = 60.0  # §C6: one automatic re-probe on the first turn > 60 s after a failed probe
@@ -404,17 +409,30 @@ class Agent:
             injection=tb.injection_suspected,
         )
 
-    @staticmethod
-    def _previous(req: ChatRequest) -> str | None:
-        """The previous user message when the follow-up rule applies (fewer than 4 tokens), else None."""
-        if req.last_user_message and len(tokens(req.message)) < FOLLOWUP_MAX_TOKENS:
-            return req.last_user_message
-        return None
+    def _previous(self, req: ChatRequest) -> str | None:
+        """The previous user message when the follow-up rule applies, else None.
 
-    @classmethod
-    def _query(cls, req: ChatRequest) -> str:
-        """Follow-up rule: fewer than 4 tokens and a previous message → previous + current."""
-        prev = cls._previous(req)
+        A follow-up is a short message (fewer than 4 content tokens) that does not
+        stand on its own: when the message alone already reaches the `answer` band it is answered alone
+        (D-W4-followup; «ما قيم الشركة الخمس؟» after a K01 question must not stick to K01).
+        """
+        if not req.last_user_message or len(tokens(req.message)) >= FOLLOWUP_MAX_TOKENS:
+            return None
+        words = normalize(req.message).split()
+        if not (len(words) <= 2 or FOLLOWUP_CUE.search(normalize(req.message))):
+            return None
+        try:
+            if self.retriever.is_list_question(req.message):
+                return None
+            if self.retriever.band(self.retriever.margin(req.message)) == "answer":
+                return None
+        except Exception:  # noqa: BLE001 - the rule must never fail a turn
+            return req.last_user_message
+        return req.last_user_message
+
+    def _query(self, req: ChatRequest) -> str:
+        """Follow-up rule (see `_previous`): previous + current, else the message alone."""
+        prev = self._previous(req)
         return f"{prev} {req.message}" if prev else req.message
 
 
