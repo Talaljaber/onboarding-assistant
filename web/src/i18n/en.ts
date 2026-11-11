@@ -402,6 +402,10 @@ export const en: Dict = {
   },
   uiChat: {
     // Worker B (chat) appends here.
+    feedbackTitle: "Notes on your reply",
+    progressLabel: "Completion of suggested activities",
+    planHint: "Suggested activities for each milestone",
+    cited: "Cited in the answer",
   },
   uiLearning: {
     // Worker C (scenarios, plan, quiz, progress) appends here.

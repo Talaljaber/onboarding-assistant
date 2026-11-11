@@ -9,6 +9,8 @@ import { LIMITS } from "@/api/types";
 import { useAppState } from "@/state/useAppState";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
+import { Icon } from "../ui/Icon";
+import { surface } from "../ui/recipes";
 import { AssistantBubble, AssistantFrame } from "./AssistantBubble";
 import { ChatMessage } from "./ChatMessage";
 import { Composer } from "./Composer";
@@ -128,17 +130,20 @@ function ChatInner() {
   return (
     <section
       data-screen="chat"
-      className={cn("mx-auto flex w-full gap-4 px-4 py-4", sideMode ? "max-w-[82rem]" : "max-w-[56rem]")}
+      className={cn(
+        "mx-auto flex w-full px-4 sm:px-6",
+        sideMode ? "max-w-[84rem] gap-8 lg:px-8" : "max-w-[52rem] lg:px-8",
+      )}
     >
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h1 className="text-xl font-bold text-fg-1">{t("chat.title")}</h1>
-          <Button variant="ghost" size="sm" disabled={busy || items.length === 0} onClick={chat.clear}>
+      <div className="flex min-w-0 flex-1 flex-col pt-3 sm:pt-6">
+        <div className="mb-2 flex items-center justify-between gap-3 sm:mb-4">
+          <h1 className="text-xl font-bold leading-snug text-fg-1 sm:text-2xl">{t("chat.title")}</h1>
+          <Button variant="ghost" icon="refresh" className="-me-3" disabled={busy || items.length === 0} onClick={chat.clear}>
             {t("chat.clear")}
           </Button>
         </div>
 
-        <ol aria-label={t("chat.thread")} className="flex flex-col gap-4 pb-4">
+        <ol aria-label={t("chat.thread")} className="flex flex-col gap-5 pb-5 sm:gap-6">
           <li data-kind="greeting">
             <AssistantFrame>
               <AssistantBubble
@@ -155,14 +160,16 @@ function ChatInner() {
             }
             if (item.type === "note") {
               return (
-                <li key={item.id} data-kind="scenario_end" className="text-center text-sm text-fg-3">
+                <li key={item.id} data-kind="scenario_end" className="flex items-center gap-3 text-sm text-fg-3">
+                  <span aria-hidden="true" className="h-px flex-1 bg-line" />
                   {t("extra.practiceEnded")}
+                  <span aria-hidden="true" className="h-px flex-1 bg-line" />
                 </li>
               );
             }
             const shown = sideMode ? selectedItem?.id === item.id : inlineShown(item.id);
             return (
-              <li key={item.id} className="flex flex-col gap-2">
+              <li key={item.id} className="flex min-w-0 flex-col gap-3">
                 <ChatMessage
                   item={item}
                   busy={busy}
@@ -191,18 +198,29 @@ function ChatInner() {
           {lastIsReply && !busy ? t("a11y.newMessage") : ""}
         </div>
 
-        <div className="sticky bottom-(--da-bottom-nav) z-10 -mx-4 bg-page px-4 pb-3 pt-2">
+        <div
+          className={cn(
+            "sticky bottom-(--da-bottom-nav) z-10 -mx-4 bg-page px-4 pb-2 pt-2 sm:-mx-6 sm:px-6 md:pb-5",
+            "lg:-mx-8 lg:px-8",
+          )}
+        >
           {active && (
             <div
               data-practice-banner
-              className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-line bg-surface-1 px-3 py-1.5"
+              className={`${surface.soft} da-rise-in mb-2 flex items-center gap-2 ps-3 pe-1`}
             >
-              <p className="text-sm font-semibold text-fg-1">
+              <Icon name="flask" size={18} className="shrink-0 text-accent" />
+              <p className="min-w-0 flex-1 text-sm font-semibold leading-snug text-fg-1">
                 {t("scenario.banner", { id: active, value: value ?? "" })}
               </p>
-              <Button variant="secondary" size="sm" onClick={chat.endPractice}>
+              <button
+                type="button"
+                onClick={chat.endPractice}
+                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm font-semibold text-accent transition-colors duration-(--da-motion-fast) hover:bg-surface-0"
+              >
+                <Icon name="close" size={16} />
                 {t("scenario.end")}
-              </Button>
+              </button>
             </div>
           )}
           <Composer
@@ -219,12 +237,15 @@ function ChatInner() {
       {sideMode && (
         <aside
           aria-label={t("trace.title")}
-          className="sticky top-4 max-h-[calc(100vh-2rem)] w-[22rem] shrink-0 self-start overflow-y-auto"
+          className="sticky top-[calc(var(--da-header-h)+1.5rem)] mt-6 max-h-[calc(100dvh-var(--da-header-h)-3rem)] w-[24rem] shrink-0 self-start overflow-y-auto rounded-lg"
         >
           {selectedItem?.trace ? (
             <TracePanel trace={selectedItem.trace} citedIds={selectedItem.reply.sources.map((s) => s.id)} />
           ) : (
-            <p className="rounded-lg border border-line bg-surface-1 p-4 text-sm text-fg-2">{t("extra.traceSelect")}</p>
+            <p className={`${surface.panel} flex items-start gap-2 p-4 text-sm text-fg-2`}>
+              <Icon name="eye" size={18} className="mt-0.5 shrink-0 text-fg-3" />
+              {t("extra.traceSelect")}
+            </p>
           )}
         </aside>
       )}

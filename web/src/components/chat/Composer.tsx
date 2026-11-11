@@ -33,7 +33,7 @@ export interface ComposerProps {
 }
 
 /**
- * The message box: a rounded box with a growing textarea and a round send button at the end of the
+ * The message box: a white rounded box with a growing textarea and a 48 px send button at the end of the
  * line. Enter sends, Shift+Enter adds a line, and Enter while an IME composes does nothing. Past the
  * limit the counter turns danger, a helper line explains and sending is disabled. The text is cleared
  * only after it was handed to `onSubmit`. Direction follows what is typed (`dir="auto"`).
@@ -88,9 +88,13 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
     <form onSubmit={onFormSubmit} className="w-full" data-testid="composer">
       <div
         className={cn(
-          "flex w-full items-end gap-2 rounded-3xl border bg-input py-1.5 ps-4 pe-1.5",
-          "transition-colors duration-(--da-motion-fast) hover:border-accent focus-within:border-accent",
-          tooLong ? "border-danger" : "border-line-strong",
+          "flex w-full items-end gap-2 rounded-xl border bg-surface-0 py-1.5 ps-4 pe-1.5 shadow-card",
+          "transition-[border-color,box-shadow] duration-(--da-motion-fast) ease-da",
+          // The box shows focus for the textarea inside it (the textarea's own outline is turned off).
+          "focus-within:outline-2 focus-within:outline-offset-0",
+          tooLong
+            ? "border-danger focus-within:outline-danger"
+            : "border-line-strong hover:border-accent focus-within:border-accent focus-within:outline-focus",
         )}
       >
         <label htmlFor="chat-composer" className="sr-only">
@@ -107,8 +111,8 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
           placeholder={placeholder ?? t("chat.placeholder")}
           aria-invalid={tooLong || undefined}
           aria-describedby="chat-composer-count"
-          style={{ maxHeight: `${MAX_HEIGHT_REM}rem` }}
-          className="min-h-9 min-w-0 flex-1 resize-none self-center bg-transparent py-1.5 text-base leading-6 text-fg-1 outline-none placeholder:text-fg-3"
+          style={{ maxHeight: `${MAX_HEIGHT_REM}rem`, outline: "none" }}
+          className="min-h-10 min-w-0 flex-1 resize-none self-center bg-transparent py-2 text-base leading-6 text-fg-1 placeholder:text-fg-3"
         />
         <button
           type="submit"
@@ -116,9 +120,9 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
           aria-label={t("chat.send")}
           aria-busy={busy || undefined}
           className={cn(
-            "grid size-11 shrink-0 place-items-center rounded-full bg-accent text-on-accent",
-            "transition-[filter,opacity] duration-(--da-motion-fast) hover:brightness-110 active:brightness-95",
-            "disabled:cursor-not-allowed disabled:opacity-45",
+            "grid size-12 shrink-0 place-items-center rounded-lg bg-accent text-on-accent shadow-1",
+            "transition-[background-color,color,transform] duration-(--da-motion-fast) ease-da hover:bg-accent-hover motion-safe:active:scale-95",
+            "disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-fg-3 disabled:shadow-none disabled:active:scale-100",
           )}
         >
           {busy ? (
@@ -130,12 +134,17 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
       </div>
       <p
         id="chat-composer-count"
-        className={cn("mt-1 flex justify-between gap-3 px-3 text-xs", tooLong ? "font-semibold text-danger" : "text-fg-3")}
+        className={cn(
+          "mt-1 flex min-h-4 justify-between gap-3 px-2 text-xs leading-4",
+          tooLong ? "font-semibold text-danger" : "text-fg-3",
+          // Phones keep the bar short: the counter appears once there is text.
+          text.length === 0 && "max-sm:hidden",
+        )}
       >
         <span role={tooLong ? "alert" : undefined}>{tooLong ? t("chat.tooLong", { max: maxLength }) : ""}</span>
-        <span className="font-id" dir="ltr">
+        <bdi dir="ltr" className="shrink-0 tabular-nums">
           {t("chat.counter", { n: text.length, max: maxLength })}
-        </span>
+        </bdi>
       </p>
     </form>
   );

@@ -109,6 +109,96 @@ def kb_manager(page: Page) -> None:
 def about_ready(page: Page) -> None:
     screen("about")(page)
     page.wait_for_selector('[data-testid="health"]', state="visible")
+# ---- B (chat) setup helpers -------------------------------------------------------------------
+CHAT_CLEAR = "محادثة جديدة"
+END_PRACTICE = "إنهاء التدريب"
+TRACE_TOGGLE = "عرض التتبع"
+
+
+def chat_fresh(page: Page) -> None:
+    """Open the chat with an empty thread and practice mode off."""
+    go(page, "#/chat", '[data-kind="greeting"]')
+    end = page.get_by_role("button", name=END_PRACTICE)
+    if end.count() and end.first.is_enabled():
+        end.first.click()
+    toggle = page.get_by_role("button", name=TRACE_TOGGLE)
+    if toggle.count() and toggle.first.is_visible() and toggle.first.get_attribute("aria-pressed") == "true":
+        toggle.first.click()
+    clear = page.get_by_role("button", name=CHAT_CLEAR)
+    if clear.is_enabled():
+        clear.click()
+    page.wait_for_selector('[data-kind="starters"]', state="visible")
+
+
+def chat_settle(page: Page) -> None:
+    """Dismiss toasts (e.g. "progress updated" after ending practice) so they do not cover the card."""
+    for _ in range(5):
+        btn = page.locator("[data-toast-region] button")
+        if not btn.count():
+            break
+        btn.first.click()
+    page.mouse.move(0, 0)
+
+
+def chat_send(page: Page, text: str, kind: str) -> None:
+    """Send a message and wait for a new card of `kind`, then bring it into view (viewport shot)."""
+    cards = page.locator(f'article[data-kind="{kind}"]')
+    before = cards.count()
+    box = page.locator("#chat-composer")
+    box.fill(text)
+    box.press("Enter")
+    page.wait_for_function(
+        "([sel, n]) => document.querySelectorAll(sel).length > n", arg=[f'article[data-kind="{kind}"]', before]
+    )
+    page.wait_for_selector('[data-kind="typing"]', state="detached")
+    card = cards.last
+    chat_settle(page)
+    card.evaluate("el => el.closest('li').scrollIntoView({block: 'start'})")
+    page.evaluate("window.scrollBy(0, -88)")
+
+
+def chat_ask(text: str, kind: str) -> Callable[[Page], None]:
+    def _setup(page: Page) -> None:
+        chat_fresh(page)
+        chat_send(page, text, kind)
+
+    return _setup
+
+
+def chat_scenario_feedback(page: Page) -> None:
+    chat_fresh(page)
+    chat_send(page, "أنا موظف مبيعات وعميل يسأل عن ميزة غير مؤكدة", "scenario_start")
+    chat_send(page, "بقوله إني رح أتأكد من المواصفات من المصدر الرسمي وبرجع له", "scenario_feedback")
+
+
+def chat_trace(page: Page) -> None:
+    chat_fresh(page)
+    chat_send(page, "متى تأسست مجموعة الدادا؟", "answer")
+    page.get_by_role("button", name="كيف أجبت؟").last.click()
+    trace = page.locator("[data-trace]").first
+    trace.wait_for(state="visible")
+    chat_settle(page)
+    if page.viewport_size and page.viewport_size["width"] < 1024:
+        trace.evaluate("el => el.scrollIntoView({block: 'start'})")
+        page.evaluate("window.scrollBy(0, -80)")
+
+
+def chat_trace_side(page: Page) -> None:
+    """Trace beside the thread: at 1280 the header trace switch on (side column; chat_fresh turns it off
+    again); narrower widths open the same trace inline with "How I answered"."""
+    wide = bool(page.viewport_size and page.viewport_size["width"] >= 1280)
+    chat_fresh(page)
+    if wide:
+        page.get_by_role("button", name=TRACE_TOGGLE).click()
+    chat_send(page, "ما قيم الشركة الخمس؟", "answer")
+    if not wide:
+        page.get_by_role("button", name="كيف أجبت؟").last.click()
+    trace = page.locator("[data-trace]").first
+    trace.wait_for(state="visible")
+    chat_settle(page)
+    if not wide:
+        trace.evaluate("el => el.scrollIntoView({block: 'start'})")
+        page.evaluate("window.scrollBy(0, -80)")
 
 
 SHOTS: list[Shot] = [
@@ -134,6 +224,16 @@ SHOTS: list[Shot] = [
     Shot("admin_kb_try", kb_try),  # builds on admin_kb_edited
     Shot("admin_manager", kb_manager),
     Shot("admin_about", about_ready),
+    # ---- B (chat)
+    Shot("chat_trace_side", chat_trace_side, full_page=False),
+    Shot("chat_answer", chat_ask("متى تأسست مجموعة الدادا؟", "answer"), full_page=False),
+    Shot("chat_answer_values", chat_ask("ما قيم الشركة الخمس؟", "answer"), full_page=False),
+    Shot("chat_refusal", chat_ask("شو رقم المدير؟", "refusal"), full_page=False),
+    Shot("chat_scenario_start", chat_ask("أنا موظف مبيعات وعميل يسأل عن ميزة غير مؤكدة", "scenario_start"), full_page=False),
+    Shot("chat_scenario_feedback", chat_scenario_feedback, full_page=False),
+    Shot("chat_progress_proposal", chat_ask("أكملت نشاط اليوم 30", "progress_proposal"), full_page=False),
+    Shot("chat_trace", chat_trace, full_page=False),
+    # ---- end B
 ]
 
 

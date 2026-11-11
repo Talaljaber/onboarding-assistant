@@ -6,6 +6,7 @@ import { useT, type DictKey } from "@/i18n";
 import { ms, score } from "@/lib/format";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
+import { surface } from "../ui/recipes";
 import { intentKey } from "./model";
 
 const BAND_KEY: Record<string, DictKey> = {
@@ -45,8 +46,8 @@ const conf = (v: number) => v.toFixed(2);
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="border-t border-line pt-3 first:border-t-0 first:pt-0">
-      <h5 className="mb-1.5 text-sm font-bold text-fg-2">{title}</h5>
+    <section className={`${surface.inset} min-w-0 p-2.5 sm:p-3`}>
+      <h5 className="mb-1.5 text-xs font-bold text-fg-2">{title}</h5>
       <div className="text-sm leading-6 text-fg-1">{children}</div>
     </section>
   );
@@ -64,8 +65,18 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
   const guard = trace.guards.employment ?? trace.guards.contact;
 
   return (
-    <div data-trace className="flex flex-col gap-3 rounded-lg border border-line bg-surface-1 p-4 shadow-1" aria-label={t("trace.title")} role="group">
-      <h4 className="text-base font-bold text-fg-1">{t("trace.title")}</h4>
+    <div
+      data-trace
+      className={`${surface.card} da-fade-in flex min-w-0 flex-col gap-2.5 p-3 sm:p-4`}
+      aria-label={t("trace.title")}
+      role="group"
+    >
+      <h4 className="flex items-center gap-2 text-base font-bold text-fg-1">
+        <span aria-hidden="true" className="grid size-8 place-items-center rounded-md bg-accent-soft text-accent">
+          <Icon name="eye" size={18} />
+        </span>
+        {t("trace.title")}
+      </h4>
 
       <Section title={t("trace.route")}>
         <p>{t(intentKey(trace))}</p>
@@ -85,9 +96,10 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
       </Section>
 
       <Section title={t("extra.traceSteps")}>
-        <ol className="flex flex-col gap-0.5 border-s-2 border-line-strong ps-3" dir="ltr">
+        <ol className="flex flex-col gap-1" dir="ltr">
           {trace.steps.map((s, i) => (
-            <li key={`${i}-${s}`} className="font-id text-xs text-fg-2">
+            <li key={`${i}-${s}`} className="font-id flex items-center gap-2 break-all text-xs text-fg-2">
+              <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-brand" />
               {s}
             </li>
           ))}
@@ -98,35 +110,55 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
         {r ? (
           <>
             {r.topic_expanded && <p className="mb-1">{t("trace.topicExpansion", { topic: r.topic_expanded })}</p>}
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[22rem] border-collapse text-start text-xs" dir="ltr">
+            <div className="overflow-x-auto" dir="ltr">
+              <table className="w-full border-collapse whitespace-nowrap text-start text-xs" dir="ltr">
                 <thead>
-                  <tr className="text-fg-2">
+                  <tr className="border-b border-line text-fg-2">
                     {(["id", "topic", "dense", "bm25", "rrf", "rank"] as const).map((c) => (
-                      <th key={c} scope="col" className="px-1.5 py-1 text-start font-semibold">
+                      <th key={c} scope="col" className="px-1 py-1.5 sm:px-1.5 text-start font-semibold">
                         {t(`trace.col.${c}`)}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {r.hits.slice(0, 5).map((h) => (
+                  {r.hits.slice(0, 5).map((h) => {
+                    const on = cited.has(h.id);
+                    return (
                     <tr
                       key={h.id}
-                      data-cited={cited.has(h.id) || undefined}
-                      className={cited.has(h.id) ? "bg-surface-2 font-semibold" : undefined}
+                      data-cited={on || undefined}
+                      className={on ? "bg-accent-soft font-semibold text-fg-1" : "text-fg-2"}
                     >
-                      <td className="font-id px-1.5 py-1">{h.id}</td>
-                      <td className="px-1.5 py-1">{h.topic}</td>
-                      <td className="font-id px-1.5 py-1">{score(h.dense)}</td>
-                      <td className="font-id px-1.5 py-1">{score(h.bm25)}</td>
-                      <td className="font-id px-1.5 py-1">{score(h.rrf)}</td>
-                      <td className="font-id px-1.5 py-1">{h.rank}</td>
+                      <td className={on ? "font-id border-s-4 border-s-brand px-1 py-1.5 sm:px-1.5" : "font-id border-s-4 border-s-transparent px-1 py-1.5 sm:px-1.5"}>
+                        <span className="inline-flex items-center gap-1">
+                          {h.id}
+                          {on && (
+                            <>
+                              <Icon name="check" size={12} className="text-accent" />
+                              <span className="sr-only">{t("uiChat.cited")}</span>
+                            </>
+                          )}
+                        </span>
+                      </td>
+                      <td className="max-w-[7rem] truncate px-1 py-1.5 sm:px-1.5">{h.topic}</td>
+                      <td className="font-id px-1 py-1.5 sm:px-1.5">{score(h.dense)}</td>
+                      <td className="font-id px-1 py-1.5 sm:px-1.5">{score(h.bm25)}</td>
+                      <td className="font-id px-1 py-1.5 sm:px-1.5">{score(h.rrf)}</td>
+                      <td className="font-id px-1 py-1.5 sm:px-1.5">{h.rank}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
+            {r.hits.slice(0, 5).some((h) => cited.has(h.id)) && (
+              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-fg-2" aria-hidden="true">
+                <span className="inline-block h-3 w-1 rounded-full bg-brand" />
+                <Icon name="check" size={12} className="text-accent" />
+                {t("uiChat.cited")}
+              </p>
+            )}
             {r.margin && r.margin.margin !== null && band && (
               <p className="mt-1.5">
                 {t("trace.margin", { margin: score(r.margin.margin), band: t(BAND_KEY[band] ?? "trace.band.answer") })}
