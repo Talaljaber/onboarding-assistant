@@ -38,9 +38,9 @@ from app.verify import (
 )
 
 SANITIZER_PROMPT = "panel_sanitizer_v1"
-CITATION_PROMPT = "panel_citation_v1"
+CITATION_PROMPT = "panel_citation_v2"
 COVERAGE_PROMPT = "panel_coverage_v1"
-ESCALATE_PROMPT = "panel_escalate_v1"
+ESCALATE_PROMPT = "panel_escalate_v2"
 SANITIZER_MAX_TOKENS = 400
 JUDGE_MAX_TOKENS = 160
 STAGE_MARGIN_S = 0.3  # time kept back from every stage deadline (render + verify)
@@ -338,8 +338,13 @@ def run_panel(
             rendered = _render(ESCALATE_PROMPT, question=asked, previous=previous or "", rows=answer_rows,
                                draft=None if d is None else {k: d[k] for k in ("status", "answer_ar", "ids")},
                                review=review)
-            st = _run_stage(escalation, "escalation", ESCALATE_PROMPT, rendered, ESCALATION_MAX_TOKENS,
-                            deadline(settings.escalation_s), lambda c: _accept_answer(c, rows, user_texts))
+            ed = deadline(settings.escalation_s)
+            # run on the pool so the wall-clock deadline holds even when the provider keeps the socket alive
+            # (keep-alive bytes reset httpx's read timeout); a late reply is discarded for this turn
+            st = _gather({"escalation": (
+                lambda: _run_stage(escalation, "escalation", ESCALATE_PROMPT, rendered, ESCALATION_MAX_TOKENS,
+                                   ed, lambda c: _accept_answer(c, rows, user_texts)),
+                ed, "escalation", escalation.model_id)})["escalation"]
             stages.append(st)
             votes.append(st.vote(note=None if st.ok else f"failed: {st.reason}"))
             return st

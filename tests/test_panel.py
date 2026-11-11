@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from typing import Any
@@ -235,6 +236,20 @@ def test_escalation_rejected_by_verifier_falls_back_to_flash_draft(tmp_path: Pat
     assert not p.accepted and p.escalated_to == ESC and not p.votes[-1].ok
     assert p.votes[-1].note == "failed: foreign_id"
     assert js(FOREIGN) not in cache.data.values()  # an unverified reply is never cached
+
+
+def test_a_slow_escalation_cannot_hold_the_turn_past_its_deadline(tmp_path: Path, kb: KnowledgeBase) -> None:
+    def slow(_messages: Any) -> str:  # ignores its deadline, like a socket kept alive by the provider
+        time.sleep(5.0)
+        return js(K16)
+
+    fake = PanelFake(sanitizer=sanitizer(), answerer=js(K16), citation_judge=judge(confidence=0.5),
+                     coverage_judge=coverage(), escalation=slow)
+    started = time.monotonic()
+    res, info = run(make_llm(tmp_path, fake), kb, budget_s=3.0)
+    assert time.monotonic() - started < 3.6  # deadline 2.7 s + 0.5 s grace, not 5 s
+    assert res is not None and res.ids == ["K16"]  # the verified flash draft
+    assert panel_of(info).votes[-1].role == "escalation" and not panel_of(info).votes[-1].ok
 
 
 def test_all_stages_time_out_means_offline(tmp_path: Path, kb: KnowledgeBase) -> None:
