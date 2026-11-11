@@ -1,4 +1,4 @@
-"""Fixtures for the browser smoke test: a real uvicorn on port 8010, offline, with a temp live-data dir."""
+"""Fixtures for the browser smoke test: a real uvicorn on port 8010 (or E2E_PORT), offline, with a temp live-data dir."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-PORT = 8010
+PORT = int(os.environ.get("E2E_PORT") or 8010)  # P14.1: E2E_PORT overrides the default for a busy machine
 BASE = f"http://127.0.0.1:{PORT}"
 
 
