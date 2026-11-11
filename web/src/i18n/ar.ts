@@ -415,6 +415,26 @@ export const ar = {
   },
   uiLearning: {
     // Worker C (scenarios, plan, quiz, progress) appends here.
+    scenariosIntro: "مواقف عملية من العمل اليومي مرتبطة بقيم الشركة. تحصل بعد ردك على ملاحظات تدريبية، وليس تقييماً.",
+    suggested: "مقترحة",
+    planProgress: "إنجاز الأنشطة المقترحة",
+    current: "المرحلة الحالية",
+    milestoneDone: "اكتملت",
+    milestoneToggle: "عرض أنشطة {name}",
+    activityKindRead: "قراءة",
+    activityKindScenario: "موقف عملي",
+    activityKindQuiz: "اختبار تدريبي",
+    activityKindSummary: "ملخص",
+    quizIntro: "سؤال واحد في كل مرة، ومع كل إجابة الصف الذي يشرحها من قاعدة المعرفة.",
+    quizProgress: "موقعك في الأسئلة",
+    quizPick: "اختر إجابة واحدة",
+    progressIntro: "ما أنجزته من الأنشطة المقترحة في خطتك، محفوظ في هذا المتصفح.",
+    nextUp: "النشاط المقترح التالي",
+    allDone: "أنجزت كل الأنشطة المقترحة في الخطة.",
+    openPlan: "افتح الخطة",
+    milestonesTitle: "المراحل",
+    manage: "إدارة بيانات التقدم",
+    resetHint: "يحذف تقدم هذا المسار من هذا المتصفح فقط.",
   },
   uiAdmin: {
     // Worker D (kb, manager, about) appends here.

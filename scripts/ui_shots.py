@@ -71,7 +71,65 @@ SHOTS: list[Shot] = [
     Shot("quiz_empty", screen("quiz")),
     Shot("progress_empty", screen("progress")),
     Shot("kb", screen("kb")),
+    # --- C "learning" (P9.3) ---
+    Shot("learning_plan", lambda page: learning_plan(page)),
+    Shot("learning_day90", lambda page: learning_day90(page)),
+    Shot("learning_quiz", lambda page: learning_quiz(page)),
+    Shot("learning_progress", lambda page: learning_progress(page)),
+    Shot("learning_scenarios", lambda page: learning_scenarios(page)),
+    # --- end C ---
 ]
+
+
+# --- C "learning" setup helpers (P9.3) ---
+def _tick_some(page: Page, count: int = 3) -> None:
+    """Tick the first `count` plan activities (idempotent) and let the progress toast go away."""
+    boxes = page.locator("[data-activity] input[type=checkbox]")
+    ticked = False
+    for i in range(count):
+        box = boxes.nth(i)
+        if not box.is_checked():
+            box.check()
+            ticked = True
+    if ticked:
+        page.wait_for_timeout(3400)
+
+
+def learning_plan(page: Page) -> None:
+    go(page, "#/plan", "[data-milestone]")
+    _tick_some(page)
+    toggle = page.locator("[data-activity] button[aria-expanded]").nth(1)
+    if toggle.get_attribute("aria-expanded") == "false":
+        toggle.click()
+    page.wait_for_selector("[data-activity] [data-source-id]", state="visible")
+    page.evaluate("window.scrollTo(0, 0)")
+
+
+def learning_day90(page: Page) -> None:
+    go(page, "#/plan", "[data-milestone]")
+    _tick_some(page)
+    page.locator('[data-screen="plan"]').get_by_role("button", name="عرض الملخص").click()
+    page.wait_for_selector('[data-summary="day90"]', state="visible")
+    page.evaluate("window.scrollTo(0, 0)")
+
+
+def learning_quiz(page: Page) -> None:
+    go(page, "#/quiz", '[data-quiz="question"]')
+    page.locator('[data-quiz="question"]').get_by_role("radio").first.click()
+    page.get_by_role("button", name="تحقق").click()
+    page.wait_for_selector('[data-quiz="question"] [data-source-id]', state="visible")
+    page.evaluate("window.scrollTo(0, 0)")
+
+
+def learning_progress(page: Page) -> None:
+    go(page, "#/progress", '[data-screen="progress"] [role="img"]')
+    page.wait_for_load_state("networkidle")
+
+
+def learning_scenarios(page: Page) -> None:
+    go(page, "#/scenarios", "[data-scenario]")
+    page.wait_for_load_state("networkidle")
+# --- end C helpers ---
 
 
 def fresh(page: Page, base: str, role: bool) -> None:

@@ -405,6 +405,26 @@ export const en: Dict = {
   },
   uiLearning: {
     // Worker C (scenarios, plan, quiz, progress) appends here.
+    scenariosIntro: "Everyday work situations linked to the company values. After your reply you get practice notes, never a grade.",
+    suggested: "Suggested",
+    planProgress: "Suggested activities completed",
+    current: "Current stage",
+    milestoneDone: "Complete",
+    milestoneToggle: "Show the activities of {name}",
+    activityKindRead: "Read",
+    activityKindScenario: "Scenario",
+    activityKindQuiz: "Practice quiz",
+    activityKindSummary: "Summary",
+    quizIntro: "One question at a time, each answer explained by its knowledge-base row.",
+    quizProgress: "Your place in the questions",
+    quizPick: "Choose one answer",
+    progressIntro: "What you have completed of the suggested activities in your plan, saved in this browser.",
+    nextUp: "Next suggested activity",
+    allDone: "You have completed every suggested activity in the plan.",
+    openPlan: "Open the plan",
+    milestonesTitle: "Stages",
+    manage: "Manage progress data",
+    resetHint: "Deletes this track's progress from this browser only.",
   },
   uiAdmin: {
     // Worker D (kb, manager, about) appends here.
