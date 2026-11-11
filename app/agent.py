@@ -268,9 +268,14 @@ class Agent:
         if use_llm and self.llm is not None:
             tb.mode, tb.model = "llm", self.llm.model
         tb.router = Route("give_scenario_feedback", {"scenario_id": scenario_id}, 0.7, "scenario feedback endpoint")
+        # Guards run first here too (D-W5-feedback-guard): a guarded reply never reaches the model;
+        # the endpoint keeps its response shape and gives the offline (server-worded) feedback.
+        from app.guards import run_guards
+
+        guarded = bool(req.user_text) and run_guards(req.user_text or "") is not None
         result = tools.give_scenario_feedback(
             scenario_id, features=self.features, user_text=req.user_text, option_id=req.option_id,
-            llm=self.llm if use_llm and req.user_text else None, budget_s=self._feedback_s(budget),
+            llm=self.llm if use_llm and req.user_text and not guarded else None, budget_s=self._feedback_s(budget),
         )
         if use_llm:
             self._note_hard_failure()

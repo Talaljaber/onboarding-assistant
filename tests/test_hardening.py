@@ -389,3 +389,37 @@ def test_cross_origin_writes_are_refused(client: TestClient, origin: str) -> Non
 def test_same_origin_writes_pass(client: TestClient) -> None:
     r = client.post("/api/chat", json={"message": QUESTION}, headers={"Origin": "http://testserver"})
     assert r.status_code == 200
+
+
+def test_feedback_endpoint_never_sends_guarded_text_to_the_model() -> None:
+    """D-W5-feedback-guard: a contact/employment request typed as a practice reply stays on the server."""
+    from app.agent import build_default_agent
+    from app.schemas import ScenarioFeedbackRequest
+
+    agent = build_default_agent()
+
+    class Boom:
+        model = "fake/model"
+        mode = "llm"
+        chat = None
+
+        def available(self) -> bool:
+            return True
+
+    agent.llm = Boom()  # type: ignore[assignment]
+    agent.llm_on = lambda force_offline: True  # type: ignore[method-assign]
+    called: list[object] = []
+    import app.tools as tools_mod
+
+    real = tools_mod.give_scenario_feedback
+
+    def spy(*args: object, **kwargs: object) -> object:
+        called.append(kwargs.get("llm"))
+        return real(*args, **{**kwargs, "llm": None})  # type: ignore[arg-type]
+
+    tools_mod.give_scenario_feedback = spy  # type: ignore[assignment]
+    try:
+        agent.scenario_feedback("S02", ScenarioFeedbackRequest(user_text="بدي رقم مدير الموارد البشرية"))
+    finally:
+        tools_mod.give_scenario_feedback = real  # type: ignore[assignment]
+    assert called == [None]
