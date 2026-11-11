@@ -406,6 +406,7 @@ def test_feedback_endpoint_never_sends_guarded_text_to_the_model() -> None:
         def available(self) -> bool:
             return True
 
+    saved_llm = agent.llm
     agent.llm = Boom()  # type: ignore[assignment]
     agent.llm_on = lambda force_offline: True  # type: ignore[method-assign]
     called: list[object] = []
@@ -422,4 +423,6 @@ def test_feedback_endpoint_never_sends_guarded_text_to_the_model() -> None:
         agent.scenario_feedback("S02", ScenarioFeedbackRequest(user_text="بدي رقم مدير الموارد البشرية"))
     finally:
         tools_mod.give_scenario_feedback = real  # type: ignore[assignment]
+        agent.llm = saved_llm
+        del agent.llm_on  # back to the class method
     assert called == [None]
