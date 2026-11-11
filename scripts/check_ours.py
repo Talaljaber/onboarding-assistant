@@ -21,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 OFFICIAL = ROOT / "data" / "official"
 OURS = ROOT / "data" / "ours"
-SEALED = "eval_heldout.csv"
+SEALED = ("eval_heldout.csv", "eval_heldout2.csv")
 
 HEADERS: dict[str, list[str]] = {
     "out_of_scope.csv": ["id", "question_ar", "category", "enabled", "source"],
@@ -77,7 +77,7 @@ def normalize(text: str) -> str:
 
 
 def _read(path: Path) -> bytes:
-    if path.name == SEALED:
+    if path.name in SEALED:
         raise RuntimeError("refusing to open the sealed held-out file")
     return path.read_bytes()
 
