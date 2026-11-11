@@ -28,16 +28,22 @@ from app.verify import parse_json_object
 if TYPE_CHECKING:
     import httpx
 
+    from app.llm.panel import PanelSettings
+
 PROMPTS_DIR = ROOT / "prompts"
 PROBE_MESSAGES = [{"role": "user", "content": 'Reply with {"ping":true}'}]
 PROBE_MAX_TOKENS = 10
+#: The escalation model runs with reasoning on (per-call param; provider data_collection deny is kept).
+ESCALATION_PARAMS: dict[str, object] = {"reasoning": {"enabled": True}}
+ESCALATION_MAX_TOKENS = 2000
 
 __all__ = ["LLM", "ProbeResult", "build_llm", "probe", "PROMPTS_DIR"]
 
 
 @dataclass
 class LLM:
-    """`chat` is None when there is no key (or OFFLINE=1). `mode` is what the server should use now."""
+    """`chat` is None when there is no key (or OFFLINE=1). `mode` is what the server should use now.
+    `panel` is set when `LLM_PANEL` is on: knowledge answers then go through `app.llm.panel.run_panel`."""
 
     chat: CachedChat | None
     model: str | None
@@ -46,6 +52,7 @@ class LLM:
     reason: str | None = None
     budget: Budget | None = None
     probed_at: float | None = None
+    panel: PanelSettings | None = None
     _closers: list[Any] = field(default_factory=list, repr=False)
 
     def available(self) -> bool:
@@ -92,7 +99,13 @@ def build_llm(settings: Settings, *, transport: httpx.BaseTransport | None = Non
     chat = CachedChat(client, settings.llm_model, cache, budget, max_tokens=500)
     escalation = None
     if settings.llm_escalation_model and settings.llm_escalation_model != settings.llm_model:
-        escalation = CachedChat(client, settings.llm_escalation_model, cache, budget, max_tokens=500)
+        escalation = CachedChat(client, settings.llm_escalation_model, cache, budget,
+                                max_tokens=ESCALATION_MAX_TOKENS, extra_params=ESCALATION_PARAMS)
+    panel = None
+    if settings.llm_panel:
+        from app.llm.panel import PanelSettings
+
+        panel = PanelSettings(accept=settings.llm_panel_accept)
     exhausted = budget.exhausted()
     llm = LLM(
         chat=chat,
@@ -101,9 +114,11 @@ def build_llm(settings: Settings, *, transport: httpx.BaseTransport | None = Non
         mode="offline" if exhausted else "llm",
         reason="budget_exhausted" if exhausted else None,
         budget=budget,
+        panel=panel,
         _closers=[client, cache],
     )
-    log_event("llm_built", model=settings.llm_model, escalation=settings.llm_escalation_model, mode=llm.mode)
+    log_event("llm_built", model=settings.llm_model, escalation=settings.llm_escalation_model, mode=llm.mode,
+              panel=panel is not None)
     return llm
 
 

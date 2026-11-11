@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -28,6 +29,7 @@ _MS = 1000
 PINNED_PARAMS: Mapping[str, object] = {"temperature": 0, "top_p": 1, "seed": 42}
 JSON_OBJECT: Mapping[str, object] = {"type": "json_object"}
 _TRUE = {"1", "true", "yes", "on"}
+_UNSET = object()
 
 
 class ChatClient(Protocol):
@@ -88,7 +90,21 @@ class CachedChat:
         self.cache_hits = 0
         self.failures = 0
         self.calls = 0
-        self.last_error: str | None = None
+        self._shared_error: str | None = None
+        self._tl = threading.local()
+
+    # -- last_error: per thread (the answer panel calls one CachedChat from several threads) --------
+    @property
+    def last_error(self) -> str | None:
+        """The failure reason of this thread's last `call` (or of the last call in any thread when this
+        thread has made none, e.g. the request thread after a parallel panel stage)."""
+        mine = getattr(self._tl, "error", _UNSET)
+        return self._shared_error if mine is _UNSET else mine  # type: ignore[return-value]
+
+    @last_error.setter
+    def last_error(self, value: str | None) -> None:
+        self._tl.error = value
+        self._shared_error = value
 
     # -- state -----------------------------------------------------------------------------------
     def _blocked(self) -> str | None:

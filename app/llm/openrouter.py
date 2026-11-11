@@ -116,7 +116,9 @@ class OpenRouterClient:
         response_format: Mapping[str, object] | None = None,
         deadline_s: float | None = None,
     ) -> ChatResult:
-        """POST one chat completion. `params` are the pinned request parameters."""
+        """POST one chat completion. `params` are the pinned request parameters; a `reasoning` entry in
+        `params` (e.g. `{"enabled": True}` for the escalation model) replaces the client's reasoning-off
+        default for this call. The provider preferences (data_collection deny) are always sent."""
         body: dict[str, object] = {
             "model": model_id,
             "messages": messages,
@@ -125,8 +127,8 @@ class OpenRouterClient:
         }
         if self._provider is not None:
             body["provider"] = self._provider
-        if self._reasoning_off:
-            body["reasoning"] = {"enabled": False}
+        if self._reasoning_off and "reasoning" not in params:
+            body["reasoning"] = {"enabled": False}  # a per-call `reasoning` param (escalation) wins
         if response_format is not None:
             body["response_format"] = dict(response_format)
         httpx = self._httpx

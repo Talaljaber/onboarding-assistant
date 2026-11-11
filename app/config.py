@@ -52,7 +52,9 @@ class Settings(BaseSettings):
 
     openrouter_api_key: SecretStr | None = None
     llm_model: str = "deepseek/deepseek-v4.1-flash"
-    llm_escalation_model: str | None = None
+    llm_escalation_model: str | None = "z-ai/glm-5.3"
+    llm_panel: bool = True
+    llm_panel_accept: float = Field(default=0.7, ge=0, le=1)
     llm_deadline_s: float = Field(default=5.0, gt=0, le=60)
     llm_agent_deadline_s: float = Field(default=1.5, gt=0, le=60)
     llm_max_retries: int = Field(default=0, ge=0, le=3)
@@ -91,7 +93,7 @@ class Settings(BaseSettings):
     @classmethod
     def _escalation(cls, v: str | None) -> str | None:
         if v is None or not v.strip():
-            return None
+            return None  # empty = no escalation model (the panel then sends the verified flash draft)
         return check_model_id(v)
 
     @model_validator(mode="after")

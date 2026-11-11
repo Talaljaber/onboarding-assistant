@@ -24,6 +24,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from app.kb import KnowledgeBase, Row
+from app.llm.panel import run_panel
 from app.llm.paths import ANSWER_MARGIN_S, llm_answer, should_escalate
 from app.retrieve import Bands, Hit, MarginResult, is_list_question, load_bands, named_values
 from app.schemas import VALUES_AR, Source
@@ -73,6 +74,8 @@ class AnswerResult:
     escalated: bool = False
     #: Refusal reason for the reply (`out_of_scope` when None); `injection` for O1.
     reason: str | None = None
+    #: `schemas.TracePanel` fields when the answer panel ran (P8), else None.
+    panel: dict[str, Any] | None = None
 
     def trace_fields(self) -> dict[str, Any]:
         """Keyword arguments for `schemas.TraceAnswer` (plus `band`)."""
@@ -225,8 +228,15 @@ def answer_llm(
     previous: str | None = None,
     list_topic: str | None = None,
     info: dict[str, Any] | None = None,
+    band: str | None = None,
 ) -> AnswerResult | None:
     """The LLM-worded, server-verified answer, or None (the caller then uses `answer_offline`).
+
+    With `llm.panel` set (LLM_PANEL=1) and no `list_topic`, the answer panel runs (`app.llm.panel`):
+    sanitizer + answerer, two judges, escalation when not confident; `band` (the offline margin band)
+    feeds the sanitizer's injection rule (an `injection` refusal result, mode "llm"). `info["panel"]` and
+    `AnswerResult.panel` carry the `schemas.TracePanel` fields. With the panel off this is the single
+    call below, unchanged.
 
     `kb_rows` are all live rows (D1), `hits` give their ranks, `llm` is the `app.llm.LLM` from
     `build_llm`, `budget_s` the seconds left in the turn (the call gets `budget_s - 0.3`).
@@ -241,12 +251,12 @@ def answer_llm(
     """
     started = time.perf_counter()
     trace: dict[str, Any] = {"llm_status": None, "verifier": None, "escalated": False, "latency_ms": None,
-                             "cached": False}
+                             "cached": False, "panel": None}
 
     def done(result: AnswerResult | None) -> AnswerResult | None:
         trace["latency_ms"] = int((time.perf_counter() - started) * 1000)
-        if info is not None:
-            info.update(trace)
+        if info is not None:  # `panel` only when the panel ran, so `TraceAnswer(**info)` keeps working
+            info.update({k: v for k, v in trace.items() if k != "panel" or v is not None})
         if result is None:
             return None
         return replace(result, **trace)
@@ -257,6 +267,9 @@ def answer_llm(
         rows = [_row_dict(r) for r in kb_rows]
         ranks = {h.id: h.rank for h in hits}
         topic_rows = [r for r in kb_rows if list_topic and r.topic == list_topic]
+        panel_cfg = getattr(llm, "panel", None)
+        if panel_cfg is not None and not topic_rows:
+            return done(_answer_panel(question, rows, ranks, llm, panel_cfg, budget_s, previous, band, trace))
         call_info: dict[str, Any] = {}
         reply, reason = llm_answer(question, rows, ranks, llm.chat, max(0.0, budget_s - ANSWER_MARGIN_S),
                                    previous=previous, list_topic=list_topic, info=call_info)
@@ -267,6 +280,14 @@ def answer_llm(
             reply, reason = llm_answer(question, rows, ranks, llm.escalation, max(0.0, remaining - ANSWER_MARGIN_S),
                                        previous=previous, list_topic=list_topic, info=call_info)
         trace["cached"] = bool(call_info.get("cached"))
+        if panel_cfg is not None:  # a list question with the panel on: one call, the server list first
+            trace["panel"] = {"votes": [{"role": "answerer", "model": call_info.get("model") or llm.model,
+                                         "ok": reply is not None, "confidence": None,
+                                         "note": None if reply is not None else f"failed: {reason}",
+                                         "latency_ms": call_info.get("latency_ms") or 0,
+                                         "cached": trace["cached"]}],
+                              "confidence": None, "accepted": reply is not None, "escalated_to": None,
+                              "single_call": True}
         if reply is None:
             trace["verifier"] = {"ok": False, "reason": reason}
             mark_budget_exhausted(llm, reason)
@@ -277,6 +298,30 @@ def answer_llm(
     except Exception:  # noqa: BLE001 - the LLM path must never fail a request
         trace["verifier"] = {"ok": False, "reason": "internal_error"}
         return done(None)
+
+
+def _answer_panel(question: str, rows: list[dict[str, Any]], ranks: dict[str, int], llm: Any, cfg: Any,
+                  budget_s: float, previous: str | None, band: str | None,
+                  trace: dict[str, Any]) -> AnswerResult | None:
+    """Run the panel and fill `trace`; None when it produced no verified answer."""
+    out = run_panel(question, rows, ranks, llm.chat, getattr(llm, "escalation", None), cfg, budget_s,
+                    previous=previous, band=band)
+    trace["panel"] = out.trace
+    trace["cached"] = out.cached
+    trace["escalated"] = out.escalated
+    if out.budget_exhausted:
+        mark_budget_exhausted(llm, "budget_exhausted")
+    if out.refusal == "injection":
+        trace["verifier"] = {"ok": True, "reason": None}
+        trace["llm_status"] = "unsupported"
+        return replace(injection_refusal(band), mode="llm")
+    if out.reply is None:
+        trace["verifier"] = {"ok": False, "reason": out.reason}
+        mark_budget_exhausted(llm, out.reason)
+        return None
+    trace["verifier"] = {"ok": True, "reason": None}
+    trace["llm_status"] = out.reply["status"]
+    return _compose(out.reply, [], None)
 
 
 def _compose(reply: dict[str, Any], topic_rows: list[Row], list_topic: str | None) -> AnswerResult:
