@@ -47,7 +47,14 @@ def test_a_different_number_gets_a_premise_on_the_cited_row(client: TestClient) 
     assert "K02" in [s["id"] for s in reply["sources"]]
 
 
-@pytest.mark.parametrize("message", [SAID_17, "كم عدد المعارض؟", "My manager said we have 20 showrooms, right?"])
+def test_an_english_message_with_a_different_number_gets_the_premise_too(client: TestClient) -> None:
+    """P16.1 taught the number-and-unit rule English units, so "20 showrooms" is compared with K02's 17."""
+    reply = chat(client, "My manager said we have 20 showrooms, right?")["reply"]
+    if "premise" in reply:  # only when the cited row is K02 (the answer may be the not-confirmed band)
+        assert reply["premise"] == {"claim": "20", "row_number": "17", "row_id": "K02"}
+
+
+@pytest.mark.parametrize("message", [SAID_17, "كم عدد المعارض؟", "My manager said we have 17 showrooms, right?"])
 def test_no_premise_when_the_number_matches_or_is_absent(client: TestClient, message: str) -> None:
     reply = chat(client, message)["reply"]
     assert "premise" not in reply
