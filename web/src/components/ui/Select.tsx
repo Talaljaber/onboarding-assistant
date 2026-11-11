@@ -1,5 +1,6 @@
 import { forwardRef, useId, type ReactNode, type SelectHTMLAttributes } from "react";
 import { cn } from "./cn";
+import { CONTROL, LABEL } from "./TextField";
 
 /** One choice of a {@link Select}. */
 export interface SelectOption {
@@ -32,14 +33,14 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   const descId = description ? `${selectId}-desc` : undefined;
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <label htmlFor={selectId} className={hideLabel ? "sr-only" : "text-sm font-bold text-accent"}>
+      <label htmlFor={selectId} className={hideLabel ? "sr-only" : LABEL}>
         {label}
       </label>
       <select
         ref={ref}
         id={selectId}
         aria-describedby={descId}
-        className="min-h-11 w-full rounded-md border border-line-strong bg-input px-3 text-base text-fg-1 transition-colors duration-(--da-motion-fast) hover:border-accent focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-55"
+        className={cn(CONTROL, "min-h-12")}
         {...rest}
       >
         {options.map((o) => (

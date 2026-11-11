@@ -1,4 +1,5 @@
 import type { SVGProps } from "react";
+import { cn } from "./cn";
 
 /** Names of the built-in icons. */
 export type IconName =
@@ -37,7 +38,13 @@ export type IconName =
   | "edit"
   | "list"
   | "clock"
-  | "eye";
+  | "eye"
+  | "settings"
+  | "arrow-end"
+  | "chevron-end"
+  | "sparkle"
+  | "calendar"
+  | "target";
 
 const PATHS: Record<IconName, string> = {
   check: "M5 12.5l4.5 4.5L19 7.5",
@@ -77,7 +84,16 @@ const PATHS: Record<IconName, string> = {
   clock: "M12 21a9 9 0 100-18 9 9 0 000 18z M12 7v5l3 2",
   eye: "M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z M12 15a3 3 0 100-6 3 3 0 000 6z",
   book: "M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3V4z M5 17a3 3 0 013-3h11",
+  settings: "M4 7h9 M17 7h3 M4 17h3 M11 17h9 M15 5v4 M9 15v4",
+  "arrow-end": "M5 12h14 M13 6l6 6-6 6",
+  "chevron-end": "M9 6l6 6-6 6",
+  sparkle: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z M18.5 15.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6.6-1.4z",
+  calendar: "M4 6h16v14H4z M4 10.5h16 M8.5 3.5v4 M15.5 3.5v4",
+  target: "M12 21a9 9 0 100-18 9 9 0 000 18z M12 16a4 4 0 100-8 4 4 0 000 8z M12 12v.01",
 };
+
+/** Icons that point along the reading direction; they are mirrored in RTL. */
+const DIRECTIONAL: ReadonlySet<IconName> = new Set<IconName>(["arrow-end", "chevron-end"]);
 
 /** Props for {@link Icon}. */
 export interface IconProps extends Omit<SVGProps<SVGSVGElement>, "name"> {
@@ -88,9 +104,10 @@ export interface IconProps extends Omit<SVGProps<SVGSVGElement>, "name"> {
 
 /**
  * Decorative inline icon (`aria-hidden`). Meaning must always be carried by adjacent
- * text; icons only reinforce it (priority is never conveyed by colour alone).
+ * text; icons only reinforce it (priority is never conveyed by colour alone). `arrow-end` and
+ * `chevron-end` point towards the end of the line and flip automatically in RTL.
  */
-export function Icon({ name, size = 16, ...rest }: IconProps) {
+export function Icon({ name, size = 16, className, ...rest }: IconProps) {
   return (
     <svg
       width={size}
@@ -103,6 +120,7 @@ export function Icon({ name, size = 16, ...rest }: IconProps) {
       strokeLinejoin="round"
       aria-hidden="true"
       focusable="false"
+      className={DIRECTIONAL.has(name) ? cn("rtl:-scale-x-100", className) : className}
       {...rest}
     >
       <path d={PATHS[name]} />

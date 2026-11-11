@@ -36,14 +36,14 @@ export function FilterGroup({ legend, children, onSubmit, onReset, submitLabel, 
   };
   return (
     <form onSubmit={submit} onReset={(e) => { e.preventDefault(); onReset?.(); }} className="shrink-0">
-      <fieldset className={cn("min-w-0 rounded-lg border border-line-strong bg-surface-0 px-3 py-1 shadow-1 sm:px-5 sm:pb-4", className)}>
-        <legend className="px-2 text-base font-bold text-accent max-sm:sr-only">{title}</legend>
+      <fieldset className={cn("min-w-0 rounded-lg border border-line bg-surface-0 px-3 py-1 shadow-card sm:px-5 sm:pb-4", className)}>
+        <legend className="px-2 text-base font-bold text-fg-1 max-sm:sr-only">{title}</legend>
         <button
           type="button"
           aria-expanded={open}
           aria-controls={bodyId}
           onClick={() => setOpen((v) => !v)}
-          className="flex min-h-10 w-full items-center justify-between text-base font-bold text-accent sm:hidden"
+          className="flex min-h-11 w-full items-center justify-between text-base font-bold text-fg-1 sm:hidden"
         >
           {title}
           <Icon name="chevron-down" size={18} className={cn("transition-transform", open && "rotate-180")} />

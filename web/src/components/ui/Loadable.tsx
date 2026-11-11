@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useT } from "@/i18n";
 import { Button } from "./Button";
+import { Icon } from "./Icon";
 import { Skeleton } from "./Skeleton";
 
 /** Props for {@link Loadable}. */
@@ -19,10 +20,13 @@ export function Loadable({ state, onRetry, lines = 4, children }: LoadableProps)
   if (state === "loading") return <Skeleton lines={lines} />;
   if (state === "error") {
     return (
-      <div role="alert" className="flex flex-col items-start gap-3 rounded-lg border border-line-strong bg-surface-1 p-4">
-        <p className="text-fg-1">{t("common.loadFailed")}</p>
+      <div role="alert" className="flex flex-col items-start gap-3 rounded-lg border border-line bg-surface-0 p-4 shadow-card sm:flex-row sm:items-center">
+        <p className="flex flex-1 items-center gap-2 text-fg-1">
+          <Icon name="alert" size={18} className="shrink-0 text-warn" />
+          {t("common.loadFailed")}
+        </p>
         {onRetry && (
-          <Button variant="secondary" size="sm" onClick={onRetry}>
+          <Button variant="secondary" icon="refresh" onClick={onRetry}>
             {t("common.retry")}
           </Button>
         )}
