@@ -398,6 +398,27 @@ export const ar = {
     panelEscalated: "تم التصعيد إلى {model}",
     panelSingle: "استدعاء واحد",
   },
+  // P9 redesign. Each block belongs to one owner; append only inside your own block, in both files.
+  uiShell: {
+    navPlanShort: "الخطة",
+    navGroupLearn: "رحلة التعلّم",
+    navGroupTools: "الأدوات والمعلومات",
+    status: "حالة الخدمة",
+    display: "العرض",
+    welcomeEyebrow: "تهيئة الموظفين الجدد · أول 90 يوماً",
+    welcomeRoleHint: "يمكنك تغيير المسار لاحقاً، ويُحفظ تقدم كل مسار على حدة.",
+    welcomeWhat: "ماذا ستجد هنا",
+    welcomeStart: "ابدأ",
+  },
+  uiChat: {
+    // Worker B (chat) appends here.
+  },
+  uiLearning: {
+    // Worker C (scenarios, plan, quiz, progress) appends here.
+  },
+  uiAdmin: {
+    // Worker D (kb, manager, about) appends here.
+  },
 };
 
 /** Dictionary shape: the same nesting as `ar`, every leaf a string. */

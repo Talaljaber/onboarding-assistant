@@ -388,4 +388,25 @@ export const en: Dict = {
     panelEscalated: "Escalated to {model}",
     panelSingle: "Single call",
   },
+  // P9 redesign. Each block belongs to one owner; append only inside your own block, in both files.
+  uiShell: {
+    navPlanShort: "Plan",
+    navGroupLearn: "Learning path",
+    navGroupTools: "Tools and info",
+    status: "Service status",
+    display: "Display",
+    welcomeEyebrow: "New-starter onboarding · first 90 days",
+    welcomeRoleHint: "You can switch track later; progress is kept per track.",
+    welcomeWhat: "What you will find here",
+    welcomeStart: "Start",
+  },
+  uiChat: {
+    // Worker B (chat) appends here.
+  },
+  uiLearning: {
+    // Worker C (scenarios, plan, quiz, progress) appends here.
+  },
+  uiAdmin: {
+    // Worker D (kb, manager, about) appends here.
+  },
 };
