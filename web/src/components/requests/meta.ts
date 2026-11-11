@@ -1,6 +1,6 @@
-// Shared labels, icons and checks for mentor requests (P13.2). Text only: no files, no replies.
+// Shared labels, icons and checks for mentor requests (P13.2) and their reply threads (P15).
 import type { RequestKind, RequestStatus } from "@/api/types";
-import { REQUEST_LIMITS } from "@/api/types";
+import { COMMENT_LIMITS, REQUEST_LIMITS } from "@/api/types";
 import type { DictKey } from "@/i18n";
 import type { IconName } from "../ui/Icon";
 
@@ -34,4 +34,43 @@ export function titleOk(v: string): boolean {
 
 export function noteOk(v: string): boolean {
   return v.trim().length <= REQUEST_LIMITS.noteMax && !hasContact(v);
+}
+
+// ---- P15 reply threads: the server's cheap checks, mirrored (the server checks again, magic bytes included)
+
+export interface Problem {
+  key: DictKey;
+  vars?: Record<string, string | number>;
+}
+
+/** Lower-case extension without the dot. */
+export function fileExt(name: string): string {
+  const m = /\.([A-Za-z0-9]+)$/.exec(name.trim());
+  return m ? m[1]!.toLowerCase() : "";
+}
+
+/** Why these files cannot be attached (type, empty, over 5 MB, more than 3), or null. */
+export function filesProblem(files: readonly { name: string; size: number }[]): Problem | null {
+  if (files.length > COMMENT_LIMITS.filesMax) return { key: "requestThread.errCount" };
+  for (const f of files) {
+    if (!(COMMENT_LIMITS.extensions as readonly string[]).includes(fileExt(f.name)))
+      return { key: "requestThread.errType", vars: { name: f.name } };
+    if (f.size === 0) return { key: "requestThread.errEmptyFile", vars: { name: f.name } };
+    if (f.size > COMMENT_LIMITS.fileMaxBytes) return { key: "requestThread.errSize", vars: { name: f.name } };
+  }
+  return null;
+}
+
+/** Why this reply cannot be sent (too long, a contact, neither text nor a file), or null. */
+export function replyProblem(body: string, fileCount: number): Problem | null {
+  if (body.trim().length > COMMENT_LIMITS.bodyMax) return { key: "requestThread.errLong", vars: { max: COMMENT_LIMITS.bodyMax } };
+  if (hasContact(body)) return { key: "requestThread.errContact" };
+  if (!body.trim() && fileCount === 0) return { key: "requestThread.errEmpty" };
+  return null;
+}
+
+/** "320 KB" / "1.4 MB" (ASCII digits in both languages). */
+export function fileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

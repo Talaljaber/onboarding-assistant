@@ -1,5 +1,6 @@
 // Mentor requests on the admin's intern page (P13.2): every request to this intern with its status (set by
-// the intern), a "New request" form (this intern or the whole track), edit and delete. Text only.
+// the intern), a "New request" form (this intern or the whole track), edit and delete. P15: each request has
+// its reply thread with the intern (text and PDF / Word / image files).
 import { useCallback, useEffect, useState } from "react";
 import { deleteRequest, getAdminRequests } from "@/api/client";
 import type { MentorRequest, Role } from "@/api/types";
@@ -14,6 +15,7 @@ import { surface } from "../ui/recipes";
 import { useToast } from "../ui/Toast";
 import { RequestCard } from "./RequestCard";
 import { RequestDialog } from "./RequestDialog";
+import { RequestThread } from "./RequestThread";
 
 export function AdminRequestsSection({ intern }: { intern: { id: string; role: Role } }) {
   const t = useT();
@@ -76,17 +78,20 @@ export function AdminRequestsSection({ intern }: { intern: { id: string; role: R
                 req={req}
                 showStatus
                 footer={
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
-                    <span className="text-xs text-fg-3">{t("mentorReq.changed", { when: formatWhen(req.status_changed_at, lang) })}</span>
-                    <span className="flex gap-1">
-                      <Button variant="ghost" size="sm" icon="edit" className="max-sm:min-h-11" onClick={() => setDialog({ editing: req })}>
-                        {t("mentorReq.edit")}
-                      </Button>
-                      <Button variant="ghost" size="sm" icon="close" className="max-sm:min-h-11" onClick={() => setRemoving(req)} data-testid="request-delete">
-                        {t("mentorReq.delete")}
-                      </Button>
-                    </span>
-                  </div>
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
+                      <span className="text-xs text-fg-3">{t("mentorReq.changed", { when: formatWhen(req.status_changed_at, lang) })}</span>
+                      <span className="flex gap-1">
+                        <Button variant="ghost" size="sm" icon="edit" className="max-sm:min-h-11" onClick={() => setDialog({ editing: req })}>
+                          {t("mentorReq.edit")}
+                        </Button>
+                        <Button variant="ghost" size="sm" icon="close" className="max-sm:min-h-11" onClick={() => setRemoving(req)} data-testid="request-delete">
+                          {t("mentorReq.delete")}
+                        </Button>
+                      </span>
+                    </div>
+                    <RequestThread req={req} side="admin" />
+                  </>
                 }
               />
             ))}
