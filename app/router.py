@@ -52,6 +52,13 @@ END_PRACTICE = re.compile(
     _W + r"(?:(?:انهاء|انهي|انه|اوقف|وقف|خلص|اطلع من|اخرج من|انتهيت من|انهينا|بكفي)\s*(?:ال)?(?:تدريب|تمرين|موقف)"
     r"|end practice|stop practice|exit practice|quit practice|end (?:the )?scenario)" + _E
 )
+#: A whole short message asking to move on («سؤال ثاني», "another question") also ends practice. Whole message only:
+#: a trainee may ask the customer «عندك سؤال ثاني؟» inside the role-play.
+NEW_TOPIC = re.compile(
+    r"^(?:(?:عندي|بدي|ابي|ابغي|في) )?(?:سوال|موضوع) (?:ثاني|تاني|اخر|جديد|غير)$"
+    r"|^(?:i have |i've got )?(?:another|a new|a different|one more) (?:question|topic)$"
+    r"|^new (?:question|topic)$|^change (?:the )?(?:topic|subject)$"
+)
 COMPLETION = re.compile(
     _W + r"و?(?:اكملت|كملت|خلصت|انهيت|انتهيت|انجزت|اتممت|خلصنا|completed|finished|done|complete)" + _E
 )
@@ -261,7 +268,7 @@ def route(
         return _guard_route(hit)
 
     if state.active_scenario:
-        if END_PRACTICE.search(t):
+        if END_PRACTICE.search(t) or NEW_TOPIC.match(t.strip()):
             return Route("end_scenario", {}, DEFAULT_CONFIDENCE, "end practice phrase")
         # an explicit practice request for a *different* situation switches scenarios instead of being
         # graded as a reply to the current one (QA: «تدريب: زبون يسأل عن ميزة غير مؤكدة» during S01)

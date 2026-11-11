@@ -87,6 +87,11 @@ def test_active_scenario_and_end(scen: Features) -> None:
     assert r.tool == "give_scenario_feedback" and r.args["scenario_id"] == "S02"
     for phrase in ("إنهاء التدريب", "انهي التدريب", "end practice", "أوقف التدريب"):
         assert route(phrase, state=st, scenario_index=scen).tool == "end_scenario", phrase
+    # a whole short "something else" message ends practice too; the same words inside a reply do not
+    for phrase in ("سؤال آخر؟", "عندي سؤال ثاني", "موضوع جديد!", "Another question?", "new topic"):
+        assert route(phrase, state=st, scenario_index=scen).tool == "end_scenario", phrase
+    for reply in ("عندك سؤال ثاني؟", "أكيد، وإذا عندك سؤال آخر أنا موجود"):
+        assert route(reply, state=st, scenario_index=scen).tool == "give_scenario_feedback", reply
 
 
 @pytest.mark.parametrize(
