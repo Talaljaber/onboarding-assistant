@@ -2,7 +2,8 @@
 
 Rules (in this order):
 1. Boilerplate lines are dropped: bare page numbers («3», «- 3 -», «Page 3 of 9», «صفحة 3»), table-of-contents
-   lines with dot leaders, and short lines (headers/footers) that repeat on 3 or more different pages.
+   lines with dot leaders, short copyright lines («جميع الحقوق محفوظة…», «© …», «All rights reserved»), and
+   short lines (headers/footers) that repeat on 3 or more different pages.
 2. Headings start a new passage and are remembered as the topic hint of what follows; they are never part
    of a passage's text (the K-row text stays the document's own sentences).
 3. A paragraph that fits (≤ `MAX_CHARS`, the K-row answer limit) is kept whole; a short passage (< `MIN_CHARS`)
@@ -41,6 +42,8 @@ _PAGE_NUMBER = re.compile(
     r"(?:\s*(?:/|of|من)\s*[\d٠-٩]{1,4})?[\s\-–—|•·]*$",
     re.IGNORECASE,
 )
+_LEGAL = re.compile(r"^[\s©]*(?:copyright\b|all rights reserved|جميع الحقوق محفوظة|حقوق (?:الطبع|النشر) محفوظة|©)",
+                    re.IGNORECASE)
 _TOC = re.compile(r"(?:\.{4,}|…{2,}|·{4,}|(?:\. ){4,})\s*[\d٠-٩]{0,4}\s*$")
 _DIGITS = re.compile(r"[\d٠-٩]+")
 _LETTER = re.compile(r"[^\W\d_]")
@@ -76,7 +79,9 @@ def repeated_lines(blocks: list[Block]) -> set[str]:
 
 def is_boilerplate(line: str, repeated: Collection[str] = frozenset()) -> bool:
     s = line.strip()
-    return not s or bool(_PAGE_NUMBER.match(s)) or bool(_TOC.search(s)) or _line_key(s) in repeated
+    if not s or _PAGE_NUMBER.match(s) or _TOC.search(s) or _line_key(s) in repeated:
+        return True
+    return len(s) <= REPEAT_LINE_MAX and bool(_LEGAL.match(s))
 
 
 def sentences(text: str) -> list[tuple[str, str]]:

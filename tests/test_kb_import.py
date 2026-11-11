@@ -209,7 +209,8 @@ def test_long_paragraph_split_at_sentence_ends_within_max() -> None:
 
 
 def test_boilerplate_pages_toc_and_running_headers() -> None:
-    for line in ("3", "- 3 -", "Page 3 of 9", "صفحة ٣", "الصفحة 4 من 10", "Introduction ........ 3", "مقدمة …… ٥"):
+    for line in ("3", "- 3 -", "Page 3 of 9", "صفحة ٣", "الصفحة 4 من 10", "Introduction ........ 3", "مقدمة …… ٥",
+                 "جميع الحقوق محفوظة لمجموعة الدادا.", "© 2026 Dada Group", "Copyright 2026. All rights reserved."):
         assert is_boilerplate(line), line
     assert not is_boilerplate("يبدأ الدوام الساعة 9 صباحاً.")
     header = "دليل الموظف 2026 — سري"
