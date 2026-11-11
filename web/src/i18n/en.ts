@@ -308,5 +308,7 @@ export const en: Dict = {
   extra: {
     // Screen agents append new keys here, in both files, in the same commit.
     storageUnavailable: "Storage is unavailable; progress will be lost when you close the page.",
+    storeSupabase: "Storage: Supabase",
+    storeLocal: "Storage: local",
   },
 };

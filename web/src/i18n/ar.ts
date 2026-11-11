@@ -318,6 +318,8 @@ export const ar = {
   extra: {
     // Screen agents append new keys here, in both files, in the same commit.
     storageUnavailable: "التخزين غير متاح؛ سيُفقد التقدم عند الإغلاق.",
+    storeSupabase: "التخزين: Supabase",
+    storeLocal: "التخزين: محلي",
   },
 };
 
