@@ -13,6 +13,7 @@ import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
 import { Icon } from "../ui/Icon";
 import { surface } from "../ui/recipes";
+import { toastsTop, useToastDock } from "../ui/Toast";
 import { AssistantBubble, AssistantFrame } from "./AssistantBubble";
 import { ChatMessage } from "./ChatMessage";
 import { Composer } from "./Composer";
@@ -88,6 +89,7 @@ function ChatInner() {
   // than the band (so a scenario card's options are reachable right under its text).
   const listRef = useRef<HTMLOListElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
+  useToastDock(dockRef);
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const scrolledOnce = useRef(false);
   const lastId = items[items.length - 1]?.id ?? null;
@@ -100,7 +102,8 @@ function ChatInner() {
     const main = document.getElementById("main");
     const navH = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
     const top = document.querySelector("header")?.getBoundingClientRect().bottom ?? 0;
-    const bottom = window.innerHeight - navH - (dockRef.current?.offsetHeight ?? 0);
+    // A toast (e.g. "progress updated" with practice feedback) sits just above the dock: the band ends above it.
+    const bottom = Math.min(window.innerHeight - navH - (dockRef.current?.offsetHeight ?? 0), toastsTop());
     const gap = 12;
     const target = !first && !busy && lastType === "reply" ? (listRef.current?.lastElementChild ?? null) : null;
     if (!target) {

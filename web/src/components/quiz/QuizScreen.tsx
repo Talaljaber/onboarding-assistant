@@ -18,7 +18,7 @@ import { Notice } from "@/components/ui/Notice";
 import { Page, PageHeader } from "@/components/ui/Page";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { surface } from "@/components/ui/recipes";
-import { useToast } from "@/components/ui/Toast";
+import { useToast, useToastDock } from "@/components/ui/Toast";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useT } from "@/i18n";
 import { pct } from "@/lib/format";
@@ -45,6 +45,7 @@ export default function QuizScreen() {
   const [finished, setFinished] = useState(false);
   const verdictRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
+  useToastDock(barRef);
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 
   useEffect(() => {
@@ -132,7 +133,7 @@ export default function QuizScreen() {
     </a>
   );
 
-  // Phones: the actions stick above the bottom bar so a toast or the keyboard never hides them.
+  // Phones: the actions stick above the bottom bar (toasts sit above them, useToastDock).
   const actionBar =
     "sticky bottom-(--da-bottom-nav) z-10 -mx-4 -mb-4 flex flex-wrap items-center gap-2 rounded-b-lg border-t border-line bg-surface-0/95 px-4 py-3 backdrop-blur-sm md:static md:mx-0 md:mb-0 md:rounded-none md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none";
 

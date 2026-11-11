@@ -9,12 +9,15 @@ export function useToggleActivity(): (activityId: string) => void {
   const { progress } = useAppState();
   const toast = useToast();
   const t = useT();
-  const toggle = progress.toggle;
+  const { toggle, isDone } = progress;
   return useCallback(
     (id: string) => {
+      const was = isDone(id);
       const next = toggle(id);
-      toast.show(t("progress.updated", { pct: pct(next) }), "ok", 3000);
+      // An untick is not good news: a neutral line, not the "updated" confirmation.
+      if (was) toast.show(t("progressSync.unticked", { pct: pct(next) }), "neutral", 3000);
+      else toast.show(t("progress.updated", { pct: pct(next) }), "ok", 3000);
     },
-    [toggle, toast, t],
+    [toggle, isDone, toast, t],
   );
 }

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { useT } from "@/i18n";
 import { cn } from "./cn";
 import { Icon, type IconName } from "./Icon";
@@ -71,6 +71,57 @@ export function useToast(): ToastApi {
   return useContext(ToastContext);
 }
 
+/** CSS variable: height of the screen's sticky bottom dock (chat composer, quiz actions), set by {@link useToastDock}. */
+const DOCK_VAR = "--da-toast-dock";
+
+function measureDock(el: HTMLElement | null): void {
+  const h = el && getComputedStyle(el).position === "sticky" ? el.offsetHeight : 0;
+  document.documentElement.style.setProperty(DOCK_VAR, `${h}px`);
+}
+
+/**
+ * Lift the toasts above this screen's sticky bottom dock (the chat composer, the quiz action bar) while
+ * the screen is mounted, so a toast never covers it. A dock that is not sticky (wide layouts) counts 0.
+ */
+export function useToastDock(ref: RefObject<HTMLElement | null>): void {
+  const observed = useRef<HTMLElement | null>(null);
+  const ro = useRef<ResizeObserver | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (el !== observed.current) {
+      ro.current?.disconnect();
+      ro.current = null;
+      observed.current = el;
+      if (el && typeof ResizeObserver !== "undefined") {
+        ro.current = new ResizeObserver(() => measureDock(observed.current));
+        ro.current.observe(el);
+      }
+    }
+    measureDock(el);
+  });
+  useEffect(() => {
+    const onResize = () => measureDock(observed.current);
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      ro.current?.disconnect();
+      ro.current = null;
+      observed.current = null;
+      document.documentElement.style.removeProperty(DOCK_VAR);
+    };
+  }, []);
+}
+
+/**
+ * The top edge (viewport px) of the toasts on screen, or `Infinity` when none shows. The chat keeps
+ * its newest reply above it, so a toast never covers the latest message.
+ */
+export function toastsTop(): number {
+  let top = Infinity;
+  for (const c of document.querySelectorAll("[data-toast-region] [role=status]")) top = Math.min(top, c.getBoundingClientRect().top);
+  return top;
+}
+
 /** Props for {@link ToastProvider}. */
 export interface ToastProviderProps {
   children: ReactNode;
@@ -79,8 +130,9 @@ export interface ToastProviderProps {
 /**
  * Holds the toast queue and renders the viewport. The viewport is a polite live
  * region (`aria-live="polite"`) so screen readers announce messages without stealing
- * focus. Timers pause on hover and focus. The viewport sits at the top end, just under the sticky
- * header, on every width: compact, clear of the bottom bar, the chat composer and the quiz actions.
+ * focus. Timers pause on hover and focus. The viewport sits at the bottom end, above the phone bottom
+ * bar and the screen's sticky dock ({@link useToastDock}): never over the page title (H1), the chat
+ * composer or the quiz actions; the chat scrolls its newest reply above it ({@link toastsTop}).
  * At most one confirmation and one warning show at once; a new one replaces the old of its kind.
  */
 export function ToastProvider({ children }: ToastProviderProps) {
@@ -115,7 +167,7 @@ export function ToastProvider({ children }: ToastProviderProps) {
         data-toast-region
         role="region"
         aria-label={t("ui.toast.region")}
-        className="pointer-events-none fixed end-3 top-[calc(var(--da-header-h)+0.5rem)] z-50 flex w-[min(22rem,calc(100vw-1.5rem))] flex-col items-end gap-2 sm:end-4"
+        className="pointer-events-none fixed end-3 bottom-[calc(var(--da-bottom-nav)+var(--da-toast-dock,0px)+0.5rem)] z-50 flex w-[min(22rem,calc(100vw-1.5rem))] flex-col items-end gap-2 sm:end-4"
       >
         <div aria-live="polite" aria-atomic="false" className="flex w-full flex-col items-end gap-2 *:max-w-full">
           {items.map((i) => (
