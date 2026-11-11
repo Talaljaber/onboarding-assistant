@@ -1338,3 +1338,26 @@ export function isMentorRequestList(x: unknown): x is MentorRequestList {
 export function isMentorRequestDeleted(x: unknown): x is MentorRequestDeleted {
   return isObj(x) && isStr(x.id) && x.deleted === true;
 }
+
+// ---------------------------------------------------------------- KB impact (P14.1, admin only)
+
+/** GET /api/admin/kb/{id}/impact: who and what a K-row reaches (ids and names only, never chat text). */
+export interface KbImpact {
+  id: string;
+  /** interns whose turn logs cite the row, roster order */
+  interns: InternPublic[];
+  /** plan activities of either track that reference the row */
+  activity_ids: string[];
+  /** quiz items whose explanation is the row */
+  quiz_ids: string[];
+}
+
+export function isKbImpact(x: unknown): x is KbImpact {
+  return (
+    isObj(x) &&
+    isStr(x.id) &&
+    isArrayOf(x.interns, isInternPublic) &&
+    isArrayOf(x.activity_ids, isStr) &&
+    isArrayOf(x.quiz_ids, isStr)
+  );
+}

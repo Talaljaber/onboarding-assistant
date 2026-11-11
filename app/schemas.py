@@ -1359,6 +1359,22 @@ class ErrorBody(_Model):
     error: ErrorDetail
 
 
+# --------------------------------------------------------------------------------------
+# KB impact (P14.1, admin only): who and what one K-row reaches, before the admin edits it
+# --------------------------------------------------------------------------------------
+
+
+class KbImpact(_Model):
+    """`GET /api/admin/kb/{id}/impact`. `interns`: interns whose turn logs cite the row (roster order; from
+    cited ids only, never chat text, never a count per intern). `activity_ids`: plan activities of either
+    track that reference it; `quiz_ids`: quiz items whose explanation is this row."""
+
+    id: KbId
+    interns: list[InternPublic]
+    activity_ids: list[ActivityId]
+    quiz_ids: list[QuizId]
+
+
 __all__ = [
     "ADMIN_PASSWORD_MAX",
     "AdminLogin",
@@ -1469,4 +1485,6 @@ __all__ = [
     "REQUEST_TITLE_MAX",
     "REQUESTS_LABEL_AR",
     "RequestCounts",
+    # P14.1 KB impact
+    "KbImpact",
 ]
