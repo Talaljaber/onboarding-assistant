@@ -11,8 +11,9 @@ or let a tool refuse on its own (refusal comes from the guards and the answer pa
 
 from __future__ import annotations
 
+import inspect
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ from app import answer as ans
 from app import scenarios as scen_mod
 from app.errors import ApiError
 from app.kb import KnowledgeBase
+from app.logging_setup import log_event
 from app.plan import PlanBook
 from app.quiz import QuizBook
 from app.retrieve import Retriever
@@ -45,6 +47,7 @@ from app.schemas import (
     TraceHit,
     TraceMargin,
     TraceRetrieval,
+    TraceVerifier,
 )
 
 DEFAULT_ROLE = "Sales"
@@ -66,12 +69,18 @@ _TRACE_HITS = 8
 # ======================================================================================= results
 @dataclass
 class ToolResult:
+    """`mode` is set when the tool decided the turn's mode itself (an LLM path that answered → "llm",
+    one that fell back → "offline"); None keeps the turn's mode. `attempt` is the scenario practice
+    record (ids and labels only) the API may store for a profile."""
+
     reply: Reply
     state: ClientState
     steps: list[str] = field(default_factory=list)
     retrieval: TraceRetrieval | None = None
     answer: TraceAnswer | None = None
     feedback: TraceFeedback | None = None
+    mode: str | None = None
+    attempt: dict[str, Any] | None = None
 
 
 def _reply(kind: str, text_ar: str, **kw: Any) -> Reply:
@@ -251,23 +260,123 @@ def search_knowledge(retriever: Retriever, query: str) -> tuple[list[Any], Any]:
     return retriever.search(query), retriever.margin(query)
 
 
+def call_llm_path(fn: Callable[..., Any] | None, *args: Any, info: dict[str, Any], **kw: Any) -> Any:
+    """Call an LLM path function (`answer.answer_llm` / `scenarios.feedback_llm`); pass `info` only when it
+    takes one. Never raises: a crash is logged and becomes None (the caller falls back to the offline path).
+    """
+    if fn is None:
+        info.setdefault("reason", "not_available")
+        return None
+    try:
+        params = inspect.signature(fn).parameters
+        if "info" in params or any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+            kw["info"] = info
+    except (TypeError, ValueError):
+        pass
+    try:
+        return fn(*args, **kw)
+    except ApiError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - an LLM path must never fail the request
+        log_event("llm_path_error", fn=getattr(fn, "__name__", "?"), error=type(exc).__name__)
+        info.setdefault("reason", "internal_error")
+        return None
+
+
+def _info_reason(info: dict[str, Any]) -> str | None:
+    """Why an LLM path returned None: its `verifier.reason` (W3-B paths fill `info`) or our own reason."""
+    v = info.get("verifier")
+    if isinstance(v, dict) and v.get("reason"):
+        return str(v["reason"])
+    return str(info["reason"]) if info.get("reason") else None
+
+
+def _int_or_none(v: Any) -> int | None:
+    try:
+        return max(0, int(v)) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _llm_answer_reply(res: Any, kb: KnowledgeBase) -> Reply | None:
+    """The reply for an accepted LLM answer, or None when it cannot be rendered (falls back offline)."""
+    status = getattr(res, "status", None)
+    if status == "unsupported":
+        return _reply("refusal", ans.REFUSAL_AR, status="unsupported", reason="out_of_scope")
+    if status not in ("answered", "partial"):
+        return None
+    sources = [src.model_dump() for src in ans.render_sources(list(getattr(res, "ids", []) or []), kb)]
+    text = str(getattr(res, "text_ar", "") or "").strip()
+    if not sources or not text:
+        return None
+    if status == "partial" and ans.PARTIAL_NOTE_AR not in text:
+        text = f"{text}\n{ans.PARTIAL_NOTE_AR}"
+    band = getattr(res, "band", None) if getattr(res, "mode", "llm") != "llm" else None
+    if band == "refuse":
+        band = None
+    return _reply("answer", text, status=status, band=band, sources=sources)
+
+
 def answer_from_rows(question: str, *, query: str, retriever: Retriever, kb: KnowledgeBase,
-                     state: ClientState) -> ToolResult:
-    """Offline answer path: retrieve → (server list | band) → render. `query` includes a follow-up prefix."""
+                     state: ClientState, llm: Any | None = None, budget_s: float = 0.0,
+                     previous: str | None = None, list_topic: str | None = None,
+                     injection: bool = False) -> ToolResult:
+    """Retrieve → (LLM answer → verify, when `llm` is given) | offline (server list | band) → render.
+
+    `query` includes a follow-up prefix; `question`/`previous` go to the LLM as separate fields. The role
+    is never a parameter here. With `llm`, a None from `answer.answer_llm` falls back to the offline result
+    (mode "offline"), except for a suspected injection, which gets the fixed injection refusal (§4.5.10).
+    """
     hits, margin = search_knowledge(retriever, query)
-    res = ans.answer_offline(query, hits, margin, kb, bands=retriever.bands)
     steps = [f"retrieve:{len(hits)}"]
-    steps.append(f"list:{res.topic_expanded}" if res.topic_expanded else f"band:{res.band}")
-    retrieval = trace_retrieval(query, hits, margin, kb.version(), list_question=retriever.is_list_question(query),
-                                topic_expanded=res.topic_expanded)
-    answer_tr = TraceAnswer(band=res.band)  # type: ignore[arg-type]
-    if res.refused:
+    is_list = retriever.is_list_question(query)
+    fallback_tr: TraceAnswer | None = None
+    if llm is not None:
+        info: dict[str, Any] = {}
+        top = kb.get(hits[0].id) if hits else None
+        topic = list_topic or (ans.LIST_TOPIC if is_list and top is not None and top.topic == ans.LIST_TOPIC
+                               else None)
+        res = call_llm_path(getattr(ans, "answer_llm", None), question, kb.rows(), hits, llm, budget_s,
+                            info=info, previous=previous, list_topic=topic)
+        reply = _llm_answer_reply(res, kb) if res is not None else None
+        cached = bool(info.get("cached"))
+        latency = _int_or_none(info.get("latency_ms"))
+        escalated = bool(info.get("escalated"))
+        if reply is not None:
+            steps += ["cache:answer" if cached else "llm:answer", "verify:ok"]
+            steps.append("render:partial" if reply.status == "partial" else "render")
+            retrieval = trace_retrieval(query, hits, margin, kb.version(), list_question=is_list,
+                                        topic_expanded=getattr(res, "topic_expanded", None))
+            answer_tr = TraceAnswer(llm_status=getattr(res, "status", None), verifier=TraceVerifier(ok=True),
+                                    escalated=escalated, latency_ms=latency, cached=cached)
+            return ToolResult(reply, state, steps, retrieval, answer_tr, mode="llm")
+        reason = _info_reason(info) or ("unrenderable" if res is not None else "unavailable")
+        steps += ["llm:answer", f"verify:{reason}"]
+        fallback_tr = TraceAnswer(llm_status=info.get("llm_status"),  # type: ignore[arg-type]
+                                  verifier=TraceVerifier(ok=False, reason=reason), escalated=escalated,
+                                  latency_ms=latency, cached=False)
+        if injection:
+            retrieval = trace_retrieval(query, hits, margin, kb.version(), list_question=is_list,
+                                        topic_expanded=None)
+            steps.append("refuse:injection")
+            reply = _reply("refusal", ans.INJECTION_AR, status="unsupported", reason="injection")
+            return ToolResult(reply, state, steps, retrieval, fallback_tr)
+        steps.append("fallback:offline")
+    res_off = ans.answer_offline(query, hits, margin, kb, bands=retriever.bands)
+    steps.append(f"list:{res_off.topic_expanded}" if res_off.topic_expanded else f"band:{res_off.band}")
+    retrieval = trace_retrieval(query, hits, margin, kb.version(), list_question=is_list,
+                                topic_expanded=res_off.topic_expanded)
+    if fallback_tr is not None:
+        answer_tr = fallback_tr.model_copy(update={"band": res_off.band})
+    else:
+        answer_tr = TraceAnswer(band=res_off.band)  # type: ignore[arg-type]
+    if res_off.refused:
         reply = _reply("refusal", ans.REFUSAL_AR, status="unsupported", band="refuse", reason="out_of_scope")
     else:
-        reply = _reply("answer", res.text_ar, status=res.status, band=res.band,
-                       sources=[s.model_dump() for s in ans.render_sources(res.ids, kb)])
+        reply = _reply("answer", res_off.text_ar, status=res_off.status, band=res_off.band,
+                       sources=[src.model_dump() for src in ans.render_sources(res_off.ids, kb)])
     steps.append("render")
-    return ToolResult(reply, state, steps, retrieval, answer_tr)
+    return ToolResult(reply, state, steps, retrieval, answer_tr, mode="offline" if llm is not None else None)
 
 
 def refuse(reason: str, *, state: ClientState, retriever: Retriever | None = None, kb: KnowledgeBase | None = None,
@@ -305,22 +414,54 @@ def start_scenario(scenario_id: str, *, features: Features, mode: str = "offline
 
 
 def give_scenario_feedback(scenario_id: str, *, features: Features, user_text: str | None = None,
-                           option_id: str | None = None) -> ToolResult:
-    """Option → fixed feedback; offline free text → the suggested response and value, nothing scored."""
+                           option_id: str | None = None, llm: Any | None = None,
+                           budget_s: float = 0.0) -> ToolResult:
+    """Option → fixed feedback; free text → LLM feedback (verified, server-worded) when `llm` is given,
+    else (or on any LLM failure) the offline feedback: the suggested response and value, nothing scored."""
     sc = features.scenarios.get(scenario_id)
+    trace_fb = TraceFeedback(llm_used=False)
+    mode: str | None = None
+    steps: list[str] = []
     if option_id is not None:
         try:
             fb = scen_mod.feedback_option(sc, option_id)
         except ValueError:
             raise ApiError("validation_error", 400, f"option {option_id} does not belong to {scenario_id}",
                            "option_id") from None
-        text, step = scen_mod.OPTION_FEEDBACK_TEXT_AR, f"option:{option_id}"
+        text = scen_mod.OPTION_FEEDBACK_TEXT_AR
+        steps.append(f"option:{option_id}")
+        mode = "offline"
     else:
-        fb = scen_mod.feedback_freetext_offline(sc, user_text or "")
-        text, step = scen_mod.FEEDBACK_TEXT_AR, "feedback:offline"
+        llm_fb = None
+        if llm is not None and user_text:
+            info: dict[str, Any] = {}
+            llm_fb = call_llm_path(getattr(scen_mod, "feedback_llm", None), sc, user_text, llm, budget_s,
+                                   info=info)
+            cached = bool(info.get("cached"))
+            reason = None if llm_fb is not None else (_info_reason(info) or "unavailable")
+            trace_fb = TraceFeedback(
+                llm_used=True, verifier=TraceVerifier(ok=llm_fb is not None, reason=reason),
+                tip_dropped=bool(info.get("tip_dropped")), latency_ms=_int_or_none(info.get("latency_ms")),
+                cached=cached,
+            )
+            steps += ["cache:feedback" if cached else "llm:feedback",
+                      "verify:ok" if llm_fb is not None else f"verify:{reason}"]
+            mode = "llm" if llm_fb is not None else "offline"
+        if llm_fb is None:
+            fb = scen_mod.feedback_freetext_offline(sc, user_text or "")
+            steps.append("feedback:offline")
+        else:
+            fb = llm_fb
+        text = scen_mod.FEEDBACK_TEXT_AR
+    met = [str(i) for i in (getattr(fb, "met", None) or [])]
+    checklist_ids = [c.item_id for c in sc.checklist]
+    attempt = {
+        "scenario_id": scenario_id, "mode": fb.mode, "option_id": option_id, "met": met,
+        "missing": [i for i in checklist_ids if i not in met] if fb.mode == "llm" else [], "value": fb.value,
+    }
     reply = _reply("scenario_feedback", text, feedback=fb.to_schema().model_dump(), label_ar=FEEDBACK_LABEL_AR)
-    return ToolResult(reply, ClientState(active_scenario=scenario_id), ["state:active_scenario", step, "render"],
-                      feedback=TraceFeedback(llm_used=False))
+    return ToolResult(reply, ClientState(active_scenario=scenario_id), ["state:active_scenario", *steps, "render"],
+                      feedback=trace_fb, mode=mode, attempt=attempt)
 
 
 def end_scenario() -> ToolResult:
@@ -393,6 +534,7 @@ __all__ = [
     "ToolSpec",
     "ValidationFail",
     "answer_from_rows",
+    "call_llm_path",
     "confirm_progress",
     "end_scenario",
     "give_scenario_feedback",
