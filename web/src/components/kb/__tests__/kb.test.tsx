@@ -80,16 +80,19 @@ async function fillNewRow(dlg: HTMLElement) {
 }
 
 describe("rows table", () => {
-  it("lists every row with status badges, the store badge and the manager mock badge", async () => {
+  it("lists every row with badges only for live changes, and one admin badge in the header", async () => {
     backend();
     mount();
     await loaded();
     expect(document.querySelectorAll("tbody tr")).toHaveLength(kbList.rows.length);
     expect(within(rowOf("K13")).getByText("Edited live")).toBeInTheDocument();
     expect(within(rowOf("K19")).getByText("Added live")).toBeInTheDocument();
-    expect(within(rowOf("K01")).getByText("Official")).toBeInTheDocument();
-    expect(screen.getByText("Manager view (mock)")).toBeInTheDocument();
-    expect(screen.getByText(/Storage: local/i)).toBeInTheDocument();
+    // the default state carries no badge, but keeps its data-status for filters and tests
+    expect(within(rowOf("K01")).queryByText("Official")).toBeNull();
+    expect(rowOf("K01").querySelector('[data-status="official"]')).not.toBeNull();
+    expect(screen.getByText("Admin mode")).toBeInTheDocument();
+    expect(screen.queryByText("Manager view (mock)")).toBeNull();
+    expect(screen.queryByText(/Storage: local/i)).toBeNull();
   });
 
   it("labels an offline edit", async () => {
@@ -323,8 +326,11 @@ describe("manager tab", () => {
     backend();
     mount();
     await userEvent.click(screen.getByRole("tab", { name: "Manager view (demo)" }));
-    const label = await screen.findByText(manager.label_ar);
-    expect(label).toHaveAttribute("dir", "rtl");
+    // English UI: the label's English equivalent (labels follow the UI language), the h1 follows the tab
+    const label = await screen.findByText("Demo profiles, not real employees — not an evaluation");
+    expect(label).toHaveAttribute("data-manager-label");
+    expect(label).toHaveAttribute("dir", "ltr");
+    expect(screen.getByRole("heading", { level: 1, name: "Manager view" })).toBeInTheDocument();
     const view = document.querySelector("[data-manager-view]") as HTMLElement;
     expect(within(view).getByText("متدرب ١")).toBeInTheDocument();
     expect(within(view).getByText("38%")).toBeInTheDocument();

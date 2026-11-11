@@ -15,11 +15,6 @@ export function StatusBadges({ row }: { row: KbRow }) {
   const t = useT();
   return (
     <span className="flex flex-wrap items-center gap-1" data-status={row.status}>
-      {row.status === "official" && (
-        <Badge tone="neutral" icon={null}>
-          {t("kb.official")}
-        </Badge>
-      )}
       {row.status === "edited" && (
         <Badge tone="warn" icon="edit">
           {t("chat.editedLive")}
@@ -104,7 +99,8 @@ function RowCard({ row, onEdit }: { row: KbRow; onEdit: (row: KbRow) => void }) 
         {row.answer_ar}
       </p>
       <div className="flex flex-wrap items-end justify-between gap-3 border-t border-line pt-3">
-        <div className="flex min-w-0 flex-col gap-1">
+        {/* Phones: the source line lives in the edit dialog; the row stays short. */}
+        <div className="flex min-w-0 flex-col gap-1 max-sm:hidden">
           <span className="text-xs font-semibold text-fg-3">{t("uiAdmin.colSource")}</span>
           <SourceMeta row={row} />
         </div>

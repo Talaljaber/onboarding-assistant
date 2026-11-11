@@ -1,13 +1,12 @@
 // #/about: what the prototype is, how it answers, what leaves the device, what is stored,
 // limitations, credits, and the live server status from GET /api/health. No fixed row count:
 // the knowledge base can change by live edits, so the count shown comes from the server.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { getHealth } from "@/api/client";
 import type { Health } from "@/api/types";
 import { linkButton } from "@/components/plan/shared";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { cn } from "@/components/ui/cn";
 import { Dialog } from "@/components/ui/Dialog";
 import { Icon } from "@/components/ui/Icon";
@@ -16,6 +15,16 @@ import { Page, PageHeader } from "@/components/ui/Page";
 import { surface } from "@/components/ui/recipes";
 import { useT } from "@/i18n";
 import { useAppState } from "@/state/useAppState";
+
+/** One part of a section card: an h3 and its text, separated from the next part by a hairline. */
+function Part({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5 p-4 sm:p-5">
+      <h3 className="text-base font-bold text-fg-1">{title}</h3>
+      {children}
+    </div>
+  );
+}
 
 export default function AboutScreen() {
   const t = useT();
@@ -66,45 +75,45 @@ export default function AboutScreen() {
           }
         />
 
-        <section aria-labelledby="about-how" className="flex flex-col gap-4">
+        <section aria-labelledby="about-how" className="flex flex-col gap-3">
           {group("about-how", t("uiAdmin.aboutGroupHow"))}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Card icon="sparkle" title={t("about.what")}>
+          <div className={cn(surface.card, "divide-y divide-line")}>
+            <Part title={t("about.what")}>
               <p className={body}>{t("about.whatText")}</p>
-            </Card>
-            <Card icon="book" title={t("about.how")}>
+            </Part>
+            <Part title={t("about.how")}>
               <p className={body}>{t("extra.aboutHowText")}</p>
-            </Card>
-            <Card icon="alert" variant="muted" title={t("about.limits")} className="lg:col-span-2">
+            </Part>
+            <Part title={t("about.limits")}>
               <p className={body}>{t("about.limitsText")}</p>
-            </Card>
+            </Part>
           </div>
         </section>
 
-        <section aria-labelledby="about-privacy" className="flex flex-col gap-4">
+        <section aria-labelledby="about-privacy" className="flex flex-col gap-3">
           {group("about-privacy", t("uiAdmin.aboutGroupPrivacy"))}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Card icon="globe" title={t("about.leaves")}>
+          <div className={cn(surface.card, "divide-y divide-line")}>
+            <Part title={t("about.leaves")}>
               <p className={body}>{t("about.leavesText")}</p>
-            </Card>
-            <Card icon="lock" title={t("about.stored")}>
+            </Part>
+            <Part title={t("about.stored")}>
               <p className={body}>{t("about.storedText")}</p>
               <button
                 type="button"
                 onClick={() => setConfirm(true)}
-                className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-[color-mix(in_srgb,var(--da-danger)_35%,transparent)] bg-surface-0 px-4 text-base font-semibold text-danger transition-[background-color,border-color,transform] duration-(--da-motion-fast) ease-da hover:border-danger hover:bg-[color-mix(in_srgb,var(--da-danger)_7%,var(--da-surface-0))] motion-safe:active:scale-[0.98] max-sm:w-full"
+                className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-[color-mix(in_srgb,var(--da-danger)_35%,transparent)] bg-surface-0 px-4 text-base font-semibold text-danger transition-[background-color,border-color,transform] duration-(--da-motion-fast) ease-da hover:border-danger hover:bg-[color-mix(in_srgb,var(--da-danger)_7%,var(--da-surface-0))] motion-safe:active:scale-[0.98] max-sm:w-full"
               >
                 <Icon name="close" size={18} className="shrink-0" />
                 {t("about.clear")}
               </button>
-            </Card>
+            </Part>
           </div>
         </section>
 
-        <section aria-labelledby="about-service" className="flex flex-col gap-4">
+        <section aria-labelledby="about-service" className="flex flex-col gap-3">
           {group("about-service", t("uiAdmin.aboutGroupService"))}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-            <Card icon="chart" title={t("about.health")}>
+          <div className={cn(surface.card, "divide-y divide-line")}>
+            <Part title={t("about.health")}>
               <Loadable state={status} onRetry={retry} lines={3}>
                 {health && (
                   <ul className={cn(surface.inset, "m-0 flex list-none flex-col divide-y divide-line p-0 text-fg-1")} data-testid="health">
@@ -134,6 +143,12 @@ export default function AboutScreen() {
                       <Icon name="clock" size={18} className="mt-1 shrink-0 text-fg-3" />
                       <span className="min-w-0 break-words">{t("about.build", { hash: health.build ?? "-" })}</span>
                     </li>
+                    <li className={row}>
+                      <Icon name="lock" size={18} className="mt-1 shrink-0 text-fg-3" />
+                      <span className="min-w-0 break-words">
+                        {t(health.store === "supabase" ? "extra.storeSupabase" : "extra.storeLocal")}
+                      </span>
+                    </li>
                     {health.encoder && (
                       <li className={row}>
                         <Icon name="target" size={18} className="mt-1 shrink-0 text-fg-3" />
@@ -147,10 +162,10 @@ export default function AboutScreen() {
                   </ul>
                 )}
               </Loadable>
-            </Card>
-            <Card icon="graduation" variant="muted" title={t("about.credits")}>
+            </Part>
+            <Part title={t("about.credits")}>
               <p className={body}>{t("extra.aboutCreditsText")}</p>
-            </Card>
+            </Part>
           </div>
         </section>
       </Page>

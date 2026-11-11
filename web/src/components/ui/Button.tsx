@@ -55,6 +55,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         "motion-safe:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 disabled:active:scale-100",
         SIZE[size],
         VARIANT[variant],
+        // A disabled (not loading) primary turns grey like the composer's send button: a faded teal read as enabled.
+        disabled && !loading && variant === "primary" && "disabled:border-transparent disabled:bg-surface-2 disabled:text-fg-3 disabled:opacity-100 disabled:shadow-none",
         block && "w-full",
         className,
       )}

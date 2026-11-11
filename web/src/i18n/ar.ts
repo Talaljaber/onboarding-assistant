@@ -512,7 +512,6 @@ export const ar = {
   uiCalm: {
     // P10.2 declutter.
     langToggle: "EN",
-    statusDetails: "التفاصيل في صفحة حول التطبيق",
     fictionalShort: "مثال افتراضي",
     scenarioPrompt: "اكتب ردّك أو اختر واحداً:",
     practiseAgain: "تدرّب مجدداً",
@@ -523,7 +522,7 @@ export const ar = {
     activitiesLine: "{done} من {total} أنشطة",
     milestoneLine: "{done}/{total}",
     managerHeading: "عرض المدير",
-    sourceCaption: "المصدر: {doc}",
+    mgrLabel: "ملفات تجريبية، ليست موظفين حقيقيين — ليست تقييماً",
   },
 };
 

@@ -501,7 +501,6 @@ export const en: Dict = {
   uiCalm: {
     // P10.2 declutter.
     langToggle: "ع",
-    statusDetails: "Details on the About page",
     fictionalShort: "Fictional example",
     scenarioPrompt: "Write your reply, or pick one:",
     practiseAgain: "Practise again",
@@ -512,6 +511,6 @@ export const en: Dict = {
     activitiesLine: "{done} of {total} activities",
     milestoneLine: "{done}/{total}",
     managerHeading: "Manager view",
-    sourceCaption: "Source: {doc}",
+    mgrLabel: "Demo profiles, not real employees — not an evaluation",
   },
 };

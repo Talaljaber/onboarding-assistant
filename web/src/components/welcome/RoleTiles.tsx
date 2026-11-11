@@ -15,7 +15,7 @@ export function RoleTiles({ onChoose, columns = 2 }: { onChoose: (role: Role) =>
         tone="brand"
         size="lg"
         label={t("role.sales")}
-        hint={t("role.fictional")}
+        hint={t("uiCalm.tileHint")}
         selected={role === "Sales"}
         onClick={() => onChoose("Sales")}
         data-testid="role-sales"
@@ -25,7 +25,7 @@ export function RoleTiles({ onChoose, columns = 2 }: { onChoose: (role: Role) =>
         tone="amber"
         size="lg"
         label={t("role.delivery")}
-        hint={t("role.fictional")}
+        hint={t("uiCalm.tileHint")}
         selected={role === "Delivery"}
         onClick={() => onChoose("Delivery")}
         data-testid="role-delivery"

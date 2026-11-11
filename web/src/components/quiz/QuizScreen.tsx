@@ -143,10 +143,9 @@ export default function QuizScreen() {
           icon="help"
           title={t("quiz.title")}
           badges={
-            <>
-              <Badge tone="info" icon="sparkle">{t("quiz.notEval")}</Badge>
-              <Badge tone="neutral" icon="list">{t("quiz.order")}</Badge>
-            </>
+            <Badge tone="info" icon="sparkle">
+              {t("quiz.notEval")}
+            </Badge>
           }
           description={t("uiLearning.quizIntro")}
         />

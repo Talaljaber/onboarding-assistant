@@ -139,20 +139,13 @@ export default function KbScreen() {
       <Page width="wide">
         <PageHeader
           icon="book"
-          title={t("kb.title")}
+          // The h1 follows the tab; "demo" is in the manager tab label, storage is in About.
+          title={tab === "manager" ? t("uiCalm.managerHeading") : t("kb.title")}
           description={t("kb.intro")}
           badges={
-            <>
-              <Badge tone="info">{t("kb.managerBadge")}</Badge>
-              <Badge tone="neutral" icon="lock">
-                {t("uiAdmin.staffMode")}
-              </Badge>
-              {kb.data && (
-                <Badge tone="neutral" icon={null}>
-                  {kb.data.store === "supabase" ? t("extra.storeSupabase") : t("extra.storeLocal")}
-                </Badge>
-              )}
-            </>
+            <Badge tone="neutral" icon="lock">
+              {t("uiAdmin.staffMode")}
+            </Badge>
           }
           actions={
             <>
