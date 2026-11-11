@@ -39,7 +39,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
       </label>
       <input ref={ref} id={inputId} aria-describedby={descId} className={cn(CONTROL, "min-h-12")} {...rest} />
       {description && (
-        <p id={descId} className="text-sm text-fg-3">
+        <p id={descId} className={cn("text-sm", rest["aria-invalid"] ? "font-medium text-danger" : "text-fg-3")}>
           {description}
         </p>
       )}
@@ -76,7 +76,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
         {...rest}
       />
       {description && (
-        <p id={descId} className="text-sm text-fg-3">
+        <p id={descId} className={cn("text-sm", rest["aria-invalid"] ? "font-medium text-danger" : "text-fg-3")}>
           {description}
         </p>
       )}

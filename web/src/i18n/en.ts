@@ -53,6 +53,7 @@ export const en: Dict = {
       showDetails: "Show details",
       hideDetails: "Hide details",
       sortBy: "Sort by {column}",
+      sortPlaceholder: "Sort by…",
       sortAscending: "Ascending",
       sortDescending: "Descending",
     },

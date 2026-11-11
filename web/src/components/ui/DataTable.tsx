@@ -131,12 +131,12 @@ function CardList<T>({ columns, shown, rowKey, sort, onSortChange, onRowClick, c
       {sortable.length > 0 && (
         <div className="flex items-center gap-2">
           <select
-            aria-label={t("ui.table.sortBy")}
+            aria-label={t("ui.table.sortPlaceholder")}
             value={sort?.columnId ?? ""}
             onChange={(e) => onSortChange(e.target.value === "" ? null : { columnId: e.target.value, dir: sort?.dir ?? "asc" })}
             className="min-h-11 min-w-0 flex-1 rounded-md border border-line-strong bg-input px-3 text-sm text-fg-1"
           >
-            <option value="">{t("ui.table.sortBy")}</option>
+            <option value="">{t("ui.table.sortPlaceholder")}</option>
             {sortable.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.header}

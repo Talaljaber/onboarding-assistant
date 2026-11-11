@@ -63,6 +63,7 @@ export const ar = {
       showDetails: "عرض التفاصيل",
       hideDetails: "إخفاء التفاصيل",
       sortBy: "ترتيب حسب {column}",
+      sortPlaceholder: "ترتيب حسب…",
       sortAscending: "تصاعدي",
       sortDescending: "تنازلي",
     },
@@ -212,7 +213,7 @@ export const ar = {
   plan: {
     title: "خطة التعلم لـ 90 يوماً",
     banner: "خطة تعلم مقترحة للمسابقة، وليست جدول تقييم رسمياً لكل الوظائف.",
-    days1to7: "الأيام 1–7",
+    days1to7: "الأيام ⁦1–7⁩", // LTR isolate: without it RTL shows the range as 7–1
     day30: "اليوم 30",
     day60: "اليوم 60",
     day90: "اليوم 90",

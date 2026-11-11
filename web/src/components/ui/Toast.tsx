@@ -100,7 +100,7 @@ export function ToastProvider({ children }: ToastProviderProps) {
         data-toast-region
         role="region"
         aria-label={t("ui.toast.region")}
-        className="pointer-events-none fixed inset-x-4 bottom-[calc(var(--da-bottom-nav)+6.5rem)] z-50 md:bottom-4 flex flex-col items-end gap-2 md:inset-x-auto md:end-4 md:w-96"
+        className="pointer-events-none fixed inset-x-4 top-[calc(var(--da-header-h)+0.5rem)] z-50 md:top-auto md:bottom-4 flex flex-col items-end gap-2 md:inset-x-auto md:end-4 md:w-96"
       >
         <div aria-live="polite" aria-atomic="false" className="flex w-full flex-col gap-2">
           {items.map((i) => (
