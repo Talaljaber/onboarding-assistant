@@ -371,7 +371,9 @@ def answer_from_rows(question: str, *, query: str, retriever: Retriever, kb: Kno
     else:
         answer_tr = TraceAnswer(band=res_off.band)  # type: ignore[arg-type]
     if res_off.refused:
-        reply = _reply("refusal", ans.REFUSAL_AR, status="unsupported", band="refuse", reason="out_of_scope")
+        why = res_off.reason or "out_of_scope"
+        text = res_off.text_ar if why != "out_of_scope" and res_off.text_ar else ans.REFUSAL_AR
+        reply = _reply("refusal", text, status="unsupported", band="refuse", reason=why)
     else:
         reply = _reply("answer", res_off.text_ar, status=res_off.status, band=res_off.band,
                        sources=[src.model_dump() for src in ans.render_sources(res_off.ids, kb)])

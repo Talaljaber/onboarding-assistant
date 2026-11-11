@@ -335,6 +335,13 @@ class Agent:
             return fallback("refuse_not_allowed" if tool == "refuse" else "precondition", tool, valid)
         if tool == "end_scenario" and not state.active_scenario:
             return fallback("precondition", tool, valid)
+        if r.tool == "answer_from_rows" and (
+            tool == "greet"
+            or (tool == "show_plan" and self.retriever.band(self.retriever.margin(text)) == "answer")
+        ):
+            # Extends the §2.2 agreement rule (D-W3-choice-agree): a greeting or plan pick never
+            # overrides a knowledge question the router sees; the answer path owns refusal.
+            return fallback("router_knowledge_question", tool, valid)
         store_choice(self.llm.chat, info)
 
         args = dict(valid)
