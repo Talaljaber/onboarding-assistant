@@ -227,3 +227,36 @@ def test_injection_with_rejected_answer_is_refused(agent: Agent, fake: Any) -> N
     assert r.trace.injection_suspected
     assert r.reply.kind == "refusal" and r.reply.reason == "injection" and r.reply.sources == []
     assert r.trace.answer is not None and r.trace.answer.verifier is not None and not r.trace.answer.verifier.ok
+
+
+def test_api_health_and_chat_with_fake_llm(agent: Agent, fake: Any) -> None:
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+    from app.schemas import Health
+    from app.store import LocalStore
+
+    client_llm = fake('{"ping": true}', choice("answer_from_rows", question="كيف أقدم طلب إجازة؟", list_topic=None),
+                      content("answer_k16_ok"))
+    store = LocalStore(agent.settings.data_live)
+    try:
+        client = TestClient(create_app(agent.settings, agent=agent, store=store))
+        h = Health.model_validate(client.get("/api/health").json())
+        assert h.mode == "llm" and h.llm_available and h.model == MODEL and h.llm_probe.ok
+        r = ChatResponse.model_validate(client.post("/api/chat", json={"message": "كيف أقدم طلب إجازة؟"}).json())
+        assert r.mode == "llm" and r.reply.sources[0].id == "K16" and len(client_llm.calls) == 3
+        h2 = Health.model_validate(client.get("/api/health").json())
+        assert h2.cache.calls == 3 and h2.budget.spent_usd > 0
+        off = client.post("/api/chat", json={"message": "كيف أقدم طلب إجازة؟", "force_offline": True}).json()
+        assert off["mode"] == "offline" and len(client_llm.calls) == 3
+    finally:
+        store.close()
+
+
+def test_redact_masks_supabase_and_jwt_shapes() -> None:
+    from app.logging_setup import redact
+
+    sb = "sb" + "_secret_" + "AbCdEf0123456789xyz"
+    jwt = "e" + "yJhbGciOiJIUzI1NiJ9." + "e" + "yJyb2xlIjoieCJ9.c2lnbmF0dXJl"
+    out = redact(f"a {sb} b {jwt} c sk-or-v1-abc")
+    assert sb not in out and jwt not in out and "sk-or-v1-abc" not in out and out.count("[redacted]") == 3
