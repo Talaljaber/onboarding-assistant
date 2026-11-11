@@ -102,6 +102,23 @@ export function useChat(): UseChat {
     appRef.current.thread.set(stripForStorage(items));
   }, [items]);
 
+  /**
+   * Record scenario `id` as practised for the current role, and complete the plan activity that
+   * references it. Called as soon as a feedback card arrives (and again on "end practice"); it is
+   * idempotent and toasts only when something new was recorded.
+   */
+  const markPractised = useCallback((id: string) => {
+    const a = appRef.current;
+    const activity = a.plan?.milestones
+      .flatMap((m) => m.activities)
+      .find((x) => x.kind === "scenario" && x.refs.includes(id));
+    const fresh = !(id in a.scenarios.practised) || (activity !== undefined && !a.progress.isDone(activity.id));
+    if (!fresh) return;
+    a.scenarios.mark(id);
+    const pct = activity ? a.progress.fromProposal([activity.id]) : a.progress.percent;
+    toastRef.current.show(tRef.current("progress.updated", { pct }), "ok");
+  }, []);
+
   const run = useCallback(
     async (p: Retry) => {
       if (busyRef.current) return;
@@ -149,8 +166,10 @@ export function useChat(): UseChat {
         ...cur,
         { id: newId(), type: "reply", reply, mode, cached, trace, active: state.active_scenario },
       ]);
+      // Practice counts once feedback exists, even if the user leaves without "end practice".
+      if (reply.kind === "scenario_feedback" && reply.feedback) markPractised(reply.feedback.scenario_id);
     },
-    [commit],
+    [commit, markPractised],
   );
 
   const lastUserText = (): string | null => {
@@ -250,18 +269,11 @@ export function useChat(): UseChat {
   );
 
   const endPractice = useCallback(() => {
-    const a = appRef.current;
     const id = activeScenario(itemsRef.current);
     if (!id) return;
-    const practised = hasFeedback(itemsRef.current, id);
-    if (practised) {
-      a.scenarios.mark(id);
-      const activity = a.plan?.milestones.flatMap((m) => m.activities).find((x) => x.kind === "scenario" && x.refs.includes(id));
-      const pct = activity ? a.progress.fromProposal([activity.id]) : a.progress.percent;
-      toastRef.current.show(tRef.current("progress.updated", { pct }), "ok");
-    }
+    if (hasFeedback(itemsRef.current, id)) markPractised(id);
     commit((cur) => [...cur, { id: newId(), type: "note", note: "practiceEnded", active: null }]);
-  }, [commit]);
+  }, [commit, markPractised]);
 
   const clear = useCallback(() => {
     commit(() => []);

@@ -104,6 +104,7 @@ export function ChatMessage(p: ChatMessageProps) {
     <AssistantFrame
       mode={item.mode}
       cached={item.cached}
+      fixed={kind === "refusal" || kind === "employment" || kind === "unconfirmed"}
       hasTrace={Boolean(item.trace)}
       traceShown={p.traceShown}
       onToggleTrace={p.onToggleTrace}

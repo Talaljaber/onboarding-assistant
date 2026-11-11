@@ -7,6 +7,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useT } from "@/i18n";
 import { pct } from "@/lib/format";
 import { Badge } from "../ui/Badge";
+import { Icon } from "../ui/Icon";
 import { DataTable, type Column, type SortState } from "../ui/DataTable";
 import { Loadable } from "../ui/Loadable";
 import { Notice } from "../ui/Notice";
@@ -131,7 +132,10 @@ export function ManagerView() {
     },
   ];
 
-  const profiles = data?.profiles ?? [];
+  // Profiles that have any progress come first (stable otherwise), so the table never opens on a wall of zeros.
+  const active = (r: ManagerProfileRow) => r.percent > 0 || r.activities_done + r.scenarios_practised + r.quiz_practised > 0;
+  const profiles = [...(data?.profiles ?? [])].sort((a, b) => Number(active(b)) - Number(active(a)));
+  const noProgress = profiles.length > 0 && !profiles.some(active);
   const total = (f: (r: ManagerProfileRow) => number) => profiles.reduce((n, r) => n + f(r), 0);
   const stats = [
     {
@@ -182,12 +186,18 @@ export function ManagerView() {
                 <StatTile key={s.label} label={s.label} value={s.value} icon={s.icon} hint={s.hint} className="min-w-0" />
               ))}
             </div>
+            {noProgress && (
+              <p data-manager-no-progress className="flex items-center gap-2 text-sm text-fg-2">
+                <Icon name="info" size={16} className="shrink-0 text-fg-3" />
+                {t("uiUat.mgrNoProgress")}
+              </p>
+            )}
             {phone ? (
-              <ProfileCards rows={data.profiles} roleName={roleName} empty={t("extra.mgrEmpty")} />
+              <ProfileCards rows={profiles} roleName={roleName} empty={t("extra.mgrEmpty")} />
             ) : (
               <DataTable
                 columns={columns}
-                rows={data.profiles}
+                rows={profiles}
                 rowKey={(r) => r.alias}
                 sort={sort}
                 onSortChange={setSort}

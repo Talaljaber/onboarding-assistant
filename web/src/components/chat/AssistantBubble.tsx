@@ -11,6 +11,8 @@ export interface AssistantFrameProps {
   /** Mode chip; omitted for the greeting and for cards built on the client. */
   mode?: Mode | null;
   cached?: boolean;
+  /** A fixed server text (refusal, employment disclaimer, no confirmed answer): a neutral "fixed reply" chip, never the model chip. */
+  fixed?: boolean;
   /** Show the "How I answered" button (only when the item still has its trace). */
   hasTrace?: boolean;
   traceShown?: boolean;
@@ -31,18 +33,32 @@ export function AssistantAvatar() {
  * The header row every assistant item shares (avatar, label, mode chip and, at the end, the
  * "How I answered" button) with the body underneath at full width, so cards keep the whole line on phones.
  */
-export function AssistantFrame({ mode, cached, hasTrace, traceShown, onToggleTrace, children }: AssistantFrameProps) {
+export function AssistantFrame({ mode, cached, fixed, hasTrace, traceShown, onToggleTrace, children }: AssistantFrameProps) {
   const t = useT();
   return (
     <div className="da-rise-in flex w-full min-w-0 flex-col gap-2">
       <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1">
         <AssistantAvatar />
         <span className="text-sm font-bold text-fg-1">{t("chat.assistant")}</span>
-        {mode && (
+        {mode && fixed && (
+          <span title={t("uiUat.fixedReplyHint")} className="inline-flex">
+            <Badge size="sm" tone="neutral" icon="lock">
+              {t("uiUat.fixedReply")}
+            </Badge>
+          </span>
+        )}
+        {mode && !fixed && (
           <Badge size="sm" tone={mode === "llm" ? "info" : "neutral"} icon={mode === "llm" ? "sparkle" : null}>
             {mode === "llm" ? t("chat.modeLlm") : t("chat.modeOffline")}
-            {cached ? ` · ${t("chat.cached")}` : ""}
           </Badge>
+        )}
+        {mode && !fixed && cached && (
+          <span title={t("uiUat.cachedHint")} className="inline-flex" data-cached>
+            <Badge size="sm" tone="ok" icon="shield">
+              {t("chat.cached")}
+              <span className="sr-only"> — {t("uiUat.cachedHint")}</span>
+            </Badge>
+          </span>
         )}
         {hasTrace && (
           <button

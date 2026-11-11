@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+﻿import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,7 +25,7 @@ import profile from "@fixtures/profile.json";
 import { LIMITS } from "@/api/types";
 import { LangScope } from "@/i18n";
 import { ToastProvider } from "@/components/ui/Toast";
-import { AppStateProvider } from "@/state/useAppState";
+import { AppStateProvider, useAppState } from "@/state/useAppState";
 import { STORAGE_KEY, defaultState, type StoredState } from "@/state/storage";
 import { Header } from "@/components/shell/Header";
 import ChatScreen from "../ChatScreen";
@@ -106,11 +106,13 @@ describe("greeting and starters", () => {
     expect(screen.getByText(/Welcome to the Sales track/)).toBeInTheDocument();
     const starters = within(document.querySelector('[data-kind="starters"]') as HTMLElement).getAllByRole("button");
     expect(starters).toHaveLength(5);
+    expect(starters[0]).toHaveTextContent("What are the company's five values?");
     await userEvent.click(starters[0]!);
     await waitFor(() => expect(card("answer")).not.toBeNull());
     expect(be.chat()).toHaveLength(1);
+    // English UI: the chip shows and sends the English question
     expect(be.chat()[0]!.body).toMatchObject({
-      message: "ما قيم الشركة الخمس؟",
+      message: "What are the company's five values?",
       role: "Sales",
       state: { active_scenario: null },
       force_offline: false,
@@ -211,6 +213,16 @@ describe("card mapping", () => {
     await ask("two");
     await waitFor(() => expect(screen.getByText("Offline mode")).toBeInTheDocument());
   });
+
+  it("a fixed server refusal carries the neutral 'Fixed reply' chip, never the model chip", async () => {
+    const llmRefusal = { ...(contact as Record<string, unknown>), mode: "llm" };
+    backend([llmRefusal]);
+    mount();
+    await ask("رقم المدير؟");
+    await waitFor(() => expect(card("refusal")).not.toBeNull());
+    expect(screen.getByText("Fixed reply")).toBeInTheDocument();
+    expect(screen.queryByText("AI answer")).toBeNull();
+  });
 });
 
 describe("request state", () => {
@@ -296,6 +308,40 @@ describe("practice mode", () => {
     expect(document.querySelector("[data-practice-banner]")).toBeNull();
     // 1 of 8 done -> SA-D60-s02 completes -> 2 of 8 = 25%
     expect(await screen.findByText("Progress updated: 25%")).toBeInTheDocument();
+  });
+
+  it("feedback alone records the practice: leaving without 'end practice' still counts", async () => {
+    backend([scenarioStart, scenarioFeedback]);
+    const initial = seed({}, ["SA-D1-read-company"]);
+    function Probe() {
+      const a = useAppState();
+      return (
+        <p data-probe>
+          {a.progress.percent}|{Object.keys(a.scenarios.practised).join(",")}
+        </p>
+      );
+    }
+    render(
+      <Harness initial={initial}>
+        <ChatScreen />
+        <Probe />
+      </Harness>,
+    );
+    const probe = () => document.querySelector("[data-probe]")!.textContent;
+    await waitFor(() => expect(probe()).toBe("12|"));
+    await ask("تدريب");
+    await waitFor(() => expect(card("scenario_start")).not.toBeNull());
+    expect(probe()).toBe("12|");
+    await ask("بقوله إني رح أتأكد");
+    await waitFor(() => expect(card("scenario_feedback")).not.toBeNull());
+    // recorded as soon as the feedback arrived (no click on "End practice")
+    await waitFor(() => expect(probe()).toBe("25|S02"));
+    expect(document.querySelector("[data-practice-banner]")).not.toBeNull();
+    expect(await screen.findByText("Progress updated: 25%")).toBeInTheDocument();
+    // ending afterwards is idempotent: same state, no second toast
+    await userEvent.click(within(document.querySelector("[data-practice-banner]") as HTMLElement).getByRole("button", { name: "End practice" }));
+    expect(probe()).toBe("25|S02");
+    expect(screen.getAllByText("Progress updated: 25%")).toHaveLength(1);
   });
 
   it("an offline option pick sends option_id with an empty message", async () => {

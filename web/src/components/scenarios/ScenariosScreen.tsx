@@ -23,7 +23,7 @@ export default function ScenariosScreen() {
   const mine: Role = role ?? "Sales";
   const shown: Role = view === "mine" ? mine : other(mine);
   const list = useScenarioList(shown);
-  const roleName = (r: Role) => t(r === "Sales" ? "role.sales" : "role.delivery");
+  const shortName = (r: Role) => t(r === "Sales" ? "uiUat.roleShortSales" : "uiUat.roleShortDelivery");
 
   // A scenario counts as done when the plan activity that references it is complete
   // (the plan is the current role's; the other track has no activities to match).
@@ -58,8 +58,8 @@ export default function ScenariosScreen() {
               value={view}
               onChange={(id) => setView(id === "other" ? "other" : "mine")}
               items={[
-                { id: "mine", label: roleName(mine) },
-                { id: "other", label: t("scenario.viewOther", { role: roleName(other(mine)) }) },
+                { id: "mine", label: shortName(mine) },
+                { id: "other", label: shortName(other(mine)) },
               ]}
             />
             {view === "mine" && list.status === "ready" && list.scenarios.length > 0 && (

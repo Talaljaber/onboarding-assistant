@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import answerLlm from "@fixtures/chat_answer_llm.json";
@@ -25,6 +25,12 @@ describe("TracePanel answer panel section", () => {
   it("renders one row per vote with icon text, 2-decimal confidence, latency, cache and note", () => {
     const el = show({ votes, confidence: 0.7, accepted: true, single_call: false });
     expect(within(el).getByText("Answer panel")).toBeInTheDocument();
+    // model ids sit behind the closed "Technical details" disclosure
+    expect(within(el).queryByText("vendor/model-a")).toBeNull();
+    const techBtn = within(el).getByRole("button", { name: "Technical details" });
+    expect(techBtn).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(techBtn);
+    expect(techBtn).toHaveAttribute("aria-expanded", "true");
     const rows = el.querySelectorAll("[data-vote]");
     expect(rows).toHaveLength(2);
     expect(within(rows[0] as HTMLElement).getByText("Answerer")).toBeInTheDocument();

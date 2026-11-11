@@ -1,6 +1,8 @@
 // "How I answered" (plan D2.6, contract trace): route, steps, retrieval, model, verifier, timing.
-// Everything comes from `response.trace`; scores are three decimals, ASCII digits.
-import type { ReactNode } from "react";
+// Everything comes from `response.trace`; scores are three decimals, ASCII digits. Model ids, raw
+// tool and step names, English reason codes and the request id sit behind a "Technical details"
+// disclosure (closed by default); the route, retrieval, vote rows, summary and checks stay visible.
+import { useId, useState, type ReactNode } from "react";
 import type { PanelRole, Trace } from "@/api/types";
 import { useT, type DictKey } from "@/i18n";
 import { ms, score } from "@/lib/format";
@@ -63,38 +65,57 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
   const llmStatus = trace.answer?.llm_status ?? null;
   const band = trace.answer?.band ?? null;
   const guard = trace.guards.employment ?? trace.guards.contact;
+  const [tech, setTech] = useState(false);
+  const techId = useId();
 
   return (
     <div
       data-trace
+      id={techId}
       className={`${surface.card} da-fade-in flex min-w-0 flex-col gap-2.5 p-3 sm:p-4`}
       aria-label={t("trace.title")}
       role="group"
     >
-      <h4 className="flex items-center gap-2 text-base font-bold text-fg-1">
-        <span aria-hidden="true" className="grid size-8 place-items-center rounded-md bg-accent-soft text-accent">
-          <Icon name="eye" size={18} />
-        </span>
-        {t("trace.title")}
-      </h4>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 className="flex items-center gap-2 text-base font-bold text-fg-1">
+          <span aria-hidden="true" className="grid size-8 place-items-center rounded-md bg-accent-soft text-accent">
+            <Icon name="eye" size={18} />
+          </span>
+          {t("trace.title")}
+        </h4>
+        <button
+          type="button"
+          aria-expanded={tech}
+          aria-controls={techId}
+          data-trace-technical
+          onClick={() => setTech((v) => !v)}
+          className="-me-2 inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-accent transition-colors duration-(--da-motion-fast) ease-da hover:bg-accent-soft"
+        >
+          <Icon name="chevron-down" size={16} className={tech ? "rotate-180 transition-transform duration-(--da-motion-fast) ease-da" : "transition-transform duration-(--da-motion-fast) ease-da"} />
+          {t("uiUat.traceTechnical")}
+        </button>
+      </div>
 
       <Section title={t("trace.route")}>
         <p>{t(intentKey(trace))}</p>
-        {guard && (
+        {tech && guard && (
           <p className="text-fg-2" dir="auto">
             {t("extra.traceGuard", { pattern: guard })}
           </p>
         )}
+        {tech && (
         <p className="flex flex-wrap items-baseline gap-x-2 text-fg-2">
           <span>{t("extra.traceTool")}</span>
           <bdi className="font-id break-all text-xs" dir="ltr">{trace.router.tool}</bdi>
           <bdi className="font-id text-xs" dir="ltr">{score(trace.router.confidence)}</bdi>
         </p>
-        {trace.agent.fallback_reason && (
+        )}
+        {tech && trace.agent.fallback_reason && (
           <p className="text-fg-2">{t("extra.traceFallbackReason", { reason: trace.agent.fallback_reason })}</p>
         )}
       </Section>
 
+      {tech && (
       <Section title={t("extra.traceSteps")}>
         <ol className="flex flex-col gap-1" dir="ltr">
           {trace.steps.map((s, i) => (
@@ -105,6 +126,7 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
           ))}
         </ol>
       </Section>
+      )}
 
       <Section title={t("trace.retrieval")}>
         {r ? (
@@ -172,14 +194,16 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
 
       <Section title={t("trace.model")}>
         <p className="flex flex-wrap items-center gap-2">
-          <span className="font-id" dir="ltr">
-            {trace.model ?? "—"}
-          </span>
+          {tech && (
+            <span className="font-id" dir="ltr">
+              {trace.model ?? "—"}
+            </span>
+          )}
           <Badge tone={trace.mode === "llm" ? "info" : "neutral"} icon={null}>
             {trace.mode === "offline" ? t("trace.notCalled") : cached ? t("trace.cachedHit") : t("trace.called")}
           </Badge>
         </p>
-        {llmStatus && <p className="text-fg-2">{t("trace.llmStatus", { status: llmStatus })}</p>}
+        {tech && llmStatus && <p className="text-fg-2">{t("trace.llmStatus", { status: llmStatus })}</p>}
       </Section>
 
       {trace.panel && (
@@ -190,7 +214,7 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
                 <li key={`${i}-${v.role}`} data-vote={v.role} data-ok={v.ok} className="flex flex-col gap-0.5">
                   <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     <span className="font-semibold">{t(ROLE_KEY[v.role])}</span>
-                    <bdi className="font-id break-all text-xs" dir="ltr">{v.model}</bdi>
+                    {tech && <bdi className="font-id break-all text-xs" dir="ltr">{v.model}</bdi>}
                     <span className={v.ok ? "inline-flex items-center gap-1 text-ok" : "inline-flex items-center gap-1 text-danger"}>
                       <Icon name={v.ok ? "check" : "close"} size={14} />
                       <span>{v.ok ? t("extra.panelOk") : t("extra.panelNo")}</span>
@@ -243,7 +267,7 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
           </ul>
           {!verifier.ok && (
             <p className="mt-1.5 font-semibold text-danger">
-              {verifier.reason && (
+              {tech && verifier.reason && (
                 <span className="font-id me-2" dir="ltr">
                   {verifier.reason}
                 </span>
@@ -255,10 +279,12 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
       )}
 
       <Section title={t("trace.latency", { ms: ms(trace.latency_ms) })}>
-        <p className="flex flex-wrap items-baseline gap-x-2 text-fg-2">
-          <span>{t("trace.requestId")}</span>
-          <bdi className="font-id break-all text-xs" dir="ltr">{trace.request_id}</bdi>
-        </p>
+        {tech ? (
+          <p className="flex flex-wrap items-baseline gap-x-2 text-fg-2">
+            <span>{t("trace.requestId")}</span>
+            <bdi className="font-id break-all text-xs" dir="ltr">{trace.request_id}</bdi>
+          </p>
+        ) : null}
       </Section>
     </div>
   );

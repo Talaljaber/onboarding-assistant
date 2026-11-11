@@ -56,11 +56,13 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: (id: numbe
 export interface ToastApi {
   /** Show a message. `ms` is the auto-dismiss delay (default 4000; `0` keeps it until dismissed). */
   show: (msg: string, tone?: Tone, ms?: number) => void;
+  /** Drop the passing confirmations (every tone except warn and danger), e.g. on a route change. */
+  dismissTransient: () => void;
 }
 
 const TOAST_ICON: Partial<Record<Tone, IconName>> = { ok: "check", warn: "alert", danger: "alert", info: "info" };
 
-const ToastContext = createContext<ToastApi>({ show: () => {} });
+const ToastContext = createContext<ToastApi>({ show: () => {}, dismissTransient: () => {} });
 
 /** Imperative toast API. Outside a {@link ToastProvider} it is a harmless no-op. */
 export function useToast(): ToastApi {
@@ -91,7 +93,14 @@ export function ToastProvider({ children }: ToastProviderProps) {
     setItems((cur) => [...cur, { id, msg, tone, ms }].slice(-MAX_TOASTS));
   }, []);
 
-  const api = useMemo(() => ({ show }), [show]);
+  const dismissTransient = useCallback(() => {
+    setItems((cur) => {
+      const keep = cur.filter((i) => i.tone === "warn" || i.tone === "danger");
+      return keep.length === cur.length ? cur : keep;
+    });
+  }, []);
+
+  const api = useMemo(() => ({ show, dismissTransient }), [show, dismissTransient]);
 
   return (
     <ToastContext.Provider value={api}>

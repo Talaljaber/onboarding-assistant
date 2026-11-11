@@ -35,8 +35,9 @@ export function ScenarioCard({ scenario, done, otherRole }: ScenarioCardProps) {
             <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-md bg-amber-soft text-amber-ink">
               <Icon name="flask" size={20} />
             </span>
-            <h3 id={titleId} className="m-0">
-              <bdi dir="ltr" className="font-id text-base font-bold text-fg-1">
+            <h3 id={titleId} className="m-0 flex flex-wrap items-baseline gap-x-2 text-base font-bold text-fg-1">
+              {t("scenario.title")}
+              <bdi dir="ltr" className="font-id text-xs font-semibold text-fg-3">
                 {scenario.id}
               </bdi>
             </h3>
