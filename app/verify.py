@@ -4,19 +4,19 @@ Nothing the LLM writes reaches the screen unless it passes here. The first faili
 whole reply; the caller then shows the offline result. This module never calls the network, never
 rewrites the model's text and never raises on bad input (bad input is a rejection).
 
-The Arabic normalisation used here follows §C4.1 exactly. It is a private copy until `app/textnorm.py`
-is merged; at that point the `_normalize`, `_ascii_digits` and `_number_words_to_digits` helpers are
-replaced by imports from `app.textnorm` (same semantics).
+All Arabic normalisation (§C4.1: diacritics, char map, Arabic-Indic digits, number words) comes from
+`app.textnorm`, the single normaliser shared with retrieval, guards and the router.
 """
 
 from __future__ import annotations
 
 import json
 import re
-import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
+
+from app.textnorm import ascii_digits, normalize, number_words_to_digits
 
 # -- reasons ------------------------------------------------------------------------------------------
 INVALID_JSON = "invalid_json"
@@ -38,47 +38,10 @@ ANSWER_MAX_CHARS = 700
 QUOTE_MIN_CHARS = 6
 TIP_MAX_WORDS = 25
 
-# -- normalisation (§C4.1; private copy until app/textnorm.py lands) ---------------------------------
-_AR_DIACRITICS = re.compile("[ً-ْٰـ]")
-_AR_CHARMAP = str.maketrans({"أ": "ا", "إ": "ا", "آ": "ا", "ى": "ي", "ة": "ه", "ؤ": "و", "ئ": "ي"})
-_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
-_PUNCT = " \t\n.,;:!?؟،؛-«»\"'"
-_WS = re.compile(r"\s+")
-_NUMBER_WORDS: dict[str, int] = {
-    "واحد": 1, "واحده": 1, "اول": 1, "الاول": 1, "الاولي": 1,
-    "اثنين": 2, "اثنان": 2, "ثاني": 2, "الثاني": 2, "الثانيه": 2,
-    "ثلاث": 3, "ثلاثه": 3, "الثلاثه": 3, "ثالث": 3, "الثالث": 3,
-    "اربع": 4, "اربعه": 4, "خمس": 5, "خمسه": 5, "الخمس": 5, "الخمسه": 5,
-    "سبع": 7, "سبعه": 7, "عشر": 10, "عشره": 10,
-    "سبعطعش": 17, "سبعه عشر": 17, "سبعة عشر": 17,
-    "ثلاثين": 30, "ستين": 60, "تسعين": 90, "تسعون": 90,
-    "شهر": 1, "شهرين": 2, "سنه": 1, "سنتين": 2, "خمسين": 50, "مئه": 100, "ميه": 100, "الف": 1000,
-}  # fmt: skip
-_NUMBER_WORDS_RE = re.compile(
-    r"(?<!\w)و?("
-    + "|".join(re.escape(w) for w in sorted(_NUMBER_WORDS, key=len, reverse=True)).replace(r"\ ", r"\s+")
-    + r")(?!\w)"
-)
-
-
-def _ascii_digits(text: str) -> str:
-    return text.translate(_DIGITS)
-
-
-def _normalize(text: str) -> str:
-    """NFC → collapse whitespace → tanween alif → diacritics off → charmap → ASCII digits → lower → strip."""
-    t = unicodedata.normalize("NFC", text)
-    t = _WS.sub(" ", t)
-    t = t.replace("اً", "ا").replace("ًا", "ا")
-    t = _AR_DIACRITICS.sub("", t)
-    t = t.translate(_AR_CHARMAP)
-    t = _ascii_digits(t)
-    return t.lower().strip(_PUNCT)
-
-
-def _number_words_to_digits(text_norm: str) -> str:
-    """Whole-word number words (an optional و prefix allowed) → digits, on normalised text."""
-    return _NUMBER_WORDS_RE.sub(lambda m: f" {_NUMBER_WORDS[_WS.sub(' ', m.group(1))]} ", text_norm)
+# -- normalisation: app.textnorm (§C4.1) -------------------------------------------------------------
+_ascii_digits = ascii_digits
+_normalize = normalize
+_number_words_to_digits = number_words_to_digits
 
 
 # -- patterns ------------------------------------------------------------------------------------------
