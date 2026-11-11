@@ -325,8 +325,19 @@ def _pdf_blocks(data: bytes) -> tuple[list[Block], int]:
                         out[-1] = f"{out[-1]} {line}"
                     else:
                         out.append(line)
-                if out:
-                    blocks.append(Block("\n".join(out), n))
+                # A PDF keeps no heading styles: a short line without closing punctuation that is followed by
+                # more text is a heading (a wrapped sentence line over 40 characters was joined above).
+                body: list[str] = []
+                for i, line in enumerate(out):
+                    if i + 1 < len(out) and len(line) <= 40 and not _SENTENCE_END.search(line):
+                        if body:
+                            blocks.append(Block("\n".join(body), n))
+                            body = []
+                        blocks.append(Block(line, n, "heading"))
+                    else:
+                        body.append(line)
+                if body:
+                    blocks.append(Block("\n".join(body), n))
         return blocks, len(pages)
     except ImportRejected:
         raise

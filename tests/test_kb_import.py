@@ -196,6 +196,19 @@ def test_pdf_pages_when_pypdf_is_installed() -> None:
     assert [b.page for b in blocks] == [1, 2] and "14 days" in blocks[0].text
 
 
+def test_pdf_short_unpunctuated_lines_become_headings() -> None:
+    """A PDF has no heading styles: a short line with no closing punctuation, followed by text, splits the page."""
+    pytest.importorskip("pypdf")
+    pdf = make_pdf([["Daily tools guide", "This is a sample.", "Laptop and account",
+                     "You get a laptop on your first day.", "Ticket system", "Report every issue in the ticket system.",
+                     "Page 1"]])
+    _, blocks, _ = extract("t.pdf", pdf)
+    assert [(b.kind, b.text) for b in blocks] == [
+        ("heading", "Daily tools guide"), ("para", "This is a sample."), ("heading", "Laptop and account"),
+        ("para", "You get a laptop on your first day."), ("heading", "Ticket system"),
+        ("para", "Report every issue in the ticket system.\nPage 1")]
+
+
 def test_pdf_unavailable_without_pypdf(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ex, "pdf_available", lambda: False)
     assert "pdf" not in ex.supported_types()
