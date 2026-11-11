@@ -61,6 +61,16 @@ describe("ProgressScreen", () => {
     expect(section).not.toHaveTextContent("S01");
   });
 
+  it("a quiz ticked on another device says so instead of 'no attempt yet'; signed in, the intro names the server", async () => {
+    stubApi();
+    renderScreen(<ProgressScreen />, { data: { ...DATA, quiz: [], profile_id: "6f1c2b9e-0000-4000-8000-000000000001" } });
+    await screen.findByRole("img", { name: /نسبة الإنجاز 25/ });
+    expect(screen.getByTestId("quiz-none")).toHaveTextContent("أُنجز — تفاصيل المحاولة على الجهاز الذي استخدمته");
+    expect(screen.queryByText("لم تُجرَ محاولة بعد")).toBeNull();
+    expect(screen.getByText(/يُحفظ تقدّمك على الخادم/)).toBeInTheDocument();
+    expect(screen.queryByText(/محفوظ في هذا المتصفح/)).toBeNull();
+  });
+
   it("opens the Day 90 summary", async () => {
     stubApi();
     renderScreen(<ProgressScreen />, { data: DATA });

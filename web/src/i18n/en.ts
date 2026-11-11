@@ -853,4 +853,9 @@ export const en: Dict = {
     unavailable: "Replies are not available right now.",
     downloadFailed: "The file could not be downloaded.",
   },
+  progressSync: {
+    intro: "What you have completed of the suggested activities in your plan. Your progress is saved on the server; your practice quiz results are saved in this browser.",
+    quizDoneElsewhere: "Completed — attempt details are on the device you used",
+    unticked: "Unticked: progress is {pct}%",
+  },
 };
