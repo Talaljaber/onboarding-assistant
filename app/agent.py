@@ -101,18 +101,14 @@ class Agent:
         kb: KnowledgeBase,
         retriever: Retriever,
         llm: Any | None = None,
-        scenarios: tools.CsvFeatures | None = None,
-        plan: tools.CsvFeatures | None = None,
-        quiz: tools.CsvFeatures | None = None,
+        features: tools.Features | None = None,
     ) -> None:
         self.settings = settings
         self.kb = kb
         self.retriever = retriever
         self.llm = llm  # W3: LLM tool choice and answer; unused offline
-        features = scenarios or plan or quiz
-        if features is None:
-            features = tools.CsvFeatures(settings.data_official, settings.data_ours, retriever.encoder)
-        self.features = features
+        self.features = features or tools.Features.from_files(retriever.encoder, settings.data_official,
+                                                              settings.data_ours)
 
     # ------------------------------------------------------------------ public
     def turn(self, req: ChatRequest, *, request_id: str | None = None) -> ChatResponse:
@@ -209,8 +205,11 @@ def build_agent(settings: Settings | None = None, *, store: Any | None = None) -
 
 @lru_cache(maxsize=1)
 def build_default_agent() -> Agent:
-    """The process-wide offline agent (the eval harness and api.py call this)."""
-    return build_agent()
+    """The process-wide offline agent over the process-wide store (the eval harness and api.py call this)."""
+    from app.store import get_store
+
+    s = get_settings()
+    return build_agent(s, store=get_store(s))
 
 
 __all__ = ["Agent", "TraceBuilder", "TurnBudget", "build_agent", "build_default_agent"]

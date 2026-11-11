@@ -200,3 +200,8 @@ def test_health_matches_contract() -> None:
     body = TestClient(create_app()).get("/api/health").json()
     h = Health.model_validate(body)
     assert h.kb.rows == 18 and len(h.kb.version) == 12 and h.mode == "offline" and not h.llm_available
+
+
+def test_force_offline_is_honoured(agent: Agent) -> None:
+    r = ask(agent, "كيف أقدم طلب إجازة؟", force_offline=True)
+    assert r.mode == "offline" and r.trace.agent.used is False

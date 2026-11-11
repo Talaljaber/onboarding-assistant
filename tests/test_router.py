@@ -8,14 +8,14 @@ from app.config import get_settings
 from app.encoder import get_encoder
 from app.router import TurnState, detect_milestone, route
 from app.textnorm import normalize
-from app.tools import CsvFeatures
+from app.tools import Features
 
 S = get_settings()
 
 
 @pytest.fixture(scope="module")
-def scen() -> CsvFeatures:
-    return CsvFeatures(S.data_official, S.data_ours, get_encoder())
+def scen() -> Features:
+    return Features.from_files(get_encoder(), S.data_official, S.data_ours)
 
 
 @pytest.mark.parametrize(
@@ -29,12 +29,12 @@ def scen() -> CsvFeatures:
         ("أنا موظف توصيل وفي اختلاف بين بيانات الطلب والتفاصيل اللي معي للتسليم", "S06"),
     ],
 )
-def test_scenario_match(scen: CsvFeatures, q: str, sid: str) -> None:
+def test_scenario_match(scen: Features, q: str, sid: str) -> None:
     r = route(q, scenario_index=scen)
     assert r.tool == "start_scenario" and r.args["scenario_id"] == sid
 
 
-def test_role_override(scen: CsvFeatures) -> None:
+def test_role_override(scen: Features) -> None:
     r = route("أنا موظف مبيعات وعميل يسأل عن ميزة غير مؤكدة", scenario_index=scen)
     assert r.args["role_override"] == "Sales"
 
@@ -43,7 +43,7 @@ def test_role_override(scen: CsvFeatures) -> None:
     "q",
     ["أنا موظف توصيل، كيف بطلب إجازة؟", "هل محورية العميل قيمة عنا؟", "شو رقم خدمة العملاء؟", "ما مدة فترة التجربة؟"],
 )
-def test_not_scenario(scen: CsvFeatures, q: str) -> None:
+def test_not_scenario(scen: Features, q: str) -> None:
     assert route(q, scenario_index=scen).tool == "answer_from_rows"
 
 
@@ -58,7 +58,7 @@ def test_not_scenario(scen: CsvFeatures, q: str) -> None:
         ("completed day 90 activities", "Day 90"),
     ],
 )
-def test_progress(scen: CsvFeatures, q: str, milestone: str) -> None:
+def test_progress(scen: Features, q: str, milestone: str) -> None:
     r = route(q, scenario_index=scen)
     assert r.tool == "propose_progress" and r.args["milestone"] == milestone
 
@@ -70,18 +70,18 @@ def test_detect_milestone_forms() -> None:
     assert detect_milestone(normalize("لأول 90 يوم")) is None
 
 
-def test_completed_probation_is_employment(scen: CsvFeatures) -> None:
+def test_completed_probation_is_employment(scen: Features) -> None:
     r = route("أكملت فترة التجربة", scenario_index=scen)
     assert r.tool == "refuse" and r.args["reason"] == "employment" and r.guard is not None
 
 
-def test_guards_first(scen: CsvFeatures) -> None:
+def test_guards_first(scen: Features) -> None:
     assert route("ما رقم مدير الموارد البشرية؟", scenario_index=scen).args["reason"] == "contact"
     r = route("كم راتب موظف المبيعات؟", state=TurnState(active_scenario="S02"), scenario_index=scen)
     assert r.tool == "refuse" and r.args["reason"] == "employment"
 
 
-def test_active_scenario_and_end(scen: CsvFeatures) -> None:
+def test_active_scenario_and_end(scen: Features) -> None:
     st = TurnState(active_scenario="S02")
     r = route("بقله ما بعرف أكيد، بتحقق من الكتالوج وبرجعله", state=st, scenario_index=scen)
     assert r.tool == "give_scenario_feedback" and r.args["scenario_id"] == "S02"
@@ -94,25 +94,25 @@ def test_active_scenario_and_end(scen: CsvFeatures) -> None:
     [("شو الخطة المقترحة إلي لأول 90 يوم؟", None), ("شو المطلوب مني باليوم 60؟", "Day 60"),
      ("اعرض خطة التعلم لموظف التوصيل", None)],
 )
-def test_plan(scen: CsvFeatures, q: str, milestone: str | None) -> None:
+def test_plan(scen: Features, q: str, milestone: str | None) -> None:
     r = route(q, scenario_index=scen)
     assert r.tool == "show_plan" and r.args["milestone"] == milestone
 
 
-def test_what_should_i_do_without_milestone_is_a_question(scen: CsvFeatures) -> None:
+def test_what_should_i_do_without_milestone_is_a_question(scen: Features) -> None:
     assert route("بدي آخذ إجازة، شو لازم أعمل؟", scenario_index=scen).tool == "answer_from_rows"
 
 
 @pytest.mark.parametrize("q", ["مرحبا", "السلام عليكم", "شكراً كتير على المساعدة", "hello", "مرحبا كيف حالك"])
-def test_greetings(scen: CsvFeatures, q: str) -> None:
+def test_greetings(scen: Features, q: str) -> None:
     assert route(q, scenario_index=scen).tool == "greet"
 
 
-def test_greeting_with_question_is_a_question(scen: CsvFeatures) -> None:
+def test_greeting_with_question_is_a_question(scen: Features) -> None:
     assert route("مرحبا، متى تأسست الشركة؟", scenario_index=scen).tool == "answer_from_rows"
 
 
-def test_quiz_and_practice(scen: CsvFeatures) -> None:
+def test_quiz_and_practice(scen: Features) -> None:
     assert route("اختبرني", scenario_index=scen).tool == "start_quiz"
     assert route("بدي اختبار تدريبي", scenario_index=scen).tool == "start_quiz"
     r = route("تدريب", scenario_index=scen)

@@ -80,9 +80,9 @@ class KbStore(Protocol):
 
     def kb_rows(self) -> list[dict[str, Any]] | None: ...
 
-    def kb_upsert(self, row: dict[str, Any], source: str) -> None: ...
+    def kb_upsert(self, row: dict[str, Any], source: str) -> object: ...
 
-    def kb_replace_all(self, rows: list[dict[str, Any]], source: str) -> None: ...
+    def kb_replace_all(self, rows: list[dict[str, Any]], source: str) -> object: ...
 
     def kb_history(self, row_id: str) -> list[dict[str, Any]]: ...
 
@@ -164,7 +164,9 @@ class KnowledgeBase:
         if self.store is not None:
             try:
                 stored = self.store.kb_rows()
-                if stored is None:
+                if stored is None:  # unreadable store: fall back to the snapshot / official rows
+                    log_event("kb_store_failed", op="load", error="unreadable")
+                elif not stored:  # empty store: seed it idempotently from the official CSV
                     self.store.kb_replace_all([r.as_store_dict() for r in self._official], "seed")
                     rows, self.loaded_from = list(self._official), "official"
                 else:
@@ -201,7 +203,7 @@ class KnowledgeBase:
         except OSError as exc:
             log_event("kb_snapshot_write_failed", error=type(exc).__name__)
 
-    def _store_call(self, op: str, fn: Callable[[], None]) -> None:
+    def _store_call(self, op: str, fn: Callable[[], object]) -> None:
         if self.store is None:
             return
         try:

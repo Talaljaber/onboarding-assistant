@@ -1,11 +1,9 @@
-"""Server-executed tools of the agent (plan Part C §2.3), argument validation, and a private CSV adapter
-for scenarios / plan / quiz.
+"""Server-executed tools of the agent (plan Part C §2.3) and argument validation.
 
 What it does: one function per tool, each pure given its inputs, returning a `ToolResult` (reply, new
 state, trace pieces). `TOOLS` and `validate_args` are the seam for the LLM tool choice (W3): any
-proposed call is checked against the enum tables before it runs. `CsvFeatures` reads
-`data/official/*.csv` and `data/ours/*.csv` directly; it is a minimal stand-in for W2-B's
-`app/scenarios.py`, `app/plan.py` and `app/quiz.py` (same Part C §1 operations) until they are wired in.
+proposed call is checked against the enum tables before it runs. `Features` bundles the scenario index,
+the plan book and the quiz book (`app/scenarios.py`, `app/plan.py`, `app/quiz.py`).
 
 What it must never do: pass the role to the answer path, score practice, send the correct quiz option,
 or let a tool refuse on its own (refusal comes from the guards and the answer path).
@@ -13,44 +11,35 @@ or let a tool refuse on its own (refusal comes from the guards and the answer pa
 
 from __future__ import annotations
 
-import csv
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 from app import answer as ans
+from app import scenarios as scen_mod
 from app.errors import ApiError
 from app.kb import KnowledgeBase
+from app.plan import PlanBook
+from app.quiz import QuizBook
 from app.retrieve import Retriever
 from app.router import SCENARIO_MIN_COS
+from app.scenarios import ScenarioIndex
 from app.schemas import (
     FEEDBACK_LABEL_AR,
     MILESTONES,
     MILESTONES_AR,
     PLAN_DISCLAIMER_AR,
-    PLAN_STATUS,
     QUIZ_LABEL_AR,
     REFUSAL_REASONS,
     ROLES,
     SCENARIO_START_LABEL_AR,
     TOOL_NAMES,
     VALUES,
-    VALUES_AR,
-    Activity,
     ClientState,
-    Feedback,
-    Milestone,
-    Option,
-    PlanOut,
-    ProgressSummary,
     Proposal,
-    QuizItem,
     Reply,
-    ScenarioOut,
     TraceAnswer,
     TraceFeedback,
     TraceHit,
@@ -59,7 +48,6 @@ from app.schemas import (
 )
 
 DEFAULT_ROLE = "Sales"
-PLAN_NOTES_AR = ["اختبار اليوم 30 ليس تقييم الشهر الأول المذكور في K14", "ملخص اليوم 90 للمراجعة البشرية فقط"]
 GREETING_AR = {
     "Sales": "أهلاً بك في مسار المبيعات. ",
     "Delivery": "أهلاً بك في مسار التوصيل. ",
@@ -69,11 +57,6 @@ GREETING_BODY_AR = (
     "اسألني عن الشركة وقيمها وسياسات التهيئة، أو اكتب «تدريب» لنبدأ موقفاً عملياً. كل إجابة تظهر مع مصدرها."
 )
 THANKS_AR = "على الرحب والسعة. اسألني عن الشركة وقيمها وسياسات التهيئة متى شئت."
-SCENARIO_START_OFFLINE_AR = "لنتدرّب على هذا الموقف. اختر رداً أو اكتب كيف ستتصرف."
-SCENARIO_START_LLM_AR = "لنتدرّب على هذا الموقف. اكتب كيف ستتصرف."
-FEEDBACK_OPTION_AR = "هذه ملاحظات تدريبية على اختيارك."
-FEEDBACK_FREETEXT_AR = "شكراً على ردك. هذا هو الرد المقترح في المادة التدريبية لتقارن به ردك."
-SCENARIO_END_AR = "انتهى التدريب. أحسنت بالمحاولة، ويمكنك العودة لأي موقف في أي وقت."
 PROGRESS_ALL_DONE_AR = "أنشطة «{m}» مسجّلة كمكتملة من قبل."
 QUIZ_INTRO_AR = "إليك اختباراً تدريبياً قصيراً."
 QUIZ_INTRO_FIVE_AR = "إليك اختباراً تدريبياً قصيراً من خمسة أسئلة."
@@ -220,132 +203,29 @@ def validate_args(tool: str, args: Mapping[str, Any] | None, enums: Enums) -> di
     return a
 
 
-# ======================================================================================= CSV adapter
-def _read_csv(path: Path) -> list[dict[str, str]]:
-    with Path(path).open(encoding="utf-8-sig", newline="") as f:
-        return [{k: (v or "").strip() for k, v in r.items()} for r in csv.DictReader(f)]
+# ======================================================================================= features
+@dataclass
+class Features:
+    """Scenarios, plan and quiz used by the tools; `match` makes it the router's scenario matcher."""
 
+    scenarios: ScenarioIndex
+    plan: PlanBook
+    quiz: QuizBook
 
-@dataclass(frozen=True)
-class _Activity:
-    id: str
-    role: str
-    milestone: str
-    kind: str
-    refs: list[str]
-    title_ar: str
-
-
-class CsvFeatures:
-    """Minimal scenarios / plan / quiz over the CSVs (stand-in for W2-B's modules, Part C §1 operations)."""
-
-    def __init__(self, data_official: Path, data_ours: Path, encoder: Any | None = None) -> None:
-        self.scenarios = {r["id"]: r for r in _read_csv(Path(data_official) / "role_scenarios.csv")}
-        self.options: dict[str, list[dict[str, str]]] = {}
-        for r in _read_csv(Path(data_ours) / "scenario_options.csv"):
-            self.options.setdefault(r["scenario_id"], []).append(r)
-        self.goals = {(r["department"], r["milestone"]): r["learning_goal_ar"]
-                      for r in _read_csv(Path(data_official) / "suggested_learning_plan.csv")}
-        self.activities = [
-            _Activity(r["activity_id"], r["role"], r["milestone"], r["kind"],
-                      [x for x in r["refs"].split(";") if x], r["title_ar"])
-            for r in _read_csv(Path(data_ours) / "plan_activities.csv")
-        ]
-        self.quiz_rows = _read_csv(Path(data_official) / "sample_quiz.csv")
-        self.encoder = encoder
-        self._scenario_ids = list(self.scenarios)
-        self._scenario_mat = (
-            encoder.encode_array([self.scenarios[s]["scenario_ar"] for s in self._scenario_ids])
-            if encoder is not None else None
+    @classmethod
+    def from_files(cls, encoder: Any | None, data_official: Path, data_ours: Path) -> Features:
+        return cls(
+            ScenarioIndex.from_files(encoder, official_dir=data_official, ours_dir=data_ours),
+            PlanBook.from_files(data_official, data_ours),
+            QuizBook.from_files(data_official),
         )
-
-    # ---- scenarios
-    def scenario_ids(self) -> list[str]:
-        return list(self._scenario_ids)
 
     def match(self, text: str, *, min_cos: float = SCENARIO_MIN_COS) -> tuple[str, float] | None:
-        if self.encoder is None or self._scenario_mat is None:
-            return None
-        sims = self._scenario_mat @ self.encoder.encode_array([text])[0]
-        i = int(np.argmax(sims))
-        return (self._scenario_ids[i], float(sims[i])) if sims[i] >= min_cos else None
+        return self.scenarios.match(text, min_cos=min_cos)
 
     def first_for_role(self, role: str) -> str:
-        for sid, r in self.scenarios.items():
-            if r["department"] == role:
-                return sid
-        return self._scenario_ids[0]
-
-    def scenario_out(self, sid: str, *, with_options: bool) -> ScenarioOut:
-        r = self.scenarios[sid]
-        opts = [Option(id=o["option_id"], text_ar=o["text_ar"]) for o in self.options.get(sid, [])]
-        return ScenarioOut(
-            id=sid, department=r["department"], company_value=r["company_value"],  # type: ignore[arg-type]
-            value_ar=VALUES_AR[r["company_value"]], scenario_ar=r["scenario_ar"], data_status=r["data_status"],
-            options=opts if with_options else None,
-        )
-
-    def feedback_option(self, sid: str, option_id: str) -> Feedback:
-        r = self.scenarios[sid]
-        opt = next((o for o in self.options.get(sid, []) if o["option_id"] == option_id), None)
-        if opt is None:
-            raise ApiError("validation_error", 400, f"unknown option {option_id}", "option_id")
-        best = opt["is_best"].lower() == "true"
-        return Feedback(
-            scenario_id=sid, option_id=option_id,
-            strengths_ar=[opt["feedback_ar"]] if best else [],
-            improve_ar=None if best else opt["feedback_ar"],
-            value=r["company_value"], value_ar=VALUES_AR[r["company_value"]],  # type: ignore[arg-type]
-            tip_ar=None, suggested_good_response_ar=r["suggested_good_response_ar"],
-            mode="offline", label_ar=FEEDBACK_LABEL_AR,
-        )
-
-    def feedback_freetext_offline(self, sid: str, user_text: str) -> Feedback:
-        """No judgement offline: the suggested response and the linked value only."""
-        r = self.scenarios[sid]
-        return Feedback(
-            scenario_id=sid, option_id=None, strengths_ar=[], improve_ar=None,
-            value=r["company_value"], value_ar=VALUES_AR[r["company_value"]],  # type: ignore[arg-type]
-            tip_ar=None, suggested_good_response_ar=r["suggested_good_response_ar"],
-            mode="offline", label_ar=FEEDBACK_LABEL_AR,
-        )
-
-    # ---- plan and progress
-    def activities_of(self, role: str, milestone: str | None = None) -> list[_Activity]:
-        return [a for a in self.activities if a.role == role and (milestone is None or a.milestone == milestone)]
-
-    def percent(self, role: str, completed_ids: list[str]) -> ProgressSummary:
-        ids = {a.id for a in self.activities_of(role)}
-        done = len(ids & set(completed_ids))
-        total = len(ids)
-        return ProgressSummary(percent=round(100 * done / total) if total else 0, done=done, total=total)
-
-    def plan_for(self, role: str, focus: str | None = None) -> PlanOut:
-        return PlanOut(
-            role=role,  # type: ignore[arg-type]
-            status=PLAN_STATUS, disclaimer_ar=PLAN_DISCLAIMER_AR, focus_milestone=focus,  # type: ignore[arg-type]
-            milestones=[
-                Milestone(
-                    name=m, name_ar=MILESTONES_AR[m],  # type: ignore[arg-type]
-                    learning_goal_ar=self.goals.get((role, m), ""),
-                    activities=[Activity(id=a.id, kind=a.kind, title_ar=a.title_ar, refs=a.refs)  # type: ignore[arg-type]
-                                for a in self.activities_of(role, m)],
-                )
-                for m in MILESTONES
-            ],
-            notes_ar=list(PLAN_NOTES_AR),
-        )
-
-    # ---- quiz
-    def quiz_for(self, role: str) -> list[QuizItem]:
-        day30 = {ref for a in self.activities_of(role, "Day 30") for ref in a.refs}
-        rows = sorted(self.quiz_rows, key=lambda r: (r["id"] not in day30, r["id"]))
-        return [
-            QuizItem(id=r["id"], question_ar=r["question_ar"],
-                     options={"A": r["option_a"], "B": r["option_b"], "C": r["option_c"]},
-                     source_knowledge_id=r["source_knowledge_id"])
-            for r in rows
-        ]
+        found = self.scenarios.for_role(role)
+        return found[0].id if found else self.scenarios.ids()[0]
 
 
 # ======================================================================================= tools
@@ -416,67 +296,71 @@ def refuse(reason: str, *, state: ClientState, retriever: Retriever | None = Non
     return ToolResult(reply, state, steps, retrieval)
 
 
-def start_scenario(scenario_id: str, *, features: CsvFeatures, mode: str = "offline") -> ToolResult:
-    sc = features.scenario_out(scenario_id, with_options=mode == "offline")
-    text = SCENARIO_START_OFFLINE_AR if mode == "offline" else SCENARIO_START_LLM_AR
-    reply = _reply("scenario_start", text, scenario=sc.model_dump(), label_ar=SCENARIO_START_LABEL_AR)
+def start_scenario(scenario_id: str, *, features: Features, mode: str = "offline") -> ToolResult:
+    with_options = mode == "offline"
+    sc = features.scenarios.get(scenario_id).to_out(with_options=with_options)
+    reply = _reply("scenario_start", scen_mod.start_text_ar(with_options=with_options), scenario=sc.model_dump(),
+                   label_ar=SCENARIO_START_LABEL_AR)
     return ToolResult(reply, ClientState(active_scenario=scenario_id), [f"scenario:{scenario_id}", "render"])
 
 
-def give_scenario_feedback(scenario_id: str, *, features: CsvFeatures, user_text: str | None = None,
+def give_scenario_feedback(scenario_id: str, *, features: Features, user_text: str | None = None,
                            option_id: str | None = None) -> ToolResult:
     """Option → fixed feedback; offline free text → the suggested response and value, nothing scored."""
+    sc = features.scenarios.get(scenario_id)
     if option_id is not None:
-        fb = features.feedback_option(scenario_id, option_id)
-        text, step = FEEDBACK_OPTION_AR, f"option:{option_id}"
+        try:
+            fb = scen_mod.feedback_option(sc, option_id)
+        except ValueError:
+            raise ApiError("validation_error", 400, f"option {option_id} does not belong to {scenario_id}",
+                           "option_id") from None
+        text, step = scen_mod.OPTION_FEEDBACK_TEXT_AR, f"option:{option_id}"
     else:
-        fb = features.feedback_freetext_offline(scenario_id, user_text or "")
-        text, step = FEEDBACK_FREETEXT_AR, "feedback:offline"
-    reply = _reply("scenario_feedback", text, feedback=fb.model_dump(), label_ar=FEEDBACK_LABEL_AR)
+        fb = scen_mod.feedback_freetext_offline(sc, user_text or "")
+        text, step = scen_mod.FEEDBACK_TEXT_AR, "feedback:offline"
+    reply = _reply("scenario_feedback", text, feedback=fb.to_schema().model_dump(), label_ar=FEEDBACK_LABEL_AR)
     return ToolResult(reply, ClientState(active_scenario=scenario_id), ["state:active_scenario", step, "render"],
                       feedback=TraceFeedback(llm_used=False))
 
 
 def end_scenario() -> ToolResult:
-    return ToolResult(_reply("scenario_end", SCENARIO_END_AR), ClientState(active_scenario=None), ["render"])
+    return ToolResult(_reply("scenario_end", scen_mod.END_TEXT_AR), ClientState(active_scenario=None), ["render"])
 
 
-def propose_progress(milestone: str, *, role: str, completed_ids: list[str], features: CsvFeatures,
+def propose_progress(milestone: str, *, role: str, completed_ids: list[str], features: Features,
                      state: ClientState) -> ToolResult:
     """Propose the role's not-yet-done activities of the milestone; nothing changes until `confirm`."""
-    acts = [a for a in features.activities_of(role, milestone) if a.id not in set(completed_ids)]
-    current = features.percent(role, completed_ids)
+    acts = features.plan.pending(role, milestone, completed_ids)
+    current = features.plan.percent(role, completed_ids)
     m_ar = MILESTONES_AR[milestone]
     steps = [f"milestone:{milestone}", "render"]
     if not acts:
         return ToolResult(_reply("text", PROGRESS_ALL_DONE_AR.format(m=m_ar)), state, steps)
-    proposed = features.percent(role, list(completed_ids) + [a.id for a in acts])
+    proposed = features.plan.percent(role, [*completed_ids, *(a.id for a in acts)])
     proposal = Proposal(milestone=milestone, activity_ids=[a.id for a in acts],  # type: ignore[arg-type]
                         titles_ar=[a.title_ar for a in acts], current_percent=current.percent,
                         proposed_percent=proposed.percent)
     reply = _reply("progress_proposal", f"هل تريد تسجيل أنشطة «{m_ar}» كمكتملة؟",
-                   proposal=proposal.model_dump(), progress=current.model_dump())
+                   proposal=proposal.model_dump(), progress=current.to_schema().model_dump())
     return ToolResult(reply, state, steps)
 
 
 def confirm_progress(milestone: str, activity_ids: list[str], *, role: str, completed_ids: list[str],
-                     features: CsvFeatures, state: ClientState) -> ToolResult:
+                     features: Features, state: ClientState) -> ToolResult:
     """Validate `activity_ids ⊆ activities_of(role, milestone)` (400 otherwise) and merge."""
-    allowed = {a.id for a in features.activities_of(role, milestone)}
-    foreign = [i for i in activity_ids if i not in allowed]
+    foreign = features.plan.foreign_ids(role, milestone, activity_ids)
     if foreign:
         raise ApiError("validation_error", 400, f"activity ids not in {role} {milestone}: {foreign}",
                        "confirm.activity_ids")
-    merged = list(dict.fromkeys([*completed_ids, *activity_ids]))
-    summary = features.percent(role, merged)
-    summary = ProgressSummary(percent=summary.percent, done=summary.done, total=summary.total, completed_ids=merged)
+    merged = features.plan.merge_completed(completed_ids, activity_ids)
+    summary = features.plan.percent(role, merged).to_schema(merged)
     text = f"تم تسجيل أنشطة {MILESTONES_AR[milestone]} كمكتملة. نسبة الإنجاز الآن {summary.percent}٪."
     reply = _reply("progress_confirmed", text, progress=summary.model_dump())
     return ToolResult(reply, state, [f"confirm:{milestone}", f"validate:{len(activity_ids)}", "render"])
 
 
-def show_plan(milestone: str | None, *, role: str, features: CsvFeatures, state: ClientState) -> ToolResult:
-    plan = features.plan_for(role, milestone)
+def show_plan(milestone: str | None, *, role: str, features: Features, state: ClientState) -> ToolResult:
+    plan = features.plan.plan_for(role).to_schema(milestone)
     if milestone:
         goal = next(m.learning_goal_ar for m in plan.milestones if m.name == milestone)
         text = f"في {MILESTONES_AR[milestone]}: {goal}. هذه خطة مقترحة وليست جدول تقييم."
@@ -488,10 +372,11 @@ def show_plan(milestone: str | None, *, role: str, features: CsvFeatures, state:
     return ToolResult(reply, state, steps)
 
 
-def start_quiz(*, role: str, features: CsvFeatures, state: ClientState) -> ToolResult:
-    items = features.quiz_for(role)
+def start_quiz(*, role: str, features: Features, state: ClientState) -> ToolResult:
+    day30 = [ref for a in features.plan.activities_of(role, "Day 30") for ref in a.refs if ref.startswith("Q")]
+    items = features.quiz.quiz_for(role, first_ids=day30)
     text = QUIZ_INTRO_FIVE_AR if len(items) == 5 else QUIZ_INTRO_AR
-    reply = _reply("quiz", text, quiz=[i.model_dump() for i in items], label_ar=QUIZ_LABEL_AR)
+    reply = _reply("quiz", text, quiz=[i.to_schema().model_dump() for i in items], label_ar=QUIZ_LABEL_AR)
     return ToolResult(reply, state, ["render"])
 
 
@@ -502,7 +387,7 @@ def greet(kind: str, *, role: str | None, state: ClientState) -> ToolResult:
 
 __all__ = [
     "TOOLS",
-    "CsvFeatures",
+    "Features",
     "Enums",
     "ToolResult",
     "ToolSpec",

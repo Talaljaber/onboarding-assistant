@@ -113,7 +113,7 @@ class FakeStore:
 
 
 def test_store_seed_and_edits(tmp_path: Path) -> None:
-    store = FakeStore(rows=None)
+    store = FakeStore(rows=[])
     kb = KnowledgeBase(store, official_path=OFFICIAL, live_dir=tmp_path)
     assert store.calls == [("replace:18", "seed")]
     kb.put("K02", {"source_page": 5})
@@ -133,3 +133,21 @@ def test_store_failure_never_raises(tmp_path: Path) -> None:
     kb = KnowledgeBase(FakeStore(fail=True), official_path=OFFICIAL, live_dir=tmp_path)
     assert len(kb.rows()) == 18
     assert kb.put("K03", {"topic": "Company"}).status == "edited"
+
+
+def test_unreadable_store_falls_back(tmp_path: Path) -> None:
+    store = FakeStore(rows=None)
+    kb = KnowledgeBase(store, official_path=OFFICIAL, live_dir=tmp_path)
+    assert len(kb.rows()) == 18 and store.calls == []
+
+
+def test_real_local_store_round_trip(tmp_path: Path) -> None:
+    from app.store.local import LocalStore
+
+    store = LocalStore(tmp_path)
+    kb = KnowledgeBase(store, official_path=OFFICIAL, live_dir=tmp_path)
+    kb.put("K16", {"source_page": 3})
+    again = KnowledgeBase(LocalStore(tmp_path), official_path=OFFICIAL, live_dir=tmp_path / "other")
+    assert again.loaded_from == "store" and again.get("K16").source_page == 3  # type: ignore[union-attr]
+    assert again.get("K16").status == "edited"  # type: ignore[union-attr]
+    assert [h["source"] for h in store.kb_history("K16")][-1] == "editor"

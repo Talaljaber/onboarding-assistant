@@ -24,6 +24,7 @@ from app.agent import Agent, build_agent, build_default_agent
 from app.config import ROOT, Settings, get_settings, validate_startup
 from app.errors import ApiError
 from app.logging_setup import log_event, setup_logging
+from app.store import store_status
 from app.schemas import Health, HealthBudget, HealthCache, HealthEncoder, HealthKb, Probe
 
 DIST = ROOT / "web" / "dist"
@@ -83,6 +84,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/health")
     def health() -> dict[str, Any]:
+        st = store_status(s)
         kb = agent.kb
         body = Health(
             status="ok",
@@ -96,15 +98,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             kb=HealthKb(rows=len(kb.rows()), version=kb.version(), edited=len(kb.edited_ids())),
             budget=HealthBudget(spent_usd=0.0, cap_usd=s.llm_budget_usd),
             cache=HealthCache(hits=0, calls=0, failures=0),
-            store="local",
-            store_probe=Probe(ok=True, reason="local store"),
+            store=st["store"],
+            store_probe=Probe(ok=bool(st["store_probe"].get("ok")), latency_ms=st["store_probe"].get("latency_ms"),
+                              reason=st["store_probe"].get("reason")),
             uptime_s=int(time.monotonic() - started),
         )
         return body.model_dump()
 
     # Include every API router above this line: the catch-all and the web mount must stay last.
     _mount_web(app, DIST)
-    log_event("startup", version=__version__, mode="offline", store="local")
+    log_event("startup", version=__version__, mode="offline", store=store_status(s)["store"])
     return app
 
 
