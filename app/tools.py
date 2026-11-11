@@ -283,6 +283,14 @@ def call_llm_path(fn: Callable[..., Any] | None, *args: Any, info: dict[str, Any
         return None
 
 
+def _info_reason(info: dict[str, Any]) -> str | None:
+    """Why an LLM path returned None: its `verifier.reason` (W3-B paths fill `info`) or our own reason."""
+    v = info.get("verifier")
+    if isinstance(v, dict) and v.get("reason"):
+        return str(v["reason"])
+    return str(info["reason"]) if info.get("reason") else None
+
+
 def _int_or_none(v: Any) -> int | None:
     try:
         return max(0, int(v)) if v is not None else None
@@ -342,9 +350,10 @@ def answer_from_rows(question: str, *, query: str, retriever: Retriever, kb: Kno
             answer_tr = TraceAnswer(llm_status=getattr(res, "status", None), verifier=TraceVerifier(ok=True),
                                     escalated=escalated, latency_ms=latency, cached=cached)
             return ToolResult(reply, state, steps, retrieval, answer_tr, mode="llm")
-        reason = str(info.get("reason") or ("unrenderable" if res is not None else "unavailable"))
+        reason = _info_reason(info) or ("unrenderable" if res is not None else "unavailable")
         steps += ["llm:answer", f"verify:{reason}"]
-        fallback_tr = TraceAnswer(verifier=TraceVerifier(ok=False, reason=reason), escalated=escalated,
+        fallback_tr = TraceAnswer(llm_status=info.get("llm_status"),  # type: ignore[arg-type]
+                                  verifier=TraceVerifier(ok=False, reason=reason), escalated=escalated,
                                   latency_ms=latency, cached=False)
         if injection:
             retrieval = trace_retrieval(query, hits, margin, kb.version(), list_question=is_list,
@@ -429,7 +438,7 @@ def give_scenario_feedback(scenario_id: str, *, features: Features, user_text: s
             llm_fb = call_llm_path(getattr(scen_mod, "feedback_llm", None), sc, user_text, llm, budget_s,
                                    info=info)
             cached = bool(info.get("cached"))
-            reason = None if llm_fb is not None else str(info.get("reason") or "unavailable")
+            reason = None if llm_fb is not None else (_info_reason(info) or "unavailable")
             trace_fb = TraceFeedback(
                 llm_used=True, verifier=TraceVerifier(ok=llm_fb is not None, reason=reason),
                 tip_dropped=bool(info.get("tip_dropped")), latency_ms=_int_or_none(info.get("latency_ms")),

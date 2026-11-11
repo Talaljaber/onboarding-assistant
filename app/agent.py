@@ -349,7 +349,8 @@ class Agent:
     # ------------------------------------------------------------------ execution
     @staticmethod
     def _answer_s(budget: TurnBudget) -> float:
-        return max(0.0, budget.remaining() - ANSWER_MARGIN_S)
+        """`answer_llm` takes the seconds left in the turn and keeps its own 0.3 s margin (§C6)."""
+        return budget.remaining()
 
     @staticmethod
     def _feedback_s(budget: TurnBudget) -> float:
