@@ -1,7 +1,7 @@
 // "How I answered" (plan D2.6, contract trace): route, steps, retrieval, model, verifier, timing.
 // Everything comes from `response.trace`; scores are three decimals, ASCII digits.
 import type { ReactNode } from "react";
-import type { Trace } from "@/api/types";
+import type { PanelRole, Trace } from "@/api/types";
 import { useT, type DictKey } from "@/i18n";
 import { ms, score } from "@/lib/format";
 import { Badge } from "../ui/Badge";
@@ -32,6 +32,16 @@ const CHECKS = [
   ["contacts", "trace.check.contacts"],
   ["cites", "trace.check.cites"],
 ] as const satisfies readonly (readonly [string, DictKey])[];
+
+const ROLE_KEY: Record<PanelRole, DictKey> = {
+  sanitizer: "extra.panelRoleSanitizer",
+  answerer: "extra.panelRoleAnswerer",
+  citation_judge: "extra.panelRoleCitationJudge",
+  coverage_judge: "extra.panelRoleCoverageJudge",
+  escalation: "extra.panelRoleEscalation",
+};
+
+const conf = (v: number) => v.toFixed(2);
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -139,6 +149,51 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
         </p>
         {llmStatus && <p className="text-fg-2">{t("trace.llmStatus", { status: llmStatus })}</p>}
       </Section>
+
+      {trace.panel && (
+        <Section title={t("extra.panelTitle")}>
+          <div data-panel className="overflow-x-auto">
+            <ul className="flex min-w-[20rem] flex-col gap-2">
+              {trace.panel.votes.map((v, i) => (
+                <li key={`${i}-${v.role}`} data-vote={v.role} data-ok={v.ok} className="flex flex-col gap-0.5">
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className="font-semibold">{t(ROLE_KEY[v.role])}</span>
+                    <bdi className="font-id break-all text-xs" dir="ltr">{v.model}</bdi>
+                    <span className={v.ok ? "inline-flex items-center gap-1 text-ok" : "inline-flex items-center gap-1 text-danger"}>
+                      <Icon name={v.ok ? "check" : "close"} size={14} />
+                      <span>{v.ok ? t("extra.panelOk") : t("extra.panelNo")}</span>
+                    </span>
+                    {typeof v.confidence === "number" && (
+                      <bdi className="font-id text-xs" dir="ltr">{conf(v.confidence)}</bdi>
+                    )}
+                    {typeof v.latency_ms === "number" && (
+                      <bdi className="font-id text-xs" dir="ltr">{ms(v.latency_ms)} ms</bdi>
+                    )}
+                    {v.cached && <span className="text-xs text-fg-2">{t("extra.panelCached")}</span>}
+                  </p>
+                  {v.note && (
+                    <p className="text-xs text-fg-2" dir="auto">
+                      {v.note}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <p data-panel-summary className="mt-2 flex flex-wrap items-baseline gap-x-3 font-semibold">
+            {typeof trace.panel.confidence === "number" && (
+              <span>{t("extra.panelAgreed", { value: conf(trace.panel.confidence) })}</span>
+            )}
+            {trace.panel.single_call ? (
+              <span>{t("extra.panelSingle")}</span>
+            ) : trace.panel.escalated_to ? (
+              <span>{t("extra.panelEscalated", { model: trace.panel.escalated_to })}</span>
+            ) : (
+              <span>{trace.panel.accepted ? t("extra.panelAccepted") : t("extra.panelNotAccepted")}</span>
+            )}
+          </p>
+        </Section>
+      )}
 
       {verifier && (
         <Section title={t("trace.verifier")}>
