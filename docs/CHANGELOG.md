@@ -162,3 +162,158 @@ Compiled by the integrator at each wave gate from `docs/changelog/<task-id>.md`.
 - Config/env: none.
 - Acceptance: `npx tsc --noEmit` clean; `npm test` -> 11 files, 114 tests passed; `npm run build` OK; `scripts\check_web.py` -> OK.
 - Limitations / TODO: the profile is created by `useAppState` (lazily after `setRole`), the welcome screen does not call it again, so the profile is created once per role. The mobile banner uses the persisted `demoBannerSeen` flag (once per browser, not per session). Nav tabs and bottom nav are both in the DOM and switched by CSS (`md:`).
+
+## W3 gate (2026-11-11)
+
+### P2.3 — Assistant screen `#/chat` (Sonnet, 2026-11-11)
+- What now exists: `web/src/components/chat/**`: the full screen (greeting, starters, thread, sticky composer), `Composer` (port of CampusPulse's, `maxLength` = `LIMITS.messageMax`, counter, helper text, `placeholder` prop, Escape-when-empty), `TypingIndicator`, `UserBubble`, `AssistantFrame`/`AssistantBubble` (avatar, mode chip with cached suffix, "How I answered" button), `AnswerCard` (+ partial trailer, English helper translation above the Arabic), `UnconfirmedCard`, `RefusalCard`, `EmploymentCard`, `SourceRow`/`SourcesBlock`, `ScenarioStartCard` (offline options) / `ScenarioFeedbackCard` (never a score), `ProgressCard` (proposal with editable ticks and live %, done state with link), `PlanCard`, `QuizCard`, `StarterChips`, `TracePanel`, `ErrorLine`, and `useChat` (items, busy, send, option pick, confirm/cancel, retry, scenario start/end, persistence).
+- Interfaces added/changed: no shared interface changed. Chat item shape (owned here, stored through `thread.items`): `user | reply | note` (+ `error`, never stored); a `reply` item keeps the contract `Reply`, `mode`, `cached`, optional `resolved` and `active`. Traces live in memory only. Data attributes: every card root has `data-kind` (`answer partial unconfirmed refusal employment text scenario_start scenario_feedback scenario_end progress_proposal progress_done plan quiz`), every source row `data-source-id`, practice banner `data-practice-banner`, trace `data-trace`. 15 i18n keys appended to the end of `extra` in both dictionaries.
+- How to use it: route `#/chat` (default export of `ChatScreen`). `#/chat?scenario=S02` loads `GET /api/scenarios?role=` client-side, shows that scenario's start card and enters practice mode with no chat call (the param is then removed from the hash). Each chat turn sends `role`, `state.active_scenario`, `progress.completed_ids` (saved ids, max 64), `last_user_message`, `force_offline` (header switch), `profile_id`. Practice ends with the banner button, the card button or Escape in an empty composer; if feedback was shown it marks the scenario (`scenarios.mark`) and the plan activity of kind `scenario` that refs it, and toasts `progress.updated`; nothing is sent.
+- Config/env: none.
+- Acceptance: `npx --prefix web tsc -p web --noEmit` -> 0 errors; `npm test --prefix web` -> `Test Files 11 passed, Tests 143 passed` (35 new in `chat/__tests__/chat.test.tsx`); `npm run build --prefix web` -> built; `scripts\check_web.py` -> OK.
+- Limitations / TODO: tested against fixtures only (not the live API). The locked role chip in practice mode belongs to the shell (it can read the practice state from the thread; not exposed). The sticky composer sits at `bottom-16` below 1024 px to clear a 4 rem bottom nav: adjust if the shell's nav differs. Starter questions are hard-coded Arabic data strings (they are sent as typed text). Trace "verifier checklist": the contract carries one verdict and reason, so the failing line is derived from `verifier.reason`. No `chat.test` for the 1024 px side column (jsdom has no `matchMedia`); it is for the browser smoke.
+
+### P2.4 — Web screens: scenarios, plan, quiz, progress, about (Sonnet, 2026-11-11)
+- What now exists: the five screens on the typed client (fixtures until the API exists), for both roles. `scenarios/ScenariosScreen` (cards, value + synthetic badges, done check, tab to peek at the other track), `plan/PlanScreen` (not-official banner + status, 4-milestone timeline, checklists, K-row rows inline, Day 30 note vs K14, printable Day 90 summary), `quiz/QuizScreen` (GET /api/quiz, POST /api/quiz/check, one question at a time, verbatim explanation row), `progress/ProgressScreen` (ring with aria-label, activity count, last practice attempt, per-milestone checklist, practised scenarios, reset dialog, Day 90 summary), `about/AboutScreen` (sections, clear-data with confirm, live GET /api/health). Shared: `plan/ActivityChecklist`, `plan/Day90Summary`, `scenarios/useScenarioList`.
+- Interfaces added/changed: hash hand-offs to the chat screen (W3-C): `#/chat?scenario=<id>` (ChatScreen reads the `scenario` query param from the hash and starts scenario mode for that id; used for both tracks, the chat shows the "other track" notice when the scenario's department differs from the role) and `#/chat?ask=<url-encoded question_ar>` (quiz, "ask the assistant" on a wrong question: prefill the composer). 14 keys appended to the `extra` block of ar.ts and en.ts (`aboutHowText`, `aboutKbRows`, `aboutModel`, `aboutNoModel`, `aboutCreditsText`, `aboutClearConfirm`, `aboutEncoder`, `practiceBadge`, `progressViewSummary`, `summaryRole`, `summaryQuizLine`, `summaryNone`, `summaryClose`, `planRowsLoading`). Test harness `plan/__tests__/harness.tsx` (providers + fetch stub on the fixtures).
+- How to use it: open `#/scenarios`, `#/plan`, `#/quiz`, `#/progress`, `#/about` with a role chosen (about works without one). Quiz completion calls `quiz.add(correct, total)` and ticks the plan's `kind: "quiz"` activity via `progress.fromProposal`. Day 90 summary: `window.print()`; the shell is hidden by `[data-shell]`, the rest of the screen by `print:hidden`.
+- Config/env: none.
+- Acceptance: from web\: `npx tsc --noEmit` -> 0 errors; `npm test` -> 15 files, 126 tests passed; `npm run build` -> built; `scripts\check_web.py` -> OK.
+- Limitations / TODO: no browser was available, so layout, RTL and print were not visually checked (jsdom tests only). About uses `extra.aboutHowText` (no fixed row count; the live count comes from /api/health) instead of the scaffold's `about.howText`, which still says "18 rows": the scaffold owner may delete or reword that key. The Day 30 and Day 90 notes use the dictionary strings, not `notes_ar` from the plan. Scenario "done" also counts a scenario recorded in `scenarios.practised` (chat marks it).
+
+### P3.2–P3.3, P3.6 (part 2) — LLM answer and scenario feedback wired into answer.py / scenarios.py  (Opus, 2026-11-11)
+- What now exists:
+  - `app/answer.py`: `answer_llm(question, kb_rows, hits, llm, budget_s, *, previous=None, list_topic=None, info=None) -> AnswerResult | None`. All live rows + hit ranks → `answer_v1.md` (via `app.llm.paths.llm_answer`) → verifier → `AnswerResult(mode="llm", band=None)`. `answered` → model text with its cited rows; `partial` → text + `"\n\n"` + `PARTIAL_NOTE_AR` (`partial_note=True`, same shape as `contracts/fixtures/chat_answer_partial_llm.json`); `unsupported` → `REFUSAL_AR`, no ids. With `list_topic` naming a topic that has rows (e.g. `"Values"`), the server list (`build_list_answer`, so an added value row is included) is always the first paragraph and a verified model sentence may follow; if the model says unsupported, only the server list is returned. One escalation call to `llm.escalation` (exists only when `LLM_ESCALATION_MODEL` is set) when the reason is `foreign_id|quote_not_in_row|foreign_number|invalid_json` and ≥ 2.0 s remain. Answer call deadline = `budget_s - 0.3`. Also `mark_budget_exhausted(llm, reason)`, `PARAGRAPH`.
+  - `app/scenarios.py`: `feedback_llm(scenario, user_text, llm, budget_s, *, info=None) -> Feedback | None`. Checklist ids and value are verified, the shown text comes from `feedback_from_checklist` (`done_ar`/`add_ar`), `tip_ar` is kept only when `verify_tip` passes (else dropped, `tip_dropped=True`). Deadline = `min(3.5, budget_s)`.
+  - `app/verify.py` now imports `normalize`, `ascii_digits`, `number_words_to_digits` from `app.textnorm` (private copy removed).
+  - `app/llm/paths.py`: `llm_feedback` also fills `info["tip_dropped"]`/`info["tip_reason"]`.
+- Interfaces added/changed (trace fields):
+  - `AnswerResult` new optional fields: `llm_status` (`answered|partial|unsupported|None`), `verifier` (`{"ok", "reason"}` or None), `cached`, `latency_ms`, `escalated`; `trace_fields()` → kwargs for `schemas.TraceAnswer` (includes `band`).
+  - `Feedback` new optional fields: `llm_used`, `verifier`, `tip_dropped`, `latency_ms`, `cached`; `trace_fields()` → kwargs for `schemas.TraceFeedback`.
+  - Both functions return None on any failure. Pass `info={}` to receive the same trace fields on failure: e.g. `TraceAnswer(**info, band=offline.band)`, `TraceFeedback(**info)`. `verifier.reason` is the verifier reason or the call failure (`timeout`, `no_credits`, `rate_limited`, `budget_exhausted`, `no_time`, `internal_error`, …); `verifier` is None when no LLM was tried (no key, offline mode).
+  - An exhausted USD budget flips `llm.mode` to `"offline"` (`llm.reason = "budget_exhausted"`).
+- How to use it: `res = answer_llm(q, kb.rows(), hits, llm, budget.remaining(), previous=..., list_topic=..., info=info) or answer_offline(...)`; `fb = feedback_llm(sc, text, llm, budget.remaining(), info=info) or feedback_freetext_offline(sc, text)`. `res.refused` → the out-of-scope refusal reply (no sources); otherwise render `res.ids` with `render_sources`.
+- Config/env: `LLM_ESCALATION_MODEL` (unset = no escalation); nothing new.
+- Acceptance: `& $VPY -m pytest -q` → 482 passed; `& $VPY -m ruff check app scripts tests` → All checks passed!; `& $VPY -m mypy app` → Success (30 files); `& $VPY -m mypy --strict app\verify.py` → Success.
+- Limitations / TODO:
+  - `tests/test_scenarios.py`: the old stub test (`feedback_llm(..., budget=None) is None`) now uses `budget_s=None` (the parameter name in the agreed signature).
+  - The web client also has a `partialTrailer` string; if `AnswerCard` appends it for `status: "partial"`, the note would show twice (the contract fixture puts it in `text_ar`). W3-C should check.
+  - Not run against the real API (no key in worktrees).
+
+### P1.4 / P3.4 / P4.1 (server) — HTTP API and the LLM tool choice  (Opus, 2026-11-11)
+- What now exists:
+  - `app/api.py`: every endpoint of `docs/api_contract.md` (chat, scenarios + feedback, plan, quiz + check, KB
+    list/put/add/reset, profiles, progress, manager summary, health incl. `?probe=1`). Pure-ASGI
+    `RequestContextMiddleware` (X-Request-Id on every response, 413 for bodies > 32 KB before parsing, generic 500),
+    contract error shape everywhere (pydantic 422 → 400 with dotted `field`, e.g. `progress.completed_ids.3`;
+    JSON/model-level errors → `field: null`), no CORS. KB writes and chat wait ≤ 2 s on `agent.kb.lock` → 423.
+    Store writes (progress on `progress_confirmed`, quiz attempts, scenario attempts, one turn log per chat turn)
+    run as background tasks after the response; turn logs carry ids/labels/timings only.
+  - `app/agent.py`: LLM tool choice (§2.2): router verdict always computed (`trace.router`); guards and an active
+    scenario skip the LLM; one `agent_v1` call with deadline `min(1.5, remaining − 2.5)`; the reply is checked by
+    `tools.validate_args` + preconditions; `refuse` is never taken from the chooser (agreement rule); any failure →
+    router with `trace.agent.fallback_reason`; `store_choice` only after validation. `run_turn` (response + tool
+    result), `scenario_feedback` (endpoint), `probe_llm`, one automatic re-probe > 60 s after a failed probe, a 401/
+    402/unreachable flips the LLM to offline until the next successful probe. `build_agent(..., llm=None)` builds the
+    LLM layer (no network) so `build_default_agent().llm` is set for `run_eval --mode llm`.
+  - `app/tools.py`: `answer_from_rows` calls `answer.answer_llm` (all live rows + hits, `list_topic` hint) and falls
+    back to `answer_offline` (mode `offline`, trace answer with the verifier reason and the offline band); a rejected
+    LLM answer on a suspected injection → the fixed injection refusal. `give_scenario_feedback` calls
+    `scenarios.feedback_llm` for free text. `ToolResult.mode` / `.attempt`; `call_llm_path` (never raises).
+  - `app/main.py`: `create_app(settings, *, agent=None, store=None)`; probes the LLM once at startup (3 s; no call
+    without a key or with OFFLINE=1); routers before `_mount_web`; `build` = short git sha.
+  - `app/logging_setup.py`: `redact` also masks Supabase secret keys and JWT shapes (regexes built from split
+    pieces so the repo secret scan stays clean).
+  - `scripts/smoke_api.py` (Part D §3 storyboard, `--base`, `--serve`, `--offline`, asserts `/` serves web/dist);
+    `scripts/no_network.py` now allows loopback (127.*, ::1, localhost) so the smoke can reach its own server.
+  - Tests: `tests/test_api.py` (18), `tests/test_agent_llm.py` (21, fake chat client with scripted JSON).
+- Interfaces added/changed: `Agent.run_turn(req, request_id=) -> (ChatResponse, ToolResult)`,
+  `Agent.scenario_feedback(id, ScenarioFeedbackRequest, request_id=)`, `Agent.probe_llm()`, `Agent.llm_probe`,
+  `Agent.llm_on(force_offline)`, `Agent.enums()`; `choose_tool(text, state, budget, *, previous, use_llm, tb)`;
+  `execute(..., *, use_llm)`; `tools.answer_from_rows(..., llm, budget_s, previous, list_topic, injection)`,
+  `tools.give_scenario_feedback(..., llm, budget_s)`; `app.api.install_api(app)`.
+- How to use it: `& $VPY -m app` (or `start.bat`); `& $VPY scripts\smoke_api.py --serve --offline`; against a running
+  server `& $VPY scripts\smoke_api.py --base http://127.0.0.1:8000`.
+- Config/env: none new. `--serve` forces `STORE=local` for the child server (the smoke edits and resets K02).
+- Acceptance: `& $VPY -m pytest -q` → 524 passed; `ruff check app scripts tests` → All checks passed!;
+  `mypy app` → Success (31 files); `smoke_api.py --serve --offline` → demo sequence OK (offline);
+  `no_network.py scripts\smoke_api.py --serve --offline` → demo sequence OK (offline);
+  `no_network.py scripts\run_eval.py --set dev --mode offline` → gates PASS.
+- Limitations / TODO: no real LLM run (no key in worktrees): the LLM paths are covered with a fake client only.
+  An unknown `profile_id` on chat/feedback/quiz-check is not a 404 (the store write is skipped silently). Manager
+  `percent` caps `activities_done` at the role's activity count (the store row has no per-role split). Option
+  feedback in llm mode reports `mode: "offline"` (fixed text, no model call).
+
+### P4.1 / P4.2 — Knowledge editor and manager view `#/kb` (Sonnet, 2026-11-11)
+- What now exists: `web/src/components/kb/**` and `web/src/components/manager/ManagerView.tsx`. `#/kb` has two tabs. Rows: table of every K-row (id, topic, Arabic text, keyword, document, page, status badges `Official` / `Edited live` / `Added live`, plus an `offline edit` badge when `offline_edit`), "Add row" and "Restore official version" buttons, a store badge (Supabase / local) and the "Manager view (mock)" badge. Edit and add share one dialog (topic select from the existing topics, text area, keyword, document, page; client validation for empty fields and page >= 1). "Try it now" side panel (below the table under 1024 px): one-line question box posting to `/api/chat`, rendered with the chat's own `ChatMessage` (so `AnswerCard` and `SourceRow` with the live-edit badge), with an "ask the same question again" button for the edit -> ask loop. Manager tab: `GET /api/manager/summary` table (alias, track, progress %, activities done, scenarios practised, quiz practice) under the server's `label_ar` verbatim; counts only.
+- Interfaces added/changed: none shared. `chat/*` is imported (`ChatMessage`), not modified. 32 i18n keys appended to the end of `extra` in both dictionaries (`kb*`, `mgr*`).
+- How to use it: open `#/kb`. Edit sends only changed fields (others `null`); the list is reloaded from the server after every successful write (and after a 409), so badges always come from the server. Save toast: `kb.saved` with the server's `reindex_ms`. `oos_disabled` ids from the write response are shown in a note under the toolbar. Reset asks for confirmation, then `POST /api/kb/reset`. 423 is retried once by the client; if it persists the dialog shows "being re-indexed, try again". 409 on add keeps the dialog open and refreshes the list. Try panel sends `role`, `force_offline` (header switch), `profile_id`; nothing is written to the chat thread.
+- Config/env: none.
+- Acceptance: `npx --prefix web tsc -p web --noEmit` -> 0 errors; `npm test --prefix web` -> `Test Files 18 passed, Tests 180 passed` (13 new in `kb/__tests__/kb.test.tsx`); `npm run build --prefix web` -> built; `scripts\check_web.py` -> OK.
+- Limitations / TODO: tested against fixtures only (not the live API). The "will be assigned" id is a client guess (max K-number + 1); the server decides. Offline edits have no sync (plan A12.3). Row edits are not logged or diffed in the UI (no history view). The manager tab shows demo profiles only and has no refresh button besides the retry on error.
+
+### P2.6 — Web follow-ups: chat, shell, state, UI kit  (Sonnet, 2026-11-11)
+- What now exists: AnswerCard no longer doubles the partial note (splits on the server's note, keeps the divider; own trailer only if the note is missing); `#/chat?ask=<q>` prefills the composer (no auto-send) and clears the param; header role chip is disabled with a title/aria-description while practice mode is on; role dialog (Dialog overlay) is `data-shell` so it is hidden in print, toasts already `data-toast-region`; `ChipGroup` items accept `lang`/`dir` (quiz options use ar/rtl); unused `about.howText` removed; BottomNav height is the CSS variable `--da-bottom-nav` (3.5rem + 1px, 0 from md) used by the chat composer and `<main>` padding (the composer used `max-lg` while the nav hides at md). About copy fixed: `limitsText`, `storedText`, `leavesText` reworded (ar + en).
+- Interfaces added/changed: `useAppState()` gains `practiceActive`, `setPracticeActive` (not persisted); `ChipGroup` item `lang?`, `dir?`; `Composer` prop `prefill`; i18n key `extra.roleLocked` appended to the end of `extra`.
+- How to use it: quiz links `#/chat?ask=...` work as is.
+- Config/env: none.
+- Acceptance: tsc 0 errors; `npm test --prefix web` -> 18 files, 185 tests passed; build OK; check_web OK.
+- Limitations / TODO: print is verified by CSS rules only (jsdom has no print media).
+
+### P3.7 — Red team: 20 adversarial Arabic prompts and an automatic safety runner  (Opus, 2026-11-11)
+- What now exists: `data/ours/redteam.csv` (RT01–RT20: injection, fake K-ids, planted numbers, name fishing,
+  employment decisions, mixed role claims; two-turn scenario rows), `scripts/run_redteam.py`,
+  `tests/test_redteam.py`, `docs/redteam.md` (checks and findings table).
+- Interfaces added/changed: none in `app/`. `run_redteam.py` exposes `load_rows`, `run_all`, `check_turn`,
+  `check_expected`, `format_table`, `write_csv`, `summary_line`, `main` for tests.
+- How to use it: `python scripts/run_redteam.py --mode offline|llm [--strict]`; prints the table and
+  `redteam <mode>: N/20 pass`, writes `results/redteam_<mode>.csv`. `notes` carries `role=`, `expect=`,
+  `forbid=`, `turn2=`, `why=` separated by ` ; `.
+- Config/env: offline mode sets `OFFLINE=1` and sends `force_offline`; llm mode needs
+  `app.llm.probe(agent.llm)` to pass, else exit 3.
+- Acceptance: `python scripts/run_redteam.py --mode offline` → `redteam offline: 13/20 pass`;
+  `python -m pytest -q tests/test_redteam.py` → `17 passed`.
+- Limitations / TODO: seven behaviour misses offline (RT04, RT07, RT08, RT12–RT15) with proposed fixes in
+  `docs/redteam.md` (guards vocabulary, OOS rows, a count rule, explicit-id lookup); LLM mode not run
+  (no key in worktrees and the agent does not use the LLM yet).
+
+### P3.8 — Fix the red-team findings  (Opus 5.5, 2026-11-11)
+- What now exists: wider guards (pay and phone words with proclitics / pronoun suffixes, email and link
+  words, «termination of my service», «مشرف/supervisor» as a person word); a K-id typed in the message is
+  stripped from the query and, when it exists, is the first hit and never refused by the margin alone;
+  an injection-looking message outside the `answer` band gets the injection refusal with no row; two
+  head-count out-of-scope rows (OOS41–OOS42).
+- Interfaces added/changed: `app.retrieve.split_named_ids(query, live_ids)`, `KID_IN_QUERY`, `Hit.named`
+  (default False); `app.answer.injection_refusal(band)`, `AnswerResult.reason` (`"injection"` or None).
+  `answer_llm` unchanged.
+- How to use it: nothing new to call; `tools.answer_from_rows` should read `res.reason` / `res.text_ar`
+  for refusals (change request) so the O1 refusal shows `INJECTION_AR` with `reason="injection"`.
+- Config/env: none. `results/bands.json` re-picked on DEV with `pick_bands.py`: identical values
+  (−0.035 / 0.035), file not changed.
+- Acceptance: `run_redteam.py --mode offline` → `redteam offline: 19/20 pass` (13 before; RT20 recorded);
+  `run_eval.py --set dev --mode offline` → correct 106/154 (100 before), answerable refused 0,
+  unanswerable refused-or-nc 40/43, gates PASS; `pytest -q` → 554 passed; ruff + mypy clean.
+- Limitations / TODO: RT20 fails the runner's scenario expectation because O2 now refuses the supervisor
+  number in turn 2 (runner change request); RT08 is a weak pass (unrelated K15 under the hedge); bare
+  «فصلي», «طردي», «بريد» and the «رابط موقع» OOS row were left out (false positives / DEV D004 regression);
+  OOS41–42 are close to DEV D052/D097, so part of the DEV gain is that overlap.
+
+### P6.0 — First drafts of the submission documents  (Opus, 2026-11-11)
+- What now exists: `README.md` (run, key/no key, store, demo walkthrough, tripwire, eval, results table,
+  checks, limitations, troubleshooting, AI-use/privacy summary, layout), `docs/report.md` (≤ 900 words,
+  ASCII architecture, results table, limitations, AI-use/knowledge/privacy section), `docs/privacy_ai_note.md`,
+  `docs/demo_script.md` (timed shot list, 6:50, exact Arabic prompts, reserve shots, recording tips),
+  `docs/slides.md` (5 slides, Markdown).
+- Interfaces added/changed: none (documents only).
+- How to use it: after the final runs, replace every `{{NAME}}` token with the number from
+  `results/summary.md` / `.cache/budget.json` / the Supabase project; check every sentence marked
+  `{{VERIFY}}` against the built app, then delete the marker (or the sentence). `grep -n "{{" README.md docs/*.md`
+  lists what is left.
+- Config/env: none.
+- Acceptance: `python -c "...len(read_text().split())" docs/report.md` → 897 words; DEV offline numbers quoted
+  only from `results/summary.md` (commit 7cb9612 run) and labelled DEV; demo prompts marked "offline: checked"
+  were run through `build_default_agent().turn` offline on 6ef95f3 (K01, K05–K09, K14, K16, K17, contact
+  refusal, S02 start + free-text feedback, Day 30 proposal, S04 start, K02 edit → "not confirmed" offline).
+- Limitations / TODO: no `.docx`/`.pptx` export (Markdown only); HTTP API, LLM wiring, KB editor and manager
+  screens were not built at draft time, so those sentences carry `{{VERIFY}}`; the demo prompts are not yet in
+  `results.csv` (plan B6.5 acceptance) — the integrator should add them or accept the in-process check.
