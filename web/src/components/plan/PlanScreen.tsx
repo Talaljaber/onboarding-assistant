@@ -28,9 +28,9 @@ export default function PlanScreen() {
     <section data-screen="plan" className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
       <div className={summary ? "flex flex-col gap-4 print:hidden" : "flex flex-col gap-4"}>
         <h1 className="text-2xl font-semibold text-fg-1">{t("plan.title")}</h1>
-        <div role="note" className="flex flex-col gap-1 rounded-lg border border-warn bg-surface-1 p-3 text-fg-1">
-          <p className="font-medium">{t("plan.banner")}</p>
-          {plan && <p className="font-id text-xs text-fg-2" dir="ltr">{plan.status}</p>}
+        <div role="note" className="min-w-0 break-words rounded-lg border border-warn bg-surface-1 p-3 text-fg-1">
+          <p className="font-medium" title={plan?.status} dir="auto">{t("plan.banner")}</p>
+          
         </div>
       </div>
       <Loadable state={state} onRetry={reloadPlan} lines={8}>

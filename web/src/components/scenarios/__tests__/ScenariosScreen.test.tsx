@@ -20,7 +20,7 @@ describe("ScenariosScreen", () => {
     expect(document.querySelectorAll("[data-scenario]")).toHaveLength(scenarios.scenarios.length);
     expect(within(card).getByText(first.scenario_ar)).toBeInTheDocument();
     expect(within(card).getByText(first.value_ar)).toBeInTheDocument();
-    expect(within(card).getByText(`(${first.company_value})`)).toBeInTheDocument();
+    expect(within(card).getByText(first.company_value)).toBeInTheDocument();
     expect(within(card).getByText("مثال تدريبي افتراضي")).toBeInTheDocument();
     const link = within(card).getByRole("link", { name: "ابدأ التدريب" });
     expect(link).toHaveAttribute("href", `#/chat?scenario=${first.id}`);

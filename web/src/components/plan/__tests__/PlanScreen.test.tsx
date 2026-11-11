@@ -13,7 +13,8 @@ describe("PlanScreen", () => {
     stubApi();
     renderScreen(<PlanScreen />);
     expect(await screen.findByText(/وليست جدول تقييم رسمياً/)).toBeInTheDocument();
-    expect(screen.getByText(plan.status)).toBeInTheDocument();
+    expect(screen.queryByText(plan.status)).not.toBeInTheDocument();
+    expect(screen.getByTitle(plan.status)).toBeInTheDocument();
     expect(document.querySelectorAll("[data-milestone]")).toHaveLength(4);
     expect(screen.getByText(plan.milestones[0]!.learning_goal_ar)).toBeInTheDocument();
     expect(screen.getByText(/وليس تقييم نهاية الشهر الأول المذكور في K14/)).toBeInTheDocument();

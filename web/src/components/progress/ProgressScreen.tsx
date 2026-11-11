@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Dialog } from "@/components/ui/Dialog";
 import { Loadable } from "@/components/ui/Loadable";
+import { ValueLabel } from "@/components/ui/ValueLabel";
 import { useT, type DictKey } from "@/i18n";
 import { isoDay } from "@/lib/format";
 import { useAppState } from "@/state/useAppState";
@@ -100,8 +101,7 @@ export default function ProgressScreen() {
                       <span className="font-id" dir="ltr">{id}</span>
                       {s && (
                         <Badge tone="value">
-                          <span lang="ar" dir="rtl">{s.value_ar}</span>
-                          <span dir="ltr">({s.company_value})</span>
+                          <ValueLabel ar={s.value_ar} en={s.company_value} />
                         </Badge>
                       )}
                       <span className="text-sm text-fg-2" dir="ltr">{isoDay(date)}</span>

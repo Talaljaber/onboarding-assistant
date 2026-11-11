@@ -291,7 +291,8 @@ describe("practice mode", () => {
     expect(fb).toHaveTextContent("Suggested response in the training material");
     expect(fb.textContent).not.toMatch(/\d+\s*%|score|grade/i);
 
-    await userEvent.click(within(fb as HTMLElement).getByRole("button", { name: "End practice" }));
+    expect(within(fb as HTMLElement).queryByRole("button", { name: "End practice" })).toBeNull();
+    await userEvent.click(within(banner).getByRole("button", { name: "End practice" }));
     expect(document.querySelector("[data-practice-banner]")).toBeNull();
     // 1 of 8 done -> SA-D60-s02 completes -> 2 of 8 = 25%
     expect(await screen.findByText("Progress updated: 25%")).toBeInTheDocument();

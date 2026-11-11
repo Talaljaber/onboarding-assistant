@@ -64,8 +64,10 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
             {t("extra.traceGuard", { pattern: guard })}
           </p>
         )}
-        <p className="font-id text-fg-2" dir="ltr">
-          {t("extra.traceAgent", { tool: trace.router.tool })} ({score(trace.router.confidence)})
+        <p className="flex flex-wrap items-baseline gap-x-2 text-fg-2">
+          <span>{t("extra.traceTool")}</span>
+          <bdi className="font-id break-all text-xs" dir="ltr">{trace.router.tool}</bdi>
+          <bdi className="font-id text-xs" dir="ltr">{score(trace.router.confidence)}</bdi>
         </p>
         {trace.agent.fallback_reason && (
           <p className="text-fg-2">{t("extra.traceFallbackReason", { reason: trace.agent.fallback_reason })}</p>
@@ -98,7 +100,7 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
                   </tr>
                 </thead>
                 <tbody>
-                  {r.hits.slice(0, 8).map((h) => (
+                  {r.hits.slice(0, 5).map((h) => (
                     <tr
                       key={h.id}
                       data-cited={cited.has(h.id) || undefined}
@@ -166,11 +168,9 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
       )}
 
       <Section title={t("trace.latency", { ms: ms(trace.latency_ms) })}>
-        <p className="text-fg-2">
-          {t("trace.requestId")}:{" "}
-          <span className="font-id" dir="ltr">
-            {trace.request_id}
-          </span>
+        <p className="flex flex-wrap items-baseline gap-x-2 text-fg-2">
+          <span>{t("trace.requestId")}</span>
+          <bdi className="font-id break-all text-xs" dir="ltr">{trace.request_id}</bdi>
         </p>
       </Section>
     </div>
