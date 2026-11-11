@@ -412,6 +412,10 @@ export const ar = {
   },
   uiChat: {
     // Worker B (chat) appends here.
+    feedbackTitle: "ملاحظات على ردك",
+    progressLabel: "نسبة إنجاز الأنشطة المقترحة",
+    planHint: "الأنشطة المقترحة لكل مرحلة",
+    cited: "مذكور في الإجابة",
   },
   uiLearning: {
     // Worker C (scenarios, plan, quiz, progress) appends here.

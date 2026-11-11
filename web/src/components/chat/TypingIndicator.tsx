@@ -1,16 +1,20 @@
 import { useT } from "@/i18n";
+import { AssistantAvatar } from "./AssistantBubble";
 
-/** Three bouncing dots while a reply is pending (a polite status for screen readers). */
+/** Three pulsing dots beside the assistant's mark while a reply is pending (a polite status for screen readers). */
 export function TypingIndicator() {
   const t = useT();
   return (
-    <li className="flex flex-col items-start gap-1" role="status" aria-label={t("chat.typing")} data-kind="typing">
-      <span className="text-xs text-fg-3">{t("chat.assistant")}</span>
-      <span className="flex items-center gap-1 rounded-2xl bg-surface-2 px-3 py-3 shadow-1" aria-hidden="true">
-        {[0, 150, 300].map((delay) => (
+    <li className="da-fade-in flex items-center gap-2" role="status" aria-label={t("chat.typing")} data-kind="typing">
+      <AssistantAvatar />
+      <span
+        className="flex h-11 items-center gap-1.5 rounded-xl rounded-ss-sm border border-line bg-surface-0 px-4 shadow-card"
+        aria-hidden="true"
+      >
+        {[0, 160, 320].map((delay) => (
           <span
             key={delay}
-            className="size-2 rounded-full bg-fg-3 motion-safe:animate-bounce"
+            className="size-2 rounded-full bg-brand motion-safe:animate-bounce"
             style={{ animationDelay: `${delay}ms` }}
           />
         ))}

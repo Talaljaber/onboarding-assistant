@@ -2,8 +2,9 @@ import type { ReactNode } from "react";
 import type { Mode } from "@/api/types";
 import { useT } from "@/i18n";
 import { textDir } from "@/lib/textDir";
+import { BrandMark } from "../shell/BrandMark";
 import { Badge } from "../ui/Badge";
-import { Button } from "../ui/Button";
+import { cn } from "../ui/cn";
 import { Icon } from "../ui/Icon";
 
 export interface AssistantFrameProps {
@@ -17,36 +18,46 @@ export interface AssistantFrameProps {
   children: ReactNode;
 }
 
-/** The header row every assistant item shares (avatar, label, mode chip, trace button) plus its body. */
+/** The small academy mark that stands for the assistant in the thread (decorative). */
+export function AssistantAvatar() {
+  return (
+    <span className="shrink-0 overflow-hidden rounded-[10px] shadow-1">
+      <BrandMark size={30} className="block" />
+    </span>
+  );
+}
+
+/**
+ * The header row every assistant item shares (avatar, label, mode chip and, at the end, the
+ * "How I answered" button) with the body underneath at full width, so cards keep the whole line on phones.
+ */
 export function AssistantFrame({ mode, cached, hasTrace, traceShown, onToggleTrace, children }: AssistantFrameProps) {
   const t = useT();
   return (
-    <div className="flex w-full flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <span
-          aria-hidden="true"
-          className="grid size-7 place-items-center rounded-full bg-accent text-on-accent"
-        >
-          <Icon name="chat" size={14} />
-        </span>
-        <span className="text-sm font-semibold text-fg-2">{t("chat.assistant")}</span>
+    <div className="da-rise-in flex w-full min-w-0 flex-col gap-2">
+      <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1">
+        <AssistantAvatar />
+        <span className="text-sm font-bold text-fg-1">{t("chat.assistant")}</span>
         {mode && (
-          <Badge tone={mode === "llm" ? "info" : "neutral"} icon={null}>
+          <Badge size="sm" tone={mode === "llm" ? "info" : "neutral"} icon={mode === "llm" ? "sparkle" : null}>
             {mode === "llm" ? t("chat.modeLlm") : t("chat.modeOffline")}
             {cached ? ` · ${t("chat.cached")}` : ""}
           </Badge>
         )}
         {hasTrace && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ms-auto"
+          <button
+            type="button"
             aria-expanded={traceShown ?? false}
             onClick={onToggleTrace}
+            className={cn(
+              "ms-auto inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-accent",
+              "transition-colors duration-(--da-motion-fast) ease-da hover:bg-accent-soft",
+              traceShown && "bg-accent-soft",
+            )}
           >
-            <Icon name="eye" size={14} />
+            <Icon name="eye" size={16} />
             {t("chat.howAnswered")}
-          </Button>
+          </button>
         )}
       </div>
       {children}
@@ -60,10 +71,10 @@ export function AssistantBubble({ text, badge }: { text: string; badge?: ReactNo
   return (
     <div
       data-kind="text"
-      className="max-w-[90%] rounded-2xl rounded-ss-md border border-line bg-surface-1 px-4 py-3 shadow-1"
+      className="w-fit max-w-full rounded-xl rounded-ss-sm border border-line bg-surface-0 px-4 py-3 shadow-card sm:max-w-[92%] sm:px-5 sm:py-3.5"
     >
       {badge && <div className="mb-2">{badge}</div>}
-      <p lang={dir === "rtl" ? "ar" : "en"} dir={dir} className="whitespace-pre-line text-[1.05rem] leading-[1.7] text-fg-1">
+      <p lang={dir === "rtl" ? "ar" : "en"} dir={dir} className="whitespace-pre-line text-base leading-[1.8] text-fg-1">
         {text}
       </p>
     </div>
