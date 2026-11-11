@@ -41,7 +41,7 @@ export function Card({ title, description, icon, actions, variant = "default", l
     >
       {(title || actions) && (
         <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-1 items-start gap-3">
+          <div className="flex min-w-0 flex-[1_1_16rem] items-start gap-3">
             {icon && (
               <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-md bg-accent-soft text-accent">
                 <Icon name={icon} size={20} />

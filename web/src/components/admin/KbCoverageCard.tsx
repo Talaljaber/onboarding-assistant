@@ -40,7 +40,7 @@ function RowLabel({ r }: { r: CoverageRow }) {
   const t = useT();
   return (
     <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-      <a href={rowHref(r.id)} aria-label={t("kbCoverage.openRow", { id: r.id })} className={`font-id text-sm ${link}`}>
+      <a href={rowHref(r.id)} aria-label={t("kbCoverage.openRow", { id: r.id })} className={`font-id inline-flex min-h-11 items-center text-sm sm:min-h-0 ${link}`}>
         <bdi dir="ltr">{r.id}</bdi>
       </a>
       <span className="min-w-0 text-sm text-fg-1">

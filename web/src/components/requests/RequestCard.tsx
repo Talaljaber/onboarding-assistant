@@ -36,7 +36,7 @@ export function StatusControl({
             key={s}
             className={cn(
               segmented.item,
-              "da-radio-tile inline-flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-1 px-3 sm:flex-none",
+              "da-radio-tile inline-flex min-h-11 flex-auto cursor-pointer items-center justify-center gap-1 whitespace-nowrap px-2.5 sm:min-h-10 sm:flex-none sm:px-3",
               value === s ? segmented.on : segmented.off,
               disabled && "cursor-not-allowed opacity-60",
             )}

@@ -79,10 +79,10 @@ export function AdminRequestsSection({ intern }: { intern: { id: string; role: R
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
                     <span className="text-xs text-fg-3">{t("mentorReq.changed", { when: formatWhen(req.status_changed_at, lang) })}</span>
                     <span className="flex gap-1">
-                      <Button variant="ghost" size="sm" icon="edit" onClick={() => setDialog({ editing: req })}>
+                      <Button variant="ghost" size="sm" icon="edit" className="max-sm:min-h-11" onClick={() => setDialog({ editing: req })}>
                         {t("mentorReq.edit")}
                       </Button>
-                      <Button variant="ghost" size="sm" icon="close" onClick={() => setRemoving(req)} data-testid="request-delete">
+                      <Button variant="ghost" size="sm" icon="close" className="max-sm:min-h-11" onClick={() => setRemoving(req)} data-testid="request-delete">
                         {t("mentorReq.delete")}
                       </Button>
                     </span>
