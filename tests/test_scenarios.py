@@ -136,5 +136,5 @@ def test_feedback_from_checklist(index: ScenarioIndex) -> None:
         scenarios.feedback_from_checklist(sc, [], [], "Honesty", None)
 
 
-def test_feedback_llm_is_a_stub(index: ScenarioIndex) -> None:
-    assert scenarios.feedback_llm(index.get("S01"), "نص", llm=None, budget=None) is None
+def test_feedback_llm_without_llm_is_none(index: ScenarioIndex) -> None:
+    assert scenarios.feedback_llm(index.get("S01"), "نص", llm=None, budget_s=None) is None

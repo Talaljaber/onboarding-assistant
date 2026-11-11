@@ -7,14 +7,16 @@ feedback: fixed option feedback, offline free-text feedback (the suggested respo
 nothing judged), and server-worded feedback from checklist ids for the LLM path.
 
 What it must never do: score, count, grade or rate a response (feedback carries no number or
-percentage); invent a scenario that is not in the official file; call the network. `feedback_llm`
-is a stub returning None until the LLM layer exists (W3-B).
+percentage); invent a scenario that is not in the official file; call the network itself (the LLM
+path goes through `app.llm.paths.llm_feedback`, which verifies the reply before anything is shown or
+cached; the model's own words reach the screen only through a verified `tip_ar`).
 """
 
 from __future__ import annotations
 
 import csv
 import io
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -24,6 +26,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from app import schemas
+from app.llm.paths import FEEDBACK_MAX_S, llm_feedback
 
 ROLES = schemas.ROLES
 VALUES = schemas.VALUES
@@ -104,6 +107,22 @@ class Feedback:
     suggested_good_response_ar: str
     option_id: str | None = None
     met: list[str] = field(default_factory=list)
+    # LLM trace fields (set by `feedback_llm`; same names as `schemas.TraceFeedback`)
+    llm_used: bool = False
+    verifier: dict[str, Any] | None = None
+    tip_dropped: bool = False
+    latency_ms: int | None = None
+    cached: bool = False
+
+    def trace_fields(self) -> dict[str, Any]:
+        """Keyword arguments for `schemas.TraceFeedback`."""
+        return {
+            "llm_used": self.llm_used,
+            "verifier": self.verifier,
+            "tip_dropped": self.tip_dropped,
+            "latency_ms": self.latency_ms,
+            "cached": self.cached,
+        }
 
     @property
     def value_ar(self) -> str:
@@ -361,10 +380,76 @@ def feedback_from_checklist(
     )
 
 
-def feedback_llm(scenario: Scenario, user_text: str, llm: Any, budget: Any) -> Feedback | None:
-    """LLM feedback (feedback_v1.md → verify → `feedback_from_checklist`). Stub until W3-B: always None."""
-    del scenario, user_text, llm, budget
-    return None
+def _scenario_payload(scenario: Scenario) -> dict[str, Any]:
+    return {
+        "id": scenario.id,
+        "department": scenario.department,
+        "scenario_ar": scenario.scenario_ar,
+        "suggested_good_response_ar": scenario.suggested_good_response_ar,
+        "company_value": scenario.company_value,
+    }
+
+
+def feedback_llm(
+    scenario: Scenario,
+    user_text: str,
+    llm: Any,
+    budget_s: float | None,
+    *,
+    info: dict[str, Any] | None = None,
+) -> Feedback | None:
+    """LLM feedback: `feedback_v1.md` → verify → `feedback_from_checklist` (server-worded), or None.
+
+    `llm` is the `app.llm.LLM` from `build_llm`; `budget_s` the seconds left (the call gets at most
+    3.5 s). The checklist ids and the value are verified; `tip_ar` is kept only when it passes
+    `verify_tip`, otherwise it is dropped and the rest is still shown. None → the caller uses
+    `feedback_freetext_offline`. `info` (optional) receives the `schemas.TraceFeedback` fields for both
+    success and failure. Never raises.
+    """
+    started = time.perf_counter()
+    trace: dict[str, Any] = {
+        "llm_used": False,
+        "verifier": None,
+        "tip_dropped": False,
+        "latency_ms": None,
+        "cached": False,
+    }
+
+    def done(fb: Feedback | None) -> Feedback | None:
+        trace["latency_ms"] = int((time.perf_counter() - started) * 1000)
+        if info is not None:
+            info.update(trace)
+        if fb is not None:
+            for k, v in trace.items():
+                setattr(fb, k, v)
+        return fb
+
+    try:
+        if llm is None or getattr(llm, "mode", None) != "llm" or getattr(llm, "chat", None) is None:
+            return done(None)
+        trace["llm_used"] = True
+        deadline = min(FEEDBACK_MAX_S, float(budget_s if budget_s is not None else FEEDBACK_MAX_S))
+        checklist = [{"item_id": c.item_id, "text_ar": c.text_ar} for c in scenario.checklist]
+        call_info: dict[str, Any] = {}
+        reply, reason = llm_feedback(
+            _scenario_payload(scenario), checklist, user_text, llm.chat, deadline, info=call_info
+        )
+        trace["cached"] = bool(call_info.get("cached"))
+        if reply is None:
+            trace["verifier"] = {"ok": False, "reason": reason}
+            if reason == "budget_exhausted":
+                llm.mode, llm.reason = "offline", "budget_exhausted"
+            return done(None)
+        trace["verifier"] = {"ok": True, "reason": None}
+        trace["tip_dropped"] = bool(call_info.get("tip_dropped"))
+        return done(
+            feedback_from_checklist(
+                scenario, reply["met"], reply["missing"], reply["value"], reply["tip_ar"], mode="llm"
+            )
+        )
+    except Exception:  # noqa: BLE001 - the LLM path must never fail a request
+        trace["verifier"] = {"ok": False, "reason": "internal_error"}
+        return done(None)
 
 
 def start_text_ar(*, with_options: bool) -> str:

@@ -211,7 +211,11 @@ def render_feedback_prompt(scenario: Mapping[str, Any], checklist: Sequence[Mapp
 
 
 def _accept_feedback(
-    content: str, scenario: Mapping[str, Any], checklist: Sequence[Mapping[str, Any]], user_text: str
+    content: str,
+    scenario: Mapping[str, Any],
+    checklist: Sequence[Mapping[str, Any]],
+    user_text: str,
+    info: dict[str, Any] | None = None,
 ) -> tuple[dict | None, str]:
     parsed = parse_json_object(content)
     if parsed is None:
@@ -221,6 +225,7 @@ def _accept_feedback(
     v = verify_feedback(parsed, ids, allowed_texts, user_text=user_text)
     if not v.ok:
         return None, v.reason or BAD_SHAPE
+    _fill(info, tip_dropped=bool(v.tip_reason), tip_reason=v.tip_reason)
     if v.tip_reason:
         log_event("feedback_tip_dropped", reason=v.tip_reason)
     return {"met": v.met, "missing": v.missing, "value": v.value, "tip_ar": v.tip_ar}, ""
@@ -237,7 +242,16 @@ def llm_feedback(
 ) -> tuple[dict | None, str | None]:
     """A verified `{met, missing, value, tip_ar | None}` or `(None, reason)`. A failing tip is dropped
     (`tip_ar: None`) and the rest is kept. `checklist` rows are `{item_id|id, text_ar, ...}`."""
-    _fill(info, model=getattr(chat, "model_id", None), prompt=FEEDBACK_PROMPT, cached=False, latency_ms=0, calls=0)
+    _fill(
+        info,
+        model=getattr(chat, "model_id", None),
+        prompt=FEEDBACK_PROMPT,
+        cached=False,
+        latency_ms=0,
+        calls=0,
+        tip_dropped=False,
+        tip_reason=None,
+    )
     try:
         if chat is None:
             return None, "no_llm"
@@ -245,7 +259,7 @@ def llm_feedback(
         ex = _Exchange(chat, FEEDBACK_PROMPT, rendered, FEEDBACK_MAX_TOKENS)
         hit = ex.cached()
         if hit is not None:
-            result, reason = _accept_feedback(hit, scenario, checklist, user_text)
+            result, reason = _accept_feedback(hit, scenario, checklist, user_text, info)
             if result is not None:
                 _fill(info, cached=True)
                 return result, None
@@ -256,7 +270,7 @@ def llm_feedback(
         _fill(info, latency_ms=latency_ms, calls=1)
         if content is None:
             return None, failure
-        result, reason = _accept_feedback(content, scenario, checklist, user_text)
+        result, reason = _accept_feedback(content, scenario, checklist, user_text, info)
         if result is None:
             log_event("verifier_rejection", prompt=FEEDBACK_PROMPT, key=ex.key[:12], reason=reason, model=chat.model_id)
             return None, reason
