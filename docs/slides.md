@@ -41,17 +41,22 @@ Notes: Scenarios, plan, quiz and activities are fictional competition examples, 
 ```
 message -> guards (employment, contact) -> tool choice (LLM checked against fixed lists; else rules)
         -> server runs the tool -> e5 + BM25 retrieval -> answer band
-        -> optional LLM wording -> verifier -> reply + sources + trace
+        -> optional answer panel -> verifier -> reply + sources + trace
 ```
 
 - Retrieval: multilingual e5 (local ONNX) + BM25, fused by rank.
 - Verifier: ids must be rows sent, a verbatim quote per id, every number found in the rows or the question, no contacts
   or links. A failed reply is dropped and the offline answer is shown.
 - Offline: the matching row verbatim, "not confirmed" with the closest row, or a refusal.
-- Model (optional): `deepseek/deepseek-v4.1-flash` via OpenRouter, pinned, temperature 0, seed 42,
-  data collection denied, reasoning off, 5 s turn budget, USD 3 cap in code.
+- Answer panel (optional): `deepseek/deepseek-v4.1-flash` (reasoning off) drafts the answer; a
+  citation judge and a coverage judge check it. Both agree (confidence ≥ 0.7): sent. Otherwise one
+  escalation to `z-ai/glm-5.3` (low reasoning effort). Judges never add text or ids.
+- Every reply, flash or GLM, still passes the verifier. Pinned models, data collection denied on every
+  call, 9 s turn budget, USD 3 cap in code.
 
-Notes: The role never reaches the answer prompt. Progress changes only after the user confirms.
+Notes: The role never reaches the answer prompt. A refusal is reopened only when retrieval is
+confident. Greetings, plan, quiz, progress and scenario turns use one flash call or none. Progress
+changes only after the user confirms.
 
 ---
 
@@ -60,20 +65,22 @@ Notes: The role never reaches the answer prompt. Progress changes only after the
 | Set · mode | Correct | Unanswerable refused (or not confirmed) | Invented contacts |
 |---|---|---|---|
 | DEV · offline | 106/154 | 13/43 (40/43) | 0 |
-| DEV · AI | 142/154 | 43/43 | 0 |
-| Held-out · offline | 25/50 | 5/14 (14/14) | 0 |
-| Held-out · AI | 43/50 | 14/14 | 0 |
+| DEV · AI (panel) | 152/154 (was 142) | 43/43 | 0 |
+| Held-out 2 · offline | 26/50 | 4/10 (10/10) | 0 |
+| Held-out 2 · AI (panel) | 45/50 | 10/10 | 0 |
 
-- Unseen held-out questions: offline 25/50 correct and 2 answerable questions refused; AI mode 43/50,
-  none refused. Neither mode invented a contact.
-- Latency p95: offline ≈ 14 ms; AI 3118 ms (DEV, uncached). Jury block 9/9 in both modes (reported
-  only). Red team 19/20. Spend 0.054 USD.
+- Unseen held-out 2: AI mode 45/50, 28/30 answerable, none refused; goal ≥ 46/50 **missed by one**
+  (misses: 2 answered wrong, 2 guard rows, 1 progress row). Offline 26/50, 1 answerable refused.
+  Neither mode invented a contact.
+- AI latency p50 2.6 s, p95 5.7 s; 27% of panel turns escalated; about 0.085 USD per 100 questions.
+  Red team: AI 17/20, offline 19/20, all safety checks held. Jury block 9/9 (reported only).
 - Limits: offline mode is weaker on unseen wording and refuses few unanswerable questions outright
-  (most get "not confirmed"); it cannot combine rows; rows added live are matched less confidently
-  offline; knowledge-base editing has no login; 18 rows only.
+  (most get "not confirmed"); it cannot combine rows; guard and progress misses are outside the panel;
+  knowledge-base editing has no login; 18 rows only.
 
-Notes: Thresholds and prompts were chosen on DEV only. The held-out set was written blind and run once
-after the freeze. The jury file was never used for tuning.
+Notes: Thresholds and prompts were chosen on DEV only. Held-out 2 was written blind and run once on the
+frozen commit after all tuning. The earlier held-out 1 run, before the panel, gave AI 43/50 and offline
+25/50. The jury file was never used for tuning.
 
 ---
 
@@ -84,7 +91,8 @@ after the freeze. The jury file was never used for tuning.
 - Without a key, nothing goes to any AI service; a socket tripwire proves the offline DEV evaluation
   makes no network calls.
 - With a key: only the question, the previous question for short follow-ups, the rows and practice replies
-  go to OpenRouter, with data collection denied. Never the role, alias or progress.
+  go to OpenRouter, with data collection denied (GLM-5.3 sees the question and rows only on escalated
+  turns). Never the role, alias or progress.
 - No chat text is stored on a server. Supabase (region to be confirmed) holds the knowledge base,
   demo profiles, progress, attempt ids and turn metadata; a local file takes over when it is
   unreachable, with no sync back.
