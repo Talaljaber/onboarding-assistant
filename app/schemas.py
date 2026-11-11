@@ -54,6 +54,8 @@ ReplyKind = Literal[
 ]
 RefusalReason = Literal["employment", "contact", "out_of_scope", "injection"]
 Mode = Literal["llm", "offline"]
+#: UI language of the chat client (P11.1): "en" asks for a verified English helper translation of answers.
+ChatLang = Literal["ar", "en"]
 AnswerStatus = Literal["answered", "partial", "unsupported"]
 Band = Literal["answer", "not_confirmed", "refuse"]
 KbStatus = Literal["official", "edited", "added"]
@@ -489,6 +491,8 @@ class ChatRequest(_Model):
     confirm: ProgressConfirm | None = None
     option_id: OptionId | None = None
     force_offline: bool = False
+    #: P11.1: "en" adds a verified English helper translation (`Reply.text_en`) to answers in LLM mode.
+    lang: ChatLang = "ar"
     profile_id: ProfileId | None = None
     # Declared last so its validator can see `confirm` and `option_id`.
     message: Annotated[Line, Field(max_length=MESSAGE_MAX)] = ""

@@ -14,7 +14,7 @@ the not-confirmed / out-of-scope questions are illustrative placeholders until
 
 | File | What it shows |
 |---|---|
-| `chat_request_question.json` | a plain question with `profile_id` |
+| `chat_request_question.json` | a plain question with `profile_id`, `lang: "ar"` (`"en"` asks for a verified `reply.text_en` in llm mode, P11.1) |
 | `chat_request_confirm.json` | progress confirm turn, empty `message` |
 | `chat_request_option.json` | offline option pick, empty `message`, `force_offline: true` |
 

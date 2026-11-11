@@ -116,6 +116,7 @@ describe("greeting and starters", () => {
       role: "Sales",
       state: { active_scenario: null },
       force_offline: false,
+      lang: "en",
       confirm: null,
       option_id: null,
       last_user_message: null,
@@ -163,10 +164,12 @@ describe("card mapping", () => {
       // the document is named on the row, or once for the whole block when all rows share it
       expect(card("partial")).toHaveTextContent(s.source_document);
     }
-    // the server's text already ends with the note: shown once, no second trailer
+    // the server's text already ends with the note: shown once, no second trailer; in English the fixed
+    // Arabic note gets one fixed English line (never a model translation)
     const noteText = partial.reply.text_ar.split(/\n\n/).pop() as string;
     expect(card("partial")!.textContent!.split(noteText).length - 1).toBe(1);
-    expect(screen.queryByText(/rest of your question/i)).toBeNull();
+    expect(screen.getAllByText(/rest of your question/i)).toHaveLength(1);
+    expect(card("partial")!.querySelector("[data-en-helper]")).toHaveTextContent(/rest of your question/i);
   });
 
   it("names a document shared by every source once, as the block caption", async () => {
@@ -518,5 +521,74 @@ describe("trace and persistence", () => {
     expect(card("answer")).not.toBeNull();
     expect(document.querySelector('[data-kind="user"]')).toHaveTextContent("كيف أقدم طلب إجازة؟");
     expect(screen.queryByRole("button", { name: /How I answered/ })).toBeNull();
+  });
+});
+
+describe("English helper translation (P11.1)", () => {
+  const withEn = (textEn: string | null) => ({ ...answerLlm, reply: { ...answerLlm.reply, text_en: textEn } });
+
+  it("shows the verified text_en above the verbatim Arabic answer and rows", async () => {
+    const en = "Leave requests go through the HR system with the direct manager's approval.";
+    backend([withEn(en)]);
+    mount();
+    await ask("leave?");
+    await waitFor(() => expect(card("answer")).not.toBeNull());
+    const box = card("answer")!.querySelector("[data-text-en]") as HTMLElement;
+    expect(box).toHaveTextContent(en);
+    expect(box).toHaveTextContent("Helper translation; the original Arabic row is the reference.");
+    const arabic = card("answer")!.querySelector('p[lang="ar"]') as HTMLElement;
+    expect(arabic.textContent).toBe(answerLlm.reply.text_ar);
+    expect(box.compareDocumentPosition(arabic) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    for (const s of answerLlm.reply.sources) {
+      expect(document.querySelector(`[data-source-id="${s.id}"]`)).toHaveTextContent(s.answer_ar);
+    }
+    expect(card("answer")!.querySelector("[data-no-translation]")).toBeNull();
+  });
+
+  it("an offline answer in English mode shows the AI-mode note and no translation box", async () => {
+    backend([answerOffline]);
+    mount();
+    await ask("leave?");
+    await waitFor(() => expect(card("answer")).not.toBeNull());
+    expect(card("answer")!.querySelector("[data-text-en]")).toBeNull();
+    expect(card("answer")!.querySelector("[data-no-translation]")).toHaveTextContent(
+      "English translation is available in AI mode.",
+    );
+  });
+
+  it("an llm answer without a checked translation says so", async () => {
+    backend([withEn(null)]);
+    mount();
+    await ask("leave?");
+    await waitFor(() => expect(card("answer")).not.toBeNull());
+    expect(card("answer")!.querySelector("[data-no-translation]")).toHaveTextContent(/No checked English translation/);
+  });
+
+  it("fixed refusals keep the Arabic text and add a fixed English line", async () => {
+    backend([oos]);
+    mount();
+    await ask("discount?");
+    await waitFor(() => expect(card("refusal")).not.toBeNull());
+    expect(card("refusal")).toHaveTextContent(oos.reply.text_ar);
+    expect(card("refusal")!.querySelector("[data-en-helper]")).toHaveTextContent(/not in my approved knowledge base/);
+  });
+
+  it("the Arabic UI sends lang ar and shows no English lines", async () => {
+    const be = backend([withEn("should not show")]);
+    render(
+      <LangScope lang="ar">
+        <ToastProvider>
+          <AppStateProvider initial={seed()}>
+            <ChatScreen />
+          </AppStateProvider>
+        </ToastProvider>
+      </LangScope>,
+    );
+    await ask("إجازة؟");
+    await waitFor(() => expect(card("answer")).not.toBeNull());
+    expect(be.chat()[0]!.body).toMatchObject({ lang: "ar" });
+    expect(card("answer")!.querySelector("[data-text-en]")).toBeNull();
+    expect(card("answer")!.querySelector("[data-no-translation]")).toBeNull();
+    expect(screen.queryByText("should not show")).toBeNull();
   });
 });

@@ -112,6 +112,11 @@ The server is stateless per request. The client sends, on every chat turn:
 - `progress.completed_ids` (the client's cache; the store mirrors it when `profile_id` is sent);
 - `last_user_message` (for the follow-up rule);
 - `force_offline` (the header switch: when `true` the server makes no LLM call and answers with `mode: "offline"`);
+- `lang` (`"ar"` default | `"en"`, P11.1): the UI language. With `"en"`, an `answer` reply (status `answered`
+  or `partial`, not the `not_confirmed` band) gets a verified English helper translation in `reply.text_en`
+  when the LLM is available (not forced offline, budget left); otherwise `text_en` stays `null`. Nothing
+  else changes: `text_ar` and the cited K-rows stay verbatim Arabic. The role and the profile never reach
+  the translation prompt;
 - `profile_id` (optional; when present the server records confirmations, quiz checks and scenario practice
   through the store; no chat text is ever stored).
 
@@ -124,7 +129,7 @@ Request `ChatRequest`:
 ```json
 {"message": "كيف أقدم طلب إجازة؟", "role": "Sales", "state": {"active_scenario": null},
  "progress": {"completed_ids": []}, "last_user_message": null,
- "confirm": null, "option_id": null, "force_offline": false, "profile_id": "6f1c2b9e-…"}
+ "confirm": null, "option_id": null, "force_offline": false, "lang": "ar", "profile_id": "6f1c2b9e-…"}
 ```
 
 Rules: `confirm` and `option_id` are mutually exclusive; `option_id` must belong to
@@ -137,7 +142,7 @@ Response `ChatResponse` = `{reply, state, mode, trace}`. `reply` (`Reply`):
 |---|---|---|
 | `kind` | reply kind | all |
 | `text_ar` | string | all (fixed server text for refusals; may be the not-confirmed or partial text) |
-| `text_en` | string \| null | optional English rendering; the Arabic K-rows stay verbatim |
+| `text_en` | string \| null | English helper translation of an `answer` (only with `lang: "en"` in llm mode, verified before use and before caching; the supported part only for a partial answer, the fixed partial note is mapped by the client); `null` otherwise. The Arabic K-rows stay verbatim |
 | `status` | answered \| partial \| unsupported \| null | `answer` (answered/partial), refusals (unsupported) |
 | `band` | answer \| not_confirmed \| refuse \| null | offline answer band; `null` in llm mode |
 | `sources` | `Source[]` | answers (≥ 1), employment refusal (optional); `[]` elsewhere |
@@ -197,10 +202,16 @@ Examples: `contracts/fixtures/chat_*.json` (one per kind and card variant, see �
 - `answer` is set for the answer path; `answer.band` is the offline band, `verifier.reason` one of
   `foreign_id | no_ids | quote_missing | quote_not_in_row | foreign_number | contact_or_link | id_in_text | invalid_json`.
 - `feedback` = `{llm_used, verifier, tip_dropped, latency_ms, cached}` for scenario feedback.
+- Translation steps (P11.1, only for `lang: "en"` answers, after `render`): `translate:ok` (called and
+  verified), `cache:translate` (verified cache hit), `translate:off` (no LLM: offline, forced offline or no
+  budget), `translate:fixed` (fixed text, e.g. the not-confirmed band: not sent to the model), or
+  `translate:<reason>` when it was rejected or failed (`text_en` stays `null`; reason one of `invalid_json |
+  bad_shape | empty | too_long | foreign_number | contact_or_link | id_in_text | arabic_left | foreign_name`
+  or a call failure such as `timeout | no_time | budget_exhausted`).
 - `steps` is the ordered timeline. `mode` equals the response `mode`. The trace never contains the
   prompt text or a key.
 - The TracePanel renders: `steps` as a timeline, `retrieval.hits`, `retrieval.margin` + `answer.band`,
-  `agent`, `answer.verifier` (one verdict and reason), mode/model/cached and `latency_ms`/`request_id`.
+  `agent`, `answer.verifier` (one verdict and reason), mode/model/cached and `latency_ms`/`request_id`, and the English translation outcome from the `translate*` step (P11.1).
 
 ### GET /api/scenarios?role=Sales
 

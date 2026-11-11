@@ -307,7 +307,7 @@ describe("try it now", () => {
     await waitFor(() => expect(document.querySelector('[data-try-result] [data-kind="answer"]')).not.toBeNull());
     expect(document.querySelector('[data-try-result] [data-source-id="K16"]')).not.toBeNull();
     const chat = calls.find((c) => c.url === "/api/chat")!;
-    expect(chat.body).toMatchObject({ message: "كيف أقدم طلب إجازة؟", role: "Sales", force_offline: false });
+    expect(chat.body).toMatchObject({ message: "كيف أقدم طلب إجازة؟", role: "Sales", force_offline: false, lang: "en" });
     await userEvent.click(screen.getByRole("button", { name: "Ask the same question again" }));
     await waitFor(() => expect(calls.filter((c) => c.url === "/api/chat")).toHaveLength(2));
   });

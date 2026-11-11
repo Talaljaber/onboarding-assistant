@@ -46,6 +46,7 @@ from app.schemas import (
     TraceRouter,
 )
 from app.textnorm import normalize, tokens
+from app.translate import translate_result, wants_translation
 
 TURN_BUDGET_S = 5.0
 #: P8: the answer panel (judges + an escalation call of up to 6 s) gets a 9 s turn; 5 s with the panel off.
@@ -243,6 +244,10 @@ class Agent:
                 tb.mode = "offline"
             result = self.execute(r, req, budget, tb, use_llm=exec_llm)
 
+        if wants_translation(req.lang, result):  # P11.1: English UI → verified helper translation
+            if use_llm:
+                self._note_hard_failure()  # a 401/402 in the answer call must not be retried here
+            result = translate_result(result, kb=self.kb, llm=self.llm, use_llm=use_llm and self.llm_on())
         if use_llm:
             self._note_hard_failure()
         tb.finish_mode(result)

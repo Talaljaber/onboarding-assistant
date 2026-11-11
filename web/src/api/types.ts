@@ -305,6 +305,10 @@ export interface ProgressConfirm {
   activity_ids: string[];
 }
 
+/** UI language sent with a chat turn (P11.1): "en" asks for a verified `text_en` on answers in llm mode. */
+export const CHAT_LANGS = ["ar", "en"] as const;
+export type ChatLang = (typeof CHAT_LANGS)[number];
+
 /** `message` may be "" only when `confirm` or `option_id` is set. */
 export interface ChatRequest {
   message: string;
@@ -315,6 +319,7 @@ export interface ChatRequest {
   confirm: ProgressConfirm | null;
   option_id: string | null;
   force_offline: boolean;
+  lang: ChatLang;
   profile_id: string | null;
 }
 

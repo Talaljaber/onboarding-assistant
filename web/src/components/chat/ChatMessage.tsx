@@ -41,7 +41,7 @@ export function ChatMessage(p: ChatMessageProps) {
   switch (kind) {
     case "answer":
     case "partial":
-      card = <AnswerCard reply={r as AnswerReply} partial={kind === "partial"} />;
+      card = <AnswerCard reply={r as AnswerReply} partial={kind === "partial"} mode={item.mode} />;
       break;
     case "unconfirmed":
       card = <UnconfirmedCard reply={r as AnswerReply} />;
