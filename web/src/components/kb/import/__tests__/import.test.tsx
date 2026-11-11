@@ -186,6 +186,24 @@ describe("review screen", () => {
     expect(screen.getByText("Approved passages become knowledge rows and are cited word for word.")).toBeInTheDocument();
   });
 
+  it("says why a passage is discarded: a repeated header, the model, or the admin", async () => {
+    const base = detail.drafts[2]!;
+    const header = { ...base, text_ar: "ترويسة متكررة", created_at: "2026-11-11T10:00:00Z", updated_at: "2026-11-11T10:00:00Z" };
+    const drafts = [
+      { ...header, id: "00000000-0000-4000-8000-0000000000a1", ord: 0 },
+      { ...base, id: "00000000-0000-4000-8000-0000000000a2", ord: 1, text_ar: "غلاف المستند", created_at: header.created_at, updated_at: header.created_at },
+      { ...header, id: "00000000-0000-4000-8000-0000000000a3", ord: 2 },
+      { ...base, id: "00000000-0000-4000-8000-0000000000a4", ord: 3, text_ar: "نص استبعده المسؤول", created_at: header.created_at, updated_at: "2026-11-11T10:05:00Z" },
+    ];
+    backend({ [`GET /api/admin/kb/imports/${IMPORT}`]: () => json({ ...detail, organize: null, drafts }) });
+    mount(<ImportReviewScreen />);
+    const cards = await screen.findAllByRole("article");
+    const why = cards.map((c) => c.querySelector("[data-discard-why]")?.getAttribute("data-discard-why"));
+    expect(why).toEqual(["repeats", "model", "repeats", "byyou"]);
+    expect(within(cards[0]!).getByText(/Repeats on 2 pages/)).toBeInTheDocument();
+    expect(within(cards[3]!).getByText("You discarded this passage.")).toBeInTheDocument();
+  });
+
   it("shows how many section titles the model detected, only when it ran", async () => {
     backend();
     rememberSummary(IMPORT, { ...detail.organize, titles: { used: true, count: 3, reason: null } });

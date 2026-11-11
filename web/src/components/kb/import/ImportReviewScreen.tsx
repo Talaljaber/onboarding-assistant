@@ -56,6 +56,12 @@ export default function ImportReviewScreen() {
   const reload = useCallback(() => setTick((n) => n + 1), []);
 
   const drafts = useMemo(() => [...(data?.drafts ?? [])].sort((a, b) => a.ord - b.ord), [data]);
+  /** Passages with the same text (a running header or footer) explain why the model discarded them. */
+  const repeatCount = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const d of drafts) m.set(d.text_ar.trim(), (m.get(d.text_ar.trim()) ?? 0) + 1);
+    return m;
+  }, [drafts]);
   const pending = drafts.filter((d) => d.status === "draft");
   const chosen = pending.filter((d) => selected.has(d.id));
   const allChosen = pending.length > 0 && chosen.length === pending.length;
@@ -210,6 +216,7 @@ export default function ImportReviewScreen() {
                   <DraftCard
                     draft={d}
                     n={i + 1}
+                    repeats={repeatCount.get(d.text_ar.trim()) ?? 1}
                     selected={selected.has(d.id)}
                     busy={busy.has(d.id) || approving}
                     onSelect={(on) => toggle(d.id, on)}

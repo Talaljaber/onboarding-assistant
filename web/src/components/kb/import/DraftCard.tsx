@@ -24,6 +24,15 @@ export interface DraftCardProps {
   onApprove: () => void;
   /** Resolves true when the server accepted the change. */
   onPatch: (body: DraftPatch) => Promise<boolean>;
+  /** How many passages of this import hold the same text (a running header or footer repeats). */
+  repeats?: number;
+}
+
+/** Why a passage is discarded: changed after the import = the admin; else the import's model step skipped it. */
+function discardWhy(draft: KbDraft, repeats: number): { key: "kbImport.whyByYou" | "kbImport.whyRepeats" | "kbImport.whyModel"; n?: number } {
+  if (draft.updated_at !== draft.created_at) return { key: "kbImport.whyByYou" };
+  if (repeats > 1) return { key: "kbImport.whyRepeats", n: repeats };
+  return { key: "kbImport.whyModel" };
 }
 
 interface Form {
@@ -45,7 +54,7 @@ function problems(f: Form, t: ReturnType<typeof useT>): Partial<Record<keyof For
   return out;
 }
 
-export function DraftCard({ draft, n, selected, busy, onSelect, onApprove, onPatch }: DraftCardProps) {
+export function DraftCard({ draft, n, selected, busy, onSelect, onApprove, onPatch, repeats = 1 }: DraftCardProps) {
   const t = useT();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Form>(() => ({ text: draft.text_ar, topic: draft.topic, keyword: draft.keyword_en, page: String(draft.page) }));
@@ -123,6 +132,15 @@ export function DraftCard({ draft, n, selected, busy, onSelect, onApprove, onPat
           </Badge>
         )}
       </header>
+
+      {draft.status === "discarded" && !editing && (() => {
+        const why = discardWhy(draft, repeats);
+        return (
+          <p className="m-0 text-sm text-fg-2" data-discard-why={why.key.slice("kbImport.why".length).toLowerCase()}>
+            {t(why.key, why.n ? { n: why.n } : undefined)}
+          </p>
+        );
+      })()}
 
       {draft.question_ar && !editing && (
         <p className="m-0 text-sm text-fg-3" data-question>
