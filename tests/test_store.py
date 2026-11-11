@@ -363,7 +363,10 @@ class FakePostgrest:
                 r.update(body)
             return httpx.Response(200, json=hit)
         if request.method == "DELETE":
+            gone = [r for r in rows if self._match(r, params)]
             self.tables[table] = [r for r in rows if not self._match(r, params)]
+            if "return=representation" in request.headers.get("Prefer", ""):
+                return httpx.Response(200, json=gone)
             return httpx.Response(204)
         if request.method == "POST":
             body = json.loads(request.content)
@@ -643,3 +646,79 @@ def test_store_status_reports_runtime_fallback(
     assert store.get_progress(str(uuid.uuid4())) == []
     st = store_status()
     assert st["store"] == "local" and st["store_probe"]["reason"].startswith("fallback_")
+
+
+# Mentor requests (P13.2) -----------------------------------------------------------------------
+
+
+def _request_round_trip(store: Any, intern_id: str) -> None:
+    rows = store.mentor_requests_create([
+        {"intern_id": intern_id, "kind": "read", "title": "اقرأ", "kb_id": "K05", "due_date": "2026-12-01"},
+        {"intern_id": intern_id, "kind": "do", "title": "نفّذ", "note": "ملاحظة", "activity_id": "SA-D1-read-company"},
+    ])
+    assert rows is not None and [r["status"] for r in rows] == ["new", "new"]
+    assert rows[0]["note"] == "" and rows[0]["due_date"] == "2026-12-01"
+    assert rows[0]["created_at"] == rows[0]["status_changed_at"]
+    listed = store.mentor_requests(intern_id=intern_id)
+    assert listed is not None and {r["id"] for r in listed} == {r["id"] for r in rows}
+    assert store.mentor_requests(intern_id=str(uuid.uuid4())) == []
+    assert [r["id"] for r in store.mentor_requests(ids=[rows[1]["id"]]) or []] == [rows[1]["id"]]
+    assert store.mentor_requests(ids=["nope"]) == []
+    up = store.mentor_request_update(rows[1]["id"], {"status": "in_progress"})
+    assert up["status"] == "in_progress" and up["status_changed_at"] >= rows[1]["status_changed_at"]
+    same = store.mentor_request_update(rows[1]["id"], {"title": "عنوان", "note": None})
+    assert same["title"] == "عنوان" and same["note"] == "" and same["status_changed_at"] == up["status_changed_at"]
+    assert store.mentor_request_update(rows[1]["id"], {"status": "graded"}) is None
+    assert store.mentor_request_update(rows[1]["id"], {"intern_id": str(uuid.uuid4())}) is None
+    assert store.mentor_request_update(str(uuid.uuid4()), {"status": "done"}) == {}
+    for bad in ({"kind": "watch"}, {"title": ""}, {"title": "x" * 121}, {"note": "x" * 1001},
+                {"kb_id": "X1"}, {"activity_id": "bad id"}, {"due_date": "2026-13-01"}):
+        assert store.mentor_requests_create([{"intern_id": intern_id, "kind": "do", "title": "t", **bad}]) is None
+    assert store.mentor_request_delete(rows[0]["id"]) is True
+    assert store.mentor_request_delete(rows[0]["id"]) is False
+    assert store.mentor_request_delete("nope") is False
+
+
+def test_local_mentor_requests(local: LocalStore) -> None:
+    local.seed_interns(SEED)
+    sara = (local.list_interns() or [])[0]
+    _request_round_trip(local, sara["id"])
+    assert len(local.table_rows("mentor_requests")) == 1
+
+
+def test_supabase_mentor_requests(tmp_path: Path, logs: io.StringIO) -> None:
+    fake = FakePostgrest()
+    fake.tables["interns"] = []
+    fake.tables["mentor_requests"] = []
+    sb = make_sb(tmp_path, fake)
+    sb.seed_interns(SEED)
+    sara = (sb.list_interns() or [])[0]
+    _request_round_trip(sb, sara["id"])
+    assert len(fake.tables["mentor_requests"]) == 1
+    patch = [r for r in fake.requests if r.method == "PATCH" and r.url.path.endswith("/mentor_requests")]
+    assert patch and all(parse_qs(r.url.query.decode())["id"][0].startswith("eq.") for r in patch)
+    assert sb.name == "supabase" and sb.fallback_reason is None
+    assert FAKE_KEY not in logs.getvalue()
+    sb.close()
+
+
+def test_supabase_mentor_requests_missing_table_does_not_flip(tmp_path: Path) -> None:
+    """Without migration 0004 PostgREST answers 404: requests are unavailable, the rest stays on Supabase."""
+    fake = FakePostgrest()
+    fake.tables["interns"] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/mentor_requests"):
+            return httpx.Response(404, json={"code": "42P01"})
+        return fake(request)
+
+    sb = make_sb(tmp_path, handler)
+    sb.seed_interns(SEED)
+    sara = (sb.list_interns() or [])[0]
+    assert sb.mentor_requests(intern_id=sara["id"]) is None
+    assert sb.mentor_requests_create([{"intern_id": sara["id"], "kind": "do", "title": "t"}]) is None
+    assert sb.mentor_request_update(str(uuid.uuid4()), {"status": "done"}) is None
+    assert sb.mentor_request_delete(str(uuid.uuid4())) is None
+    assert sb.name == "supabase" and sb.fallback_reason is None
+    assert sb.list_interns()
+    sb.close()

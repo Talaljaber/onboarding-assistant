@@ -43,6 +43,10 @@ from app.store.base import (
     IMPORT_COLUMNS,
     draft_record,
     import_record,
+    REQUEST_COLUMNS,
+    request_changes,
+    request_record,
+    request_row,
 )
 from app.store.local import LocalStore
 
@@ -60,6 +64,7 @@ _DRAFT_SELECT = ",".join(DRAFT_COLUMNS)
 _METRICS_SELECT = ",".join(TURN_METRIC_FIELDS)
 _PAGE = 1000  # PostgREST's default max rows per response
 _METRICS_MAX_PAGES = 100  # KB coverage reads at most 100k turn logs
+_REQUEST_SELECT = ",".join(REQUEST_COLUMNS)
 
 
 class _Conflict(Exception):
@@ -688,3 +693,77 @@ class SupabaseStore:
             return True
 
         return self._imports("kb_drafts_save", remote, lambda s: s.kb_drafts_save(drafts), False)
+
+    # Mentor requests (P13.2) ------------------------------------------------------------------
+    # Like the import tables: never flips to the LocalStore. Without migration 0004 (PostgREST 404) or on a
+    # failing call only the requests feature is unavailable (None -> 503); everything else keeps Supabase.
+
+    def mentor_requests(
+        self, *, intern_id: str | None = None, ids: list[str] | None = None
+    ) -> list[dict[str, Any]] | None:
+        params = {"select": _REQUEST_SELECT, "order": "created_at.desc"}
+        if intern_id is not None:
+            params["intern_id"] = f"eq.{valid_uuid(intern_id) or '00000000-0000-0000-0000-000000000000'}"
+        clean: list[str] = []
+        if ids is not None:
+            clean = [i for i in (valid_uuid(x) for x in ids) if i]
+            if not clean:
+                return []
+
+        def remote() -> list[dict[str, Any]] | None:
+            if ids is None:
+                return [request_row(r) for r in self._list("mentor_requests", params)]
+            out: list[dict[str, Any]] = []
+            for n in range(0, len(clean), _IN_CHUNK):
+                out += self._list("mentor_requests", {**params, "id": f"in.{_in_list(clean[n:n + _IN_CHUNK])}"})
+            return [request_row(r) for r in out]
+
+        return self._imports("mentor_requests", remote,
+                             lambda s: s.mentor_requests(intern_id=intern_id, ids=ids), None)
+
+    def mentor_requests_create(self, records: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+        rows = [request_record(r) for r in records]
+        if any(r is None for r in rows):
+            log_event("store_rejected", store="supabase", op="mentor_requests_create", reason="invalid_input")
+            return None
+        body = [r for r in rows if r is not None]
+
+        def remote() -> list[dict[str, Any]] | None:
+            if body:
+                self._req("POST", "mentor_requests", json=body, prefer="return=minimal")
+            return [request_row(r) for r in body]
+
+        return self._imports("mentor_requests_create", remote, lambda s: s.mentor_requests_create(body), None)
+
+    def mentor_request_update(self, request_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        rid = valid_uuid(request_id)
+        if rid is None:
+            return {}
+
+        def remote() -> dict[str, Any] | None:
+            found = self._list("mentor_requests", {"select": _REQUEST_SELECT, "id": f"eq.{rid}"})
+            if not found:
+                return {}
+            clean = request_changes(changes, str(found[0].get("status")))
+            if clean is None:
+                log_event("store_rejected", store="supabase", op="mentor_request_update", reason="invalid_input")
+                return None
+            data = self._req("PATCH", "mentor_requests", params={"select": _REQUEST_SELECT, "id": f"eq.{rid}"},
+                             json=clean, prefer="return=representation")
+            if not isinstance(data, list):
+                raise TypeError("mentor_requests: expected a list")
+            return request_row(data[0]) if data else {}
+
+        return self._imports("mentor_request_update", remote, lambda s: s.mentor_request_update(rid, changes), None)
+
+    def mentor_request_delete(self, request_id: str) -> bool | None:
+        rid = valid_uuid(request_id)
+        if rid is None:
+            return False
+
+        def remote() -> bool | None:
+            data = self._req("DELETE", "mentor_requests", params={"select": "id", "id": f"eq.{rid}"},
+                             prefer="return=representation")
+            return bool(data)
+
+        return self._imports("mentor_request_delete", remote, lambda s: s.mentor_request_delete(rid), None)

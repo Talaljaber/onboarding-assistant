@@ -100,6 +100,20 @@ The passage texts, keywords and suggested questions are illustrative placeholder
 Counts and timestamps are illustrative; topics and keywords are the official rows'. Aggregate only: no
 profile id, name or per-intern figure.
 
+## Mentor requests (P13.2)
+
+| File | Endpoint | Model |
+|---|---|---|
+| `mentor_request_create_request.json` | `POST /api/admin/requests` body (a `read` request for the Sales track, linked to K05) | `MentorRequestCreate` |
+| `mentor_requests_created.json` | `POST /api/admin/requests` (201; one row per active Sales intern) | `MentorRequestList` |
+| `mentor_requests.json` | `GET /api/requests?profile_id=` and `GET /api/admin/requests` (Sara: one per kind and status) | `MentorRequestList` |
+| `mentor_request_status_request.json` | `PATCH /api/requests/{id}` body | `MentorRequestStatusPatch` |
+| `mentor_request.json` | `PATCH /api/requests/{id}`, `PATCH /api/admin/requests/{id}` | `MentorRequest` |
+| `mentor_request_patch_request.json` | `PATCH /api/admin/requests/{id}` body | `MentorRequestPatch` |
+| `mentor_request_deleted.json` | `DELETE /api/admin/requests/{id}` | `MentorRequestDeleted` |
+
+Titles and notes are illustrative; `kb_row` is the live K05 row verbatim; ids and times are illustrative.
+
 ## Errors (`ErrorBody`)
 
 | File | Status | Code |
@@ -113,3 +127,4 @@ profile id, name or per-intern figure.
 | `error_429.json` | 429 | `too_many_requests` (5 wrong admin passwords inside 60 s) |
 | `error_500.json` | 500 | `internal_error` |
 | `error_503.json` | 503 | `imports_unavailable` (document import only: the store has no import tables or failed) |
+| `error_503_requests.json` | 503 | `requests_unavailable` (mentor requests only: no `mentor_requests` table, migration 0004) |

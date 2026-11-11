@@ -20,6 +20,7 @@ import { ProgressBar } from "../ui/ProgressBar";
 import { surface } from "../ui/recipes";
 import { StatTile } from "../ui/StatTile";
 import { useToast } from "../ui/Toast";
+import { RequestsOverview } from "../requests/RequestsOverview";
 import { InternDialog } from "./InternDialog";
 import { KbCoverageCard } from "./KbCoverageCard";
 
@@ -194,6 +195,7 @@ export default function InternsScreen() {
             <StatTile label={t("uiIntern.statAvg")} value={num(`${avg}%`)} icon="chart" />
             <StatTile label={t("uiIntern.statQuestions")} value={num(rows.reduce((n, r) => n + r.questions_asked, 0))} icon="chat" />
           </div>
+          <RequestsOverview />
           {phone ? (
             <InternCards rows={rows} />
           ) : (

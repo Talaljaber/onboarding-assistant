@@ -53,6 +53,7 @@ Every non-2xx response has this body (`ErrorBody`):
 | `too_many_requests` | 429 | admin sign-in after 5 wrong passwords inside 60 s (`field: "password"`) |
 | `internal_error` | 500 | anything else; the message is generic, details only in the log with the request id |
 | `imports_unavailable` | 503 | document import only (P12.1): the store has no `kb_imports`/`kb_drafts` tables (Supabase without migration 0003) or the import call failed; the rest of the app is unaffected |
+| `requests_unavailable` | 503 | mentor requests only (P13.2): the store has no `mentor_requests` table (Supabase without migration 0004) or the call failed; the rest of the app is unaffected |
 
 No 5xx is ever caused by the LLM or the store: LLM failures become `mode: "offline"` inside a 200,
 store failures switch the process to the local store.
@@ -442,6 +443,56 @@ with no citation in any log (`count: 0`), in id order. `windows`: the last 7 and
 turns with an answer status, `refusals` = `unsupported` turns, `refusal_share` = refusals / questions
 (4 decimals, null when no questions). `since` = oldest log counted, null with none. 401 without the admin token.
 
+## 6e. Mentor requests (P13.2)
+
+Text-only "learn this / do this / read this" requests from the admin (the mentor) to an intern. No files, no
+replies, no history: one row per request and intern. A request may link one K-row (`kb_id`, checked against
+the live KB) and one plan activity (`activity_id`, checked against the plan of the target intern's track), so
+the intern opens the row or the activity in one click. `title` (1–120 after cleaning) and `note` (≤ 1000,
+line breaks kept) are checked with the server's contact rule (the verifier's: no email, link or phone
+number; 400 with `field`). `due_date` is a real `YYYY-MM-DD` or null. `status` (`new` → `in_progress` →
+`done`, any direction) is the intern's to-do marker, never a score; `status_changed_at` moves only when the
+status changes. Request text never reaches the assistant (chat, prompts, turn logs).
+
+`MentorRequest` = `{id, intern_id, title, note, kind: "learn"|"do"|"read", kb_id, activity_id, due_date,
+status: "new"|"in_progress"|"done", created_at, updated_at, status_changed_at, kb_row: Source|null,
+activity: {id, kind, title_ar, milestone}|null}`. `kb_row` is the linked row verbatim from the live KB (null
+when the id is no longer in the KB); `activity` is null when the id is not in the intern's current plan.
+`MentorRequestList` = `{requests: MentorRequest[] (newest first), counts: {new, in_progress, done},
+label_ar}`. Every endpoint answers 503 `requests_unavailable` when the store cannot serve the table.
+
+### GET /api/requests?profile_id=…
+
+The signed-in intern's own requests → `MentorRequestList`. Scoped by the session profile id (the one
+`POST /api/interns/{id}/session` returns; a profile of an earlier track of the same intern works too). 400
+missing or malformed `profile_id`; 404 unknown, anonymous (not an intern's) or deactivated intern's profile.
+
+### PATCH /api/requests/{id}
+
+Body `MentorRequestStatusPatch` `{profile_id, status}` → `MentorRequest`. The intern can change only the
+status, and only of their own requests: another intern's request is 404, like an unknown one.
+
+### GET /api/admin/requests?intern_id=… (admin)
+
+→ `MentorRequestList`: every request, or one intern's (`intern_id`; 404 unknown intern). The admin interns
+list shows the counts per intern from it.
+
+### POST /api/admin/requests (admin)
+
+Body `MentorRequestCreate` `{intern_id | track, kind, title, note?, kb_id?, activity_id?, due_date?}` with
+exactly one target: one intern (any status; 404 unknown) or every **active** intern of a track (one row each;
+400 `field: "track"` when the track has none) → 201 `MentorRequestList` of the rows created.
+
+### PATCH /api/admin/requests/{id} (admin)
+
+Body `MentorRequestPatch` `{kind?, title?, note?, kb_id?, activity_id?, due_date?, status?}`: absent =
+unchanged; `note`, `kb_id`, `activity_id`, `due_date` null clears; `title`, `kind`, `status` cannot be null; at
+least one field → `MentorRequest`. 404 unknown request.
+
+### DELETE /api/admin/requests/{id} (admin)
+
+→ `MentorRequestDeleted` `{id, deleted: true}`. 404 unknown request.
+
 ### GET /api/health
 
 Always 200 once the app is up; `?probe=1` re-runs the LLM probe. → `Health`:
@@ -461,6 +512,7 @@ store: "supabase"|"local", store_probe: Probe, uptime_s}` with `Probe` = `{ok, l
 | plan `disclaimer_ar` | «خطة تعلم مقترحة للمسابقة، وليست جدول تقييم رسمياً» |
 | quiz `label_ar` | «اختبار تدريبي» |
 | admin interns `label_ar` | «متدربون للعرض بأسماء افتراضية — أعداد الإكمال والتدريب فقط، ليست تقييماً» |
+| mentor requests `label_ar` | «طلبات من المشرف للمتابعة — ليست تقييماً» |
 
 The refusal, not-confirmed, partial, contact, employment and injection texts are the fixed server texts
 of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
@@ -486,8 +538,12 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
 - document import (P12.1): `import_capabilities.json`, `import_create_request.json`, `import_detail.json`,
   `imports_list.json`, `draft_patch_request.json`, `draft.json`, `approve_request.json`, `approve.json`;
 - KB coverage (P13.1): `kb_coverage.json`;
+- mentor requests (P13.2): `mentor_request_create_request.json`, `mentor_requests_created.json`,
+  `mentor_requests.json`, `mentor_request_status_request.json`, `mentor_request.json`,
+  `mentor_request_patch_request.json`, `mentor_request_deleted.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,
-  `error_423.json`, `error_500.json`, `error_401.json`, `error_429.json`, `error_503.json`.
+  `error_423.json`, `error_500.json`, `error_401.json`, `error_429.json`, `error_503.json`,
+  `error_503_requests.json`.
 
 `tests/test_contract.py` checks that every fixture validates and is canonical, that every reply kind and
 refusal reason is covered, the request rules and limits, that no quiz GET carries the correct option, that

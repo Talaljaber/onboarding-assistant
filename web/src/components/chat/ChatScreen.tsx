@@ -8,6 +8,7 @@ import { FirstDayCard } from "@/components/welcome/FirstDayCard";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { LIMITS } from "@/api/types";
 import { useAppState } from "@/state/useAppState";
+import { MentorRequestsPanel } from "../requests/MentorRequestsPanel";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
 import { Icon } from "../ui/Icon";
@@ -179,6 +180,7 @@ function ChatInner() {
           )}
         </div>
 
+        <MentorRequestsPanel />
         {items.length === 0 && !active && (
           <div className="mb-5">
             <FirstDayCard />

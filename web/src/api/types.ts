@@ -76,6 +76,7 @@ export const ERROR_CODES = [
   "too_many_requests",
   "internal_error",
   "imports_unavailable",
+  "requests_unavailable",
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
@@ -1203,4 +1204,128 @@ export function isErrorBody(x: unknown): x is ErrorBody {
 
 export function isAdminSession(x: unknown): x is AdminSession {
   return isObj(x) && isStr(x.token) && x.token.length > 0 && typeof x.expires_in_s === "number";
+}
+
+// ---------------------------------------------------------------- P13.2 mentor requests
+// Text-only "learn / do / read" requests from the mentor (admin) to an intern. No files, no replies.
+// A request may link one K-row (shown verbatim from the live KB) and one plan activity. The status is the
+// intern's own to-do marker, never a score.
+
+export const REQUEST_KINDS = ["learn", "do", "read"] as const;
+export type RequestKind = (typeof REQUEST_KINDS)[number];
+export const REQUEST_STATUSES = ["new", "in_progress", "done"] as const;
+export type RequestStatus = (typeof REQUEST_STATUSES)[number];
+export const REQUEST_LIMITS = { titleMax: 120, noteMax: 1000 } as const;
+
+export interface LinkedActivity {
+  id: string;
+  kind: ActivityKind;
+  title_ar: string;
+  milestone: MilestoneKey;
+}
+
+export interface MentorRequest {
+  id: string;
+  intern_id: string;
+  title: string;
+  note: string;
+  kind: RequestKind;
+  kb_id: string | null;
+  activity_id: string | null;
+  /** YYYY-MM-DD or null. */
+  due_date: string | null;
+  status: RequestStatus;
+  created_at: string;
+  updated_at: string;
+  status_changed_at: string;
+  /** The linked K-row verbatim from the live KB; null when the id is no longer in the KB. */
+  kb_row: Source | null;
+  /** The linked activity in the intern's current plan; null when not in it. */
+  activity: LinkedActivity | null;
+}
+
+export interface RequestCounts {
+  new: number;
+  in_progress: number;
+  done: number;
+}
+
+/** `GET /api/requests`, `GET /api/admin/requests`, `POST /api/admin/requests` (201). Newest first. */
+export interface MentorRequestList {
+  requests: MentorRequest[];
+  counts: RequestCounts;
+  label_ar: string;
+}
+
+/** `POST /api/admin/requests`: exactly one of `intern_id` or `track` (every active intern of it). */
+export interface MentorRequestCreate {
+  intern_id?: string | null;
+  track?: Role | null;
+  kind: RequestKind;
+  title: string;
+  note?: string;
+  kb_id?: string | null;
+  activity_id?: string | null;
+  due_date?: string | null;
+}
+
+/** `PATCH /api/admin/requests/{id}`: absent = unchanged; null clears note/kb_id/activity_id/due_date. */
+export interface MentorRequestPatch {
+  kind?: RequestKind;
+  title?: string;
+  note?: string | null;
+  kb_id?: string | null;
+  activity_id?: string | null;
+  due_date?: string | null;
+  status?: RequestStatus;
+}
+
+/** `PATCH /api/requests/{id}`: the intern moves their own request (any direction). */
+export interface MentorRequestStatusPatch {
+  profile_id: string;
+  status: RequestStatus;
+}
+
+export interface MentorRequestDeleted {
+  id: string;
+  deleted: boolean;
+}
+
+function isLinkedActivity(x: unknown): x is LinkedActivity {
+  return isObj(x) && isStr(x.id) && isStr(x.title_ar) && isOneOf(MILESTONES, x.milestone);
+}
+
+export function isMentorRequest(x: unknown): x is MentorRequest {
+  return (
+    isObj(x) &&
+    isStr(x.id) &&
+    isStr(x.intern_id) &&
+    isStr(x.title) &&
+    isStr(x.note) &&
+    isOneOf(REQUEST_KINDS, x.kind) &&
+    isStrOrNull(x.kb_id) &&
+    isStrOrNull(x.activity_id) &&
+    isStrOrNull(x.due_date) &&
+    isOneOf(REQUEST_STATUSES, x.status) &&
+    isStr(x.created_at) &&
+    isStr(x.status_changed_at) &&
+    (x.kb_row === null || isSource(x.kb_row)) &&
+    (x.activity === null || isLinkedActivity(x.activity))
+  );
+}
+
+export function isMentorRequestList(x: unknown): x is MentorRequestList {
+  return (
+    isObj(x) &&
+    isArrayOf(x.requests, isMentorRequest) &&
+    isObj(x.counts) &&
+    isNum(x.counts.new) &&
+    isNum(x.counts.in_progress) &&
+    isNum(x.counts.done) &&
+    isStr(x.label_ar)
+  );
+}
+
+export function isMentorRequestDeleted(x: unknown): x is MentorRequestDeleted {
+  return isObj(x) && isStr(x.id) && x.deleted === true;
 }

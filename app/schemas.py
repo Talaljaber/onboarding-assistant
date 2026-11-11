@@ -17,6 +17,7 @@ here is a contract change and goes through the integrator in one commit together
 
 from __future__ import annotations
 
+import datetime
 import re
 import unicodedata
 from typing import Annotated, Any, Literal, get_args
@@ -85,11 +86,15 @@ ErrorCode = Literal[
     "too_many_requests",
     "internal_error",
     "imports_unavailable",
+    "requests_unavailable",
 ]
 #: P12.1 document import: file types the server can read (pdf only when the optional pypdf is installed).
 ImportFileType = Literal["txt", "md", "csv", "docx", "pdf"]
 ImportStatus = Literal["open", "done"]
 DraftStatus = Literal["draft", "approved", "discarded"]
+#: P13.2 mentor requests: what the mentor asks for, and the intern's own to-do marker (never a score).
+RequestKind = Literal["learn", "do", "read"]
+RequestStatus = Literal["new", "in_progress", "done"]
 
 ROLES: tuple[str, ...] = get_args(Role)
 MILESTONES: tuple[str, ...] = get_args(MilestoneKey)
@@ -102,6 +107,8 @@ BANDS: tuple[str, ...] = get_args(Band)
 KB_STATUSES: tuple[str, ...] = get_args(KbStatus)
 IMPORT_FILE_TYPES: tuple[str, ...] = get_args(ImportFileType)
 DRAFT_STATUSES: tuple[str, ...] = get_args(DraftStatus)
+REQUEST_KINDS: tuple[str, ...] = get_args(RequestKind)
+REQUEST_STATUSES: tuple[str, ...] = get_args(RequestStatus)
 TOOL_NAMES: tuple[str, ...] = get_args(ToolName)
 ERROR_CODES: tuple[str, ...] = get_args(ErrorCode)
 
@@ -116,6 +123,7 @@ ERROR_STATUS: dict[str, int] = {
     "too_many_requests": 429,
     "internal_error": 500,
     "imports_unavailable": 503,
+    "requests_unavailable": 503,
 }
 
 #: Arabic value names, taken from K05–K09.
@@ -1113,6 +1121,147 @@ class InternDetail(_Model):
 
 
 # --------------------------------------------------------------------------------------
+# Mentor requests (P13.2): text-only "learn / do / read" requests from the admin to an intern
+# --------------------------------------------------------------------------------------
+
+REQUEST_TITLE_MAX = 120
+REQUEST_NOTE_MAX = 1000
+REQUEST_ID_RE = PROFILE_ID_RE
+DUE_DATE_RE = r"^\d{4}-\d{2}-\d{2}$"
+REQUESTS_LABEL_AR = "طلبات من المشرف للمتابعة — ليست تقييماً"
+
+RequestTitle = Annotated[Line, Field(min_length=1, max_length=REQUEST_TITLE_MAX)]
+RequestNote = Annotated[Block, Field(max_length=REQUEST_NOTE_MAX)]
+
+
+def _real_date(v: str | None) -> str | None:
+    if v is None:
+        return v
+    try:
+        datetime.date.fromisoformat(v)
+    except ValueError:
+        raise ValueError("due_date must be a real date (YYYY-MM-DD)") from None
+    return v
+
+
+DueDate = Annotated[str, Field(pattern=DUE_DATE_RE)]
+
+
+class LinkedActivity(_Model):
+    """The plan activity a request links to (from the intern's current plan)."""
+
+    id: ActivityId
+    kind: ActivityKind
+    title_ar: str
+    milestone: MilestoneKey
+
+
+class MentorRequest(_Model):
+    """One request to one intern. `kb_row` is the linked K-row verbatim from the live KB (null when the id
+    is no longer in the KB); `activity` the linked plan activity (null when not in the intern's plan)."""
+
+    id: Annotated[str, Field(pattern=REQUEST_ID_RE)]
+    intern_id: InternId
+    title: str
+    note: str
+    kind: RequestKind
+    kb_id: KbId | None
+    activity_id: ActivityId | None
+    due_date: DueDate | None
+    status: RequestStatus
+    created_at: str
+    updated_at: str
+    status_changed_at: str
+    kb_row: Source | None
+    activity: LinkedActivity | None
+
+
+class RequestCounts(_Model):
+    new: NonNeg
+    in_progress: NonNeg
+    done: NonNeg
+
+
+class MentorRequestList(_Model):
+    """`GET /api/requests` (the intern's own), `GET /api/admin/requests`, and `POST /api/admin/requests`
+    (201: the rows created, one per intern). Newest first; `counts` covers `requests`."""
+
+    requests: list[MentorRequest]
+    counts: RequestCounts
+    label_ar: str
+
+
+class MentorRequestCreate(_Model):
+    """`POST /api/admin/requests`: exactly one target, one intern (`intern_id`) or every active intern of a
+    track (`track`, one row each). Text only: links are ids checked by the server."""
+
+    intern_id: InternId | None = None
+    track: Role | None = None
+    kind: RequestKind
+    title: RequestTitle
+    note: RequestNote = ""
+    kb_id: KbId | None = None
+    activity_id: ActivityId | None = None
+    due_date: DueDate | None = None
+
+    @field_validator("due_date")
+    @classmethod
+    def _due_ok(cls, v: str | None) -> str | None:
+        return _real_date(v)
+
+    @model_validator(mode="after")
+    def _one_target(self) -> MentorRequestCreate:
+        if (self.intern_id is None) == (self.track is None):
+            raise ValueError("send exactly one of intern_id or track")
+        return self
+
+
+class MentorRequestPatch(_Model):
+    """`PATCH /api/admin/requests/{id}`: absent = unchanged; `note`/`kb_id`/`activity_id`/`due_date` null
+    clears; `title`, `kind`, `status` cannot be null. At least one field."""
+
+    kind: RequestKind | None = None
+    title: RequestTitle | None = None
+    note: RequestNote | None = None
+    kb_id: KbId | None = None
+    activity_id: ActivityId | None = None
+    due_date: DueDate | None = None
+    status: RequestStatus | None = None
+
+    @field_validator("due_date")
+    @classmethod
+    def _due_ok(cls, v: str | None) -> str | None:
+        return _real_date(v)
+
+    @model_validator(mode="after")
+    def _some_change(self) -> MentorRequestPatch:
+        if not self.model_fields_set:
+            raise ValueError("send at least one field")
+        for key in ("kind", "title", "status"):
+            if key in self.model_fields_set and getattr(self, key) is None:
+                raise ValueError(f"{key} cannot be null")
+        return self
+
+    def changes(self) -> dict[str, Any]:
+        out = {k: getattr(self, k) for k in self.model_fields_set}
+        if "note" in out and out["note"] is None:
+            out["note"] = ""
+        return out
+
+
+class MentorRequestStatusPatch(_Model):
+    """`PATCH /api/requests/{id}`: the intern moves their own request (any direction)."""
+
+    profile_id: ProfileId
+    status: RequestStatus
+
+
+class MentorRequestDeleted(_Model):
+    id: Annotated[str, Field(pattern=REQUEST_ID_RE)]
+    deleted: bool
+
+
+# --------------------------------------------------------------------------------------
 # Admin sign-in (the knowledge editor and the manager view are admin only)
 # --------------------------------------------------------------------------------------
 
@@ -1295,4 +1444,17 @@ __all__ = [
     "Trace",
     "clean_block",
     "clean_line",
+    "LinkedActivity",
+    "MentorRequest",
+    "MentorRequestCreate",
+    "MentorRequestDeleted",
+    "MentorRequestList",
+    "MentorRequestPatch",
+    "MentorRequestStatusPatch",
+    "REQUEST_KINDS",
+    "REQUEST_NOTE_MAX",
+    "REQUEST_STATUSES",
+    "REQUEST_TITLE_MAX",
+    "REQUESTS_LABEL_AR",
+    "RequestCounts",
 ]
