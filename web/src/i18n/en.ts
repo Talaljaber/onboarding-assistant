@@ -782,4 +782,10 @@ export const en: Dict = {
     unavailable: "Requests are not available right now.",
     changed: "Status last changed: {when}",
   },
+  // P14.3: the customer's pressure line on the first practice feedback.
+  pushback: {
+    title: "The customer pushes back",
+    prompt: "How do you answer? Type your reply now.",
+    stuck: "Stuck?",
+  },
 };

@@ -162,6 +162,27 @@ export function hasFeedback(items: readonly ChatItem[], id: string): boolean {
   return false;
 }
 
+/**
+ * P14.3: ids of the feedback items that show the customer's pressure line: the first feedback after each
+ * `scenario_start` of the same scenario (once per practice run). A later feedback, an ended practice or a
+ * feedback for another scenario closes the run.
+ */
+export function customerTurnIds(items: readonly ChatItem[]): Set<string> {
+  const out = new Set<string>();
+  let open: string | null = null;
+  for (const it of items) {
+    if (it.type === "note") open = null;
+    if (it.type !== "reply") continue;
+    const r = it.reply;
+    if (r.kind === "scenario_start") open = r.scenario?.id ?? null;
+    else if (r.kind === "scenario_feedback") {
+      if (open !== null && r.feedback?.scenario_id === open) out.add(it.id);
+      open = null;
+    } else if (r.kind === "scenario_end") open = null;
+  }
+  return out;
+}
+
 const INTENT: Record<string, DictKey> = {
   search_knowledge: "trace.intent.question",
   answer_from_rows: "trace.intent.question",

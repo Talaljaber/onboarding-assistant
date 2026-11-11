@@ -35,6 +35,18 @@ the server writes the feedback from these sentences (never a score).
 | `add_ar` | "one thing to add" sentence shown when the item is missing |
 | `source` | `ours` |
 
+## scenario_customer_lines.csv — 6 rows (one per scenario, P14.3)
+One authored Jordanian-Arabic customer pressure line per scenario: natural follow-up pressure to promise or
+confirm something the trainee cannot know. The server returns it as `Feedback.customer_ar`; the client shows
+it once per practice run. Each line is Arabic only, at most 160 characters and passes the small-talk checks
+(no number, name, time, contact, honorific or policy noun); `tests/test_customer_lines.py` enforces this.
+
+| column | meaning |
+|---|---|
+| `scenario_id` | `S01`…`S06` |
+| `customer_ar` | the customer's line |
+| `source` | `ours` |
+
 ## scenario_options.csv — 18 rows (3 per scenario, exactly one best)
 Offline practice: the user picks one of three replies and sees fixed feedback linked to a company value.
 

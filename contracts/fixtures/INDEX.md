@@ -42,6 +42,10 @@ the not-confirmed / out-of-scope questions are illustrative placeholders until
 | `chat_plan.json` | `plan` | Sales plan, `focus_milestone: "Day 30"` |
 | `chat_quiz.json` | `quiz` | five items, no correct option |
 
+The three feedback fixtures (`chat_scenario_feedback.json`, `chat_scenario_feedback_option.json`,
+`scenario_feedback.json`) carry the optional `feedback.customer_ar` (P14.3): S02's authored customer line,
+verbatim from `data/ours/scenario_customer_lines.csv`. A feedback without the key still validates.
+
 ## Other endpoints
 
 | File | Endpoint | Model |

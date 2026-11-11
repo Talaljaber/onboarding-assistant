@@ -19,7 +19,8 @@
       "tip_ar": null,
       "suggested_good_response_ar": "لا تخترع مواصفات؛ تحقق من مصدر موثوق أو اسأل المسؤول.",
       "mode": "offline",
-      "label_ar": "ملاحظات تدريبية، ليست تقييماً"
+      "label_ar": "ملاحظات تدريبية، ليست تقييماً",
+      "customer_ar": "أكيد؟ رح أشتريها عشانها بالذات، فاحكيلي آه أو لأ هلّق."
     },
     "proposal": null,
     "progress": null,

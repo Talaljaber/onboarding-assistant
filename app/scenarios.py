@@ -2,7 +2,7 @@
 
 What it does: loads the six official scenarios (`data/official/role_scenarios.csv`) with our
 checklists and offline options (`data/ours/scenario_checklists.csv`, `scenario_options.csv`),
-matches a free-text message to a scenario with the e5 encoder (any role), and composes practice
+one authored customer pressure line per scenario (`scenario_customer_lines.csv`, P14.3), matches a free-text message to a scenario with the e5 encoder (any role), and composes practice
 feedback: fixed option feedback, offline free-text feedback (the suggested response and the value,
 nothing judged), and server-worded feedback from checklist ids for the LLM path.
 
@@ -17,7 +17,7 @@ from __future__ import annotations
 import csv
 import io
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Protocol
@@ -74,6 +74,8 @@ class Scenario:
     data_status: str
     options: tuple[ScenarioOption, ...] = ()
     checklist: tuple[ChecklistItem, ...] = ()
+    #: P14.3: the authored customer pressure line (no number, name, time or policy noun), or None.
+    customer_ar: str | None = None
 
     @property
     def value_ar(self) -> str:
@@ -106,6 +108,7 @@ class Feedback:
     scenario_id: str
     suggested_good_response_ar: str
     option_id: str | None = None
+    customer_ar: str | None = None
     met: list[str] = field(default_factory=list)
     # LLM trace fields (set by `feedback_llm`; same names as `schemas.TraceFeedback`)
     llm_used: bool = False
@@ -140,6 +143,7 @@ class Feedback:
             suggested_good_response_ar=self.suggested_good_response_ar,
             mode=self.mode,  # type: ignore[arg-type]
             label_ar=self.label_ar,
+            customer_ar=self.customer_ar,
         )
 
 
@@ -195,6 +199,14 @@ def load_options(ours_dir: Path) -> list[ScenarioOption]:
     ]
 
 
+def load_customer_lines(ours_dir: Path) -> dict[str, str]:
+    """P14.3: scenario id → its authored customer pressure line; an absent file gives no lines."""
+    path = ours_dir / "scenario_customer_lines.csv"
+    if not path.is_file():
+        return {}
+    return {r["scenario_id"]: r["customer_ar"].strip() for r in _read_csv(path) if r["customer_ar"].strip()}
+
+
 # --------------------------------------------------------------------------------------
 # Index
 # --------------------------------------------------------------------------------------
@@ -209,15 +221,17 @@ class ScenarioIndex:
         scenarios: Sequence[Scenario],
         checklists: Sequence[ChecklistItem],
         options: Sequence[ScenarioOption],
+        customer_lines: Mapping[str, str] | None = None,
     ) -> None:
         self._encoder = encoder
+        lines = customer_lines or {}
         self._vectors: NDArray[np.float32] | None = None
         by_id: dict[str, Scenario] = {}
         for sc in scenarios:
             opts = tuple(o for o in options if o.scenario_id == sc.id)
             items = tuple(c for c in checklists if c.scenario_id == sc.id)
             _check_scenario(sc, opts, items)
-            by_id[sc.id] = replace(sc, options=opts, checklist=items)
+            by_id[sc.id] = replace(sc, options=opts, checklist=items, customer_ar=lines.get(sc.id))
         self._by_id = by_id
         self._order = [sc.id for sc in scenarios]
 
@@ -233,7 +247,8 @@ class ScenarioIndex:
             d_off, d_ours = _default_dirs()
             official_dir = official_dir or d_off
             ours_dir = ours_dir or d_ours
-        return cls(encoder, load_scenarios(official_dir), load_checklists(ours_dir), load_options(ours_dir))
+        return cls(encoder, load_scenarios(official_dir), load_checklists(ours_dir), load_options(ours_dir),
+                   load_customer_lines(ours_dir))
 
     # lookups ------------------------------------------------------------------------
 
@@ -321,6 +336,7 @@ def _base(scenario: Scenario, mode: str) -> dict[str, Any]:
         "suggested_good_response_ar": scenario.suggested_good_response_ar,
         "label_ar": schemas.FEEDBACK_LABEL_AR,
         "mode": mode,
+        "customer_ar": scenario.customer_ar,
     }
 
 
@@ -472,6 +488,7 @@ __all__ = [
     "feedback_llm",
     "feedback_option",
     "load_checklists",
+    "load_customer_lines",
     "load_options",
     "load_scenarios",
     "start_text_ar",

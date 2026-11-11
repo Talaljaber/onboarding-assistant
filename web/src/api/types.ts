@@ -149,6 +149,8 @@ export interface Feedback {
   suggested_good_response_ar: string;
   mode: Mode;
   label_ar: string;
+  /** P14.3: the scenario's authored customer pressure line; the client shows it once per practice run. */
+  customer_ar?: string | null;
 }
 
 export interface Proposal {
@@ -874,7 +876,8 @@ export function isFeedback(x: unknown): x is Feedback {
     isStrOrNull(x.tip_ar) &&
     isStr(x.suggested_good_response_ar) &&
     isOneOf(MODES, x.mode) &&
-    isStr(x.label_ar)
+    isStr(x.label_ar) &&
+    (x.customer_ar === undefined || isStrOrNull(x.customer_ar))
   );
 }
 

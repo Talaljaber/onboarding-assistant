@@ -18,6 +18,8 @@ export interface ChatMessageProps {
   busy: boolean;
   /** This item is the practice card the banner refers to (options and actions enabled). */
   live: boolean;
+  /** P14.3: the first feedback of a practice run: show the customer's pressure line. */
+  customer?: boolean;
   traceShown: boolean;
   onToggleTrace: () => void;
   onPickOption: (o: Option) => void;
@@ -59,7 +61,13 @@ export function ChatMessage(p: ChatMessageProps) {
       break;
     case "scenario_feedback":
       card = r.feedback ? (
-        <ScenarioFeedbackCard feedback={r.feedback} live={p.live} onTryAgain={p.onTryAgain} onEnd={p.onEnd} />
+        <ScenarioFeedbackCard
+          feedback={r.feedback}
+          live={p.live}
+          customer={p.customer}
+          onTryAgain={p.onTryAgain}
+          onEnd={p.onEnd}
+        />
       ) : null;
       break;
     case "scenario_end":

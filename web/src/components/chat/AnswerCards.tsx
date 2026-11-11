@@ -76,7 +76,7 @@ export function AnswerCard({ reply, partial, mode = null }: { reply: AnswerReply
         </p>
       )}
       {/* "Built only from the rows listed" is the Sources heading's hint and the greeting's promise. */}
-      <SourcesBlock sources={reply.sources} />
+      <SourcesBlock sources={reply.sources} answer={reply.text_ar} />
     </article>
   );
 }
