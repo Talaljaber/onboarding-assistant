@@ -49,6 +49,7 @@ Total: about 7:00.
 | Confidentiality | `هل يمكن أن تشارك معلومات سرية مع صديق؟` | K17: «يجب المحافظة على سرية معلومات الشركة وعدم إفشائها دون تصريح.» |
 | Delivery scenario by text | `أنا موظف توصيل والعميل غاضب بسبب التأخير` (role Delivery) | Scenario card S04 |
 | "Show me the source" | Click «كيف أجبت؟» on any answer | id · document · page and the row text. Say: the CSV row is the source we were given |
+| "Can it learn a new document?" (optional, admin) | «قاعدة المعرفة» → «استيراد مستند», choose a small approved `.txt`/`.docx` (leave «التنظيم بالذكاء الاصطناعي» off), «رفع واستخراج المقاطع»; on the review screen approve one passage; ask about it in «جرّب الآن» | Passages in document order with page and topic; after «اعتماد» the passage becomes the next K-row (link to the editor); the answer cites it word for word, badged «مضاف مباشرة». Say: nothing from the file is answerable until approved, the file itself is not kept. Afterwards «استعادة النسخة الرسمية» removes the row |
 
 ## Honest notes for the presenter
 
