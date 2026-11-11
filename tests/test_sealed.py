@@ -1,9 +1,9 @@
 """Sealed held-out hygiene (plan §7.1, §A6.26).
 
-1. `run_eval.py --set heldout` without `--final` exits 2.
+1. `run_eval.py --set heldout|heldout2` without `--final` exits 2.
 2. No file under app/ or prompts/ contains a held-out question. The check compares sha256 values of
    normalised strings only, so neither the test nor its failure message ever prints a held-out row
-   (a failure names file:line only). Skipped when the held-out file is absent.
+   (a failure names file:line only). Skipped when a held-out file is absent.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 HELDOUT = ROOT / "data" / "ours" / "eval_heldout.csv"
+HELDOUT2 = ROOT / "data" / "ours" / "eval_heldout2.csv"
 SEARCH_ROOTS = (ROOT / "app", ROOT / "prompts")
 SUFFIXES = {".py", ".md", ".txt", ".json", ".csv", ".yaml", ".yml", ".toml"}
 MIN_LEN = 6
@@ -73,9 +74,10 @@ def find_hits(hashes: set[str], roots: Iterable[Path]) -> list[str]:
     return hits
 
 
-def test_run_eval_refuses_heldout_without_final() -> None:
+@pytest.mark.parametrize(("set_name", "mode"), [("heldout", "offline"), ("heldout2", "offline"), ("heldout2", "llm")])
+def test_run_eval_refuses_heldout_without_final(set_name: str, mode: str) -> None:
     out = subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / "run_eval.py"), "--set", "heldout", "--mode", "offline"],
+        [sys.executable, str(ROOT / "scripts" / "run_eval.py"), "--set", set_name, "--mode", mode],
         capture_output=True, text=True, encoding="utf-8", check=False,
     )
     assert out.returncode == 2
@@ -91,9 +93,11 @@ def test_matcher_finds_planted_strings(tmp_path: Path) -> None:
     assert len(hits) == 3
 
 
-@pytest.mark.skipif(not HELDOUT.exists(), reason="held-out file absent")
-def test_no_heldout_question_in_app_or_prompts() -> None:
-    hashes = _question_hashes(HELDOUT)
+@pytest.mark.parametrize("path", [HELDOUT, HELDOUT2], ids=["heldout", "heldout2"])
+def test_no_heldout_question_in_app_or_prompts(path: Path) -> None:
+    if not path.exists():
+        pytest.skip("held-out file absent")
+    hashes = _question_hashes(path)
     assert hashes, "no held-out questions parsed"
     hits = find_hits(hashes, SEARCH_ROOTS)
     assert not hits, f"{len(hits)} line(s) under app/ or prompts/ contain a held-out question: {', '.join(hits)}"

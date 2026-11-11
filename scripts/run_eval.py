@@ -8,9 +8,12 @@
   `--mode both` runs llm in-process, then offline in a child process with OFFLINE=1.
 - Scenario rows run two turns (the prompt, then «سأتحقق من المصدر وأعود إليه»); progress rows run the
   prompt, then `confirm` with the proposed activities.
-- `--set heldout` is sealed: without `--final` it exits 2 and never opens the file; with `--final` it
-  prints a warning, prints aggregate numbers only, and stores its rows in
-  `results/results_heldout_final.csv` (git-ignored). `--set all` = dev + jury (+ heldout with `--final`).
+- `--set heldout` and `--set heldout2` are sealed: without `--final` they exit 2 and never open the
+  file; with `--final` they print a warning, print aggregate numbers only, and store their rows in
+  `results/results_heldout_final.csv` / `results/results_heldout_2_final.csv` (git-ignored).
+  `--set all` = dev + jury (+ heldout + heldout2 with `--final`).
+- Answer-panel columns come from `trace.panel` of the first turn (empty when absent); `turn_cost_usd`
+  is the row's budget delta (`agent.llm.budget.spent()` after − before, all turns), empty without one.
 - `--warm` runs dev + jury in llm mode to fill the cache for the demo.
 - Writes `results/results.csv` (rows of the same set + mode are replaced, others kept), then
   `summary.md` and `jury_block.csv` through `score_results.py`.
@@ -44,10 +47,12 @@ import score_results as sr  # noqa: E402  (stdlib-only sibling script)
 
 DEV_CSV = ROOT / "data" / "ours" / "eval_dev.csv"
 HELDOUT_CSV = ROOT / "data" / "ours" / "eval_heldout.csv"
+HELDOUT2_CSV = ROOT / "data" / "ours" / "eval_heldout2.csv"
 JURY_CSV = ROOT / "data" / "official" / "JURY_TEST_CASES.csv"
 SCENARIO_REPLY = "سأتحقق من المصدر وأعود إليه"
 FOLLOWUP_SEP = " ||| "
-SETS = ("dev", "jury", "heldout")
+SEALED = {"heldout": HELDOUT_CSV, "heldout2": HELDOUT2_CSV}
+SETS = ("dev", "jury", *SEALED)
 
 
 @dataclass(frozen=True)
@@ -77,7 +82,7 @@ def sets_for(set_name: str, *, final: bool, warm: bool = False) -> list[str]:
     if warm:
         return ["dev", "jury"]
     if set_name == "all":
-        return ["dev", "jury", "heldout"] if final else ["dev", "jury"]
+        return ["dev", "jury", *SEALED] if final else ["dev", "jury"]
     return [set_name]
 
 
@@ -160,10 +165,10 @@ def load_rows(set_name: str, *, final: bool = False) -> list[EvalRow]:
         return _eval_rows("dev", DEV_CSV)
     if set_name == "jury":
         return jury_rows()
-    if set_name == "heldout":
+    if set_name in SEALED:
         if not final:
-            raise PermissionError("the held-out set is sealed; it needs --final")
-        return _eval_rows("heldout", HELDOUT_CSV)
+            raise PermissionError(f"the {set_name} set is sealed; it needs --final")
+        return _eval_rows(set_name, SEALED[set_name])
     raise ValueError(f"unknown set {set_name!r}")
 
 
@@ -198,8 +203,51 @@ def _feedback_text(fb: dict[str, Any] | None) -> str:
     return "\n".join(p for p in parts if p)
 
 
+def _fmt_conf(value: Any) -> str:
+    return f"{float(value):.2f}" if isinstance(value, (int, float)) and not isinstance(value, bool) else ""
+
+
+def panel_columns(trace: dict[str, Any]) -> dict[str, str]:
+    """`trace.panel` → panel_confidence / panel_accepted / panel_escalated_to / panel_votes ("" when absent).
+
+    panel_votes is compact: "role:ok:conf" joined by ";" (ok = ok|no, conf 2 decimals or empty),
+    with a 4th field "cached" when that vote came from the cache.
+    """
+    panel = trace.get("panel")
+    if not isinstance(panel, dict):
+        return {}
+    votes = []
+    for v in panel.get("votes") or []:
+        vote = f"{v.get('role', '')}:{'ok' if v.get('ok') else 'no'}:{_fmt_conf(v.get('confidence'))}"
+        votes.append(vote + (":cached" if v.get("cached") else ""))
+    return {
+        "panel_confidence": _fmt_conf(panel.get("confidence")),
+        "panel_accepted": "true" if panel.get("accepted") else "false",
+        "panel_escalated_to": panel.get("escalated_to") or "",
+        "panel_votes": ";".join(votes),
+    }
+
+
+def spent_usd(agent: Any) -> float | None:
+    """USD spent so far by the agent's LLM budget, or None when there is none."""
+    budget = getattr(getattr(agent, "llm", None), "budget", None)
+    try:
+        return float(budget.spent()) if budget is not None else None
+    except Exception:  # a broken budget never breaks the run; the column stays empty
+        return None
+
+
 def run_row(agent: Any, row: EvalRow, mode: str) -> dict[str, str]:
     """Run one eval row (one or two turns) and return a scored results.csv row."""
+    spent_before = spent_usd(agent)
+    out = _run_row(agent, row, mode)
+    spent_after = spent_usd(agent)
+    if spent_before is not None and spent_after is not None:
+        out["turn_cost_usd"] = f"{max(0.0, spent_after - spent_before):.6f}"
+    return sr.score_row({c: out.get(c, "") for c in sr.ALL_COLUMNS})
+
+
+def _run_row(agent: Any, row: EvalRow, mode: str) -> dict[str, str]:
     from app import schemas
 
     force = mode == "offline"
@@ -247,6 +295,7 @@ def run_row(agent: Any, row: EvalRow, mode: str) -> dict[str, str]:
             top1_id=hits[0]["id"] if hits else "",
             scenario_id=(reply.get("scenario") or {}).get("id", ""),
         )
+        out.update(panel_columns(trace))
         state = d.get("state") or {}
         if reply.get("kind") == "scenario_start" and row.expected_behaviour == "scenario":
             req2 = schemas.ChatRequest(
@@ -275,7 +324,7 @@ def run_row(agent: Any, row: EvalRow, mode: str) -> dict[str, str]:
         out["answer"] = text
     except Exception as exc:  # a crash is recorded as a failed row, the run continues
         out.update(kind="error", answer=type(exc).__name__, latency_ms=str(int((time.perf_counter() - t0) * 1000)))
-    return sr.score_row({c: out.get(c, "") for c in sr.ALL_COLUMNS})
+    return out
 
 
 def run_rows(
@@ -337,9 +386,9 @@ def _ensure_llm_importable() -> None:
 
 def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description="Run an evaluation set in-process.")
-    ap.add_argument("--set", dest="set_name", choices=["dev", "jury", "heldout", "all"], default="dev")
+    ap.add_argument("--set", dest="set_name", choices=[*SETS, "all"], default="dev")
     ap.add_argument("--mode", choices=["llm", "offline", "both"], default="offline")
-    ap.add_argument("--final", action="store_true", help="unseal the held-out set (run once, by the orchestrator)")
+    ap.add_argument("--final", action="store_true", help="unseal the held-out sets (run once, by the orchestrator)")
     ap.add_argument("--warm", action="store_true", help="run dev + jury in llm mode to fill the cache")
     ap.add_argument("--out", default=str(ROOT / "results"))
     return ap.parse_args(argv)
@@ -347,7 +396,7 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
 
 def _print_block(set_name: str, mode: str, rows: list[dict[str, str]]) -> None:
     b = sr.build_block(set_name, mode, rows)
-    aggregate_only = set_name == "heldout"
+    aggregate_only = set_name in SEALED
     for line in sr.block_lines(b, aggregate_only=aggregate_only):
         if aggregate_only or not line.startswith("|"):
             print(line)
@@ -367,7 +416,7 @@ def run_mode(
         print(f"running {set_name} ({len(rows)} rows) in {mode} mode…", flush=True)
         results = run_rows(agent, rows, mode)
         errors += sum(r["kind"] == "error" for r in results)
-        target = out_dir / (sr.HELDOUT_FILE if set_name == "heldout" else "results.csv")
+        target = out_dir / sr.SEALED_FILES.get(set_name, "results.csv")
         merge_into(target, results)
         _print_block(set_name, mode, results)
     return errors, agent
@@ -378,14 +427,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = parse_args(argv)
     # Sealed-set checks come first: nothing is imported or opened before them.
-    if args.set_name == "heldout" and not args.final:
-        print("error: --set heldout requires --final (the held-out set is sealed).", file=sys.stderr)
+    if args.set_name in SEALED and not args.final:
+        print(f"error: --set {args.set_name} requires --final (the held-out set is sealed).", file=sys.stderr)
         return 2
     mode = "llm" if args.warm else args.mode
     sets = sets_for(args.set_name, final=args.final, warm=args.warm)
-    if "heldout" in sets:
+    sealed = [s for s in sets if s in SEALED]
+    if sealed:
         print(
-            "WARNING: --final unseals the held-out set. It is run once, after the last prompt/threshold commit;"
+            f"WARNING: --final unseals {', '.join(sealed)}. It is run once, after the last prompt/threshold commit;"
             " only aggregate numbers are printed.",
             flush=True,
         )
