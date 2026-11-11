@@ -1,7 +1,7 @@
 // Route table and providers. Screen agents never edit this file: each route renders the default
 // export of components/<screen>/<Screen>Screen.tsx. The frame (header, nav, footer) lives in
 // components/shell/AppShell.tsx.
-import { useEffect, type ComponentType } from "react";
+import { useEffect, useRef, type ComponentType } from "react";
 import AboutScreen from "@/components/about/AboutScreen";
 import ChatScreen from "@/components/chat/ChatScreen";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -11,7 +11,7 @@ import ProgressScreen from "@/components/progress/ProgressScreen";
 import QuizScreen from "@/components/quiz/QuizScreen";
 import ScenariosScreen from "@/components/scenarios/ScenariosScreen";
 import { AppShell } from "@/components/shell/AppShell";
-import { ToastProvider } from "@/components/ui/Toast";
+import { ToastProvider, useToast } from "@/components/ui/Toast";
 import WelcomeScreen from "@/components/welcome/WelcomeScreen";
 import { replace, usePath } from "@/router";
 import { AppStateProvider, useAppState } from "@/state/useAppState";
@@ -45,6 +45,18 @@ function Routes() {
   useEffect(() => {
     if (redirect) replace(redirect);
   }, [redirect]);
+  // A new screen starts at its top (instant, so reduced motion is respected) with no stale toast.
+  // The chat screen is left alone: it scrolls itself to the latest message.
+  const { dismissTransient } = useToast();
+  const prevPath = useRef(path);
+  useEffect(() => {
+    if (prevPath.current === path) return;
+    prevPath.current = path;
+    dismissTransient();
+    if (path !== "/chat" && typeof window.scrollTo === "function" && window.scrollY > 0) {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    }
+  }, [path, dismissTransient]);
   if (!route || redirect) return null;
   const { Screen } = route;
   return <Screen key={route.path} />;

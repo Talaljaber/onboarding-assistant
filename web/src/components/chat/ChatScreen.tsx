@@ -83,10 +83,45 @@ function ChatInner() {
     return () => setPracticeActive(false);
   }, [practiceOn, setPracticeActive]);
 
-  // ---- keep the newest item in view
+  // ---- keep the newest item in view. The visible band is between the sticky header and the
+  // sticky dock (practice bar + composer) plus the phone bottom bar; on first render jump to the
+  // end (the latest message), afterwards bring a new reply in whole, or its top when it is taller
+  // than the band (so a scenario card's options are reachable right under its text).
+  const listRef = useRef<HTMLOListElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
+  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const scrolledOnce = useRef(false);
+  const lastId = items[items.length - 1]?.id ?? null;
+  const lastType = items[items.length - 1]?.type ?? null;
   useEffect(() => {
-    endRef.current?.scrollIntoView?.({ block: "end" });
-  }, [items.length, busy]);
+    const first = !scrolledOnce.current;
+    scrolledOnce.current = true;
+    if (typeof window.scrollBy !== "function") return;
+    const behavior: ScrollBehavior = first || reducedMotion ? "auto" : "smooth";
+    const main = document.getElementById("main");
+    const navH = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
+    const top = document.querySelector("header")?.getBoundingClientRect().bottom ?? 0;
+    const bottom = window.innerHeight - navH - (dockRef.current?.offsetHeight ?? 0);
+    const gap = 12;
+    const target = !first && !busy && lastType === "reply" ? (listRef.current?.lastElementChild ?? null) : null;
+    if (!target) {
+      const end = endRef.current?.getBoundingClientRect().bottom ?? 0;
+      if (end > bottom) window.scrollBy({ top: end - bottom + gap, behavior });
+      return;
+    }
+    const r = target.getBoundingClientRect();
+    const fits = r.height <= bottom - top - 2 * gap;
+    if (fits && r.top >= top && r.bottom <= bottom) return;
+    let delta = fits ? r.bottom - (bottom - gap) : r.top - (top + gap);
+    // A scenario card taller than the band: its reply options must not stay under the dock.
+    const opts = target.querySelectorAll("[data-option-id]");
+    const lastOpt = opts[opts.length - 1];
+    if (!fits && lastOpt) {
+      const ob = lastOpt.getBoundingClientRect().bottom;
+      if (ob - delta > bottom - gap) delta = ob - (bottom - gap);
+    }
+    window.scrollBy({ top: delta, behavior });
+  }, [lastId, lastType, busy, reducedMotion]);
 
   // ---- trace: side column (wide + toggle on) or inline under the card
   const sideMode = wide && app.trace;
@@ -124,7 +159,7 @@ function ChatInner() {
   const lastItem = items[items.length - 1];
   const followUps =
     !busy && userTurns >= 1 && userTurns <= 2 && lastItem?.type === "reply" && ANSWER_KINDS.has(cardKind(lastItem));
-  const starters = role ? STARTERS[role] : [];
+  const starters = role ? STARTERS[role].map((k) => t(k)) : [];
   const lastIsReply = lastItem?.type === "reply";
 
   return (
@@ -143,7 +178,7 @@ function ChatInner() {
           </Button>
         </div>
 
-        <ol aria-label={t("chat.thread")} className="flex flex-col gap-5 pb-5 sm:gap-6">
+        <ol ref={listRef} aria-label={t("chat.thread")} className="flex flex-col gap-5 pb-5 sm:gap-6">
           <li data-kind="greeting">
             <AssistantFrame>
               <AssistantBubble
@@ -199,6 +234,7 @@ function ChatInner() {
         </div>
 
         <div
+          ref={dockRef}
           className={cn(
             "sticky bottom-(--da-bottom-nav) z-10 -mx-4 bg-page px-4 pb-2 pt-2 sm:-mx-6 sm:px-6 md:pb-5",
             "lg:-mx-8 lg:px-8",

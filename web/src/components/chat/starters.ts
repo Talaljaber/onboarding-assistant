@@ -1,21 +1,23 @@
-// Starter questions (plan D2.3). Arabic data strings: they are sent to the server as typed text,
-// so they stay Arabic in both UI languages.
+// Starter questions (plan D2.3). The texts live in the dictionaries (`uiUat.starter*`): the Arabic
+// ones are the questions the server was tuned on; in English the chip shows and sends the English
+// question (the server still answers in Arabic).
 import type { Role } from "@/api/types";
+import type { DictKey } from "@/i18n";
 
-export const STARTERS: Record<Role, readonly string[]> = {
+export const STARTERS: Record<Role, readonly DictKey[]> = {
   Sales: [
-    "ما قيم الشركة الخمس؟",
-    "كيف أقدم طلب إجازة؟",
-    "ما العلامات التجارية للشركة؟",
-    "تدريب: زبون يسأل عن ميزة غير مؤكدة",
-    "ماذا أفعل في اليوم 30؟",
+    "uiUat.starterSales1",
+    "uiUat.starterSales2",
+    "uiUat.starterSales3",
+    "uiUat.starterSales4",
+    "uiUat.starterSales5",
   ],
   Delivery: [
-    "متى تأسست مجموعة الدادا؟",
-    "كم مدة فترة التجربة؟",
-    "هل يمكنني مشاركة ملفات الشركة مع شخص خارجي؟",
-    "تدريب: العميل منزعج من تأخر التسليم",
-    "ماذا أفعل في اليوم 30؟",
+    "uiUat.starterDelivery1",
+    "uiUat.starterDelivery2",
+    "uiUat.starterDelivery3",
+    "uiUat.starterDelivery4",
+    "uiUat.starterDelivery5",
   ],
 };
 

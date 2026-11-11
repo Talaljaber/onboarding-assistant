@@ -20,7 +20,8 @@ describe("ScenariosScreen", () => {
     expect(document.querySelectorAll("[data-scenario]")).toHaveLength(scenarios.scenarios.length);
     expect(within(card).getByText(first.scenario_ar)).toBeInTheDocument();
     expect(within(card).getByText(first.value_ar)).toBeInTheDocument();
-    expect(within(card).getByText(first.company_value)).toBeInTheDocument();
+    // Arabic UI: the Arabic value name only, never the English one
+    expect(within(card).queryByText(first.company_value)).toBeNull();
     expect(within(card).getByText("مثال تدريبي افتراضي")).toBeInTheDocument();
     const link = within(card).getByRole("link", { name: "ابدأ التدريب" });
     expect(link).toHaveAttribute("href", `#/chat?scenario=${first.id}`);
@@ -34,7 +35,7 @@ describe("ScenariosScreen", () => {
     await screen.findByText("تم التدرب");
     expect(document.querySelector('[data-scenario="S01"]')).toHaveTextContent("تم التدرب");
     expect(document.querySelector('[data-scenario="S02"]')).not.toHaveTextContent("تم التدرب");
-    await userEvent.click(screen.getByRole("tab", { name: /عرض مواقف/ }));
+    await userEvent.click(screen.getByRole("tab", { name: "التوصيل" }));
     await waitFor(() => expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes("role=Delivery"))).toBe(true));
     expect((await screen.findAllByText("هذا الموقف من مسار التوصيل.")).length).toBeGreaterThan(0);
   });
