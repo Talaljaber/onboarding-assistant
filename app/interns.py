@@ -149,7 +149,9 @@ def detail(intern: dict[str, Any], profiles: list[dict[str, Any]], act: dict[str
     for r in act["quiz"]:
         events.append(schemas.TimelineEvent(at=iso(r["at"]), kind="quiz",
                                             role=roles.get(str(r["profile_id"]), role), ids=[r["question_id"]]))  # type: ignore[arg-type]
-    for t in act["turns"]:
+    # "Asked the assistant" uses the same definition as `chat.questions`: question turns only. Practice
+    # replies already appear as scenario events; greetings, plan and quiz turns are not questions.
+    for t in questions:
         ids = [k for k in (t.get("cited_ids") or []) if isinstance(k, str)]
         events.append(schemas.TimelineEvent(at=iso(t["at"]), kind="chat",
                                             role=roles.get(str(t["profile_id"]), role), ids=ids))  # type: ignore[arg-type]
