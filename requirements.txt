@@ -8,3 +8,6 @@ httpx==0.28.1
 numpy==2.4.6
 onnxruntime==1.31.0
 tokenizers==0.23.3
+# Optional (P12.1): PDF import in the knowledge editor. Not installed by default; without it the server
+# reports `pdf: false` and the editor says PDF needs this package. The integrator may enable it with:
+# pypdf==6.21.4

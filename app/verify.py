@@ -413,3 +413,131 @@ def verify_translation(
     if _arabic_left(text):
         return _reject(ARABIC_LEFT)
     return Verdict(True)
+
+
+# -- the document-import organizer verifier (P12.1) ---------------------------------------------------
+ORGANIZE_TOPIC_MAX = 40
+ORGANIZE_KEYWORD_MAX = 60
+ORGANIZE_QUESTION_MAX = 160
+ORGANIZE_MERGED_MAX = 600  # = KbAnswer max_length
+_ORGANIZE_KEYS = frozenset({"id", "topic", "keyword_en", "question_ar", "keep", "order", "merge_with"})
+
+
+@dataclass(frozen=True)
+class OrganizeVerdict:
+    """`fields[id]` holds only the values that passed (a missing key = use the offline fallback);
+    `order` is the accepted reading order of the ids (None = document order); `merges` the accepted
+    (first, second) pairs; `rejected` counts every value that failed a check."""
+
+    ok: bool
+    reason: str | None = None
+    fields: dict[str, dict[str, Any]] = field(default_factory=dict)
+    order: list[str] | None = None
+    merges: list[tuple[str, str]] = field(default_factory=list)
+    rejected: int = 0
+
+
+def _organize_line(value: object, text: str, limit: int) -> str | None:
+    """A model-written label for one passage, or None: a non-empty single line of at most `limit`
+    characters with no contact/link, no K-id and no number that the passage text does not contain."""
+    if not isinstance(value, str):
+        return None
+    line = " ".join(value.split())
+    if not line or len(line) > limit:
+        return None
+    if has_contact_or_link(line) is not None or _KID_IN_TEXT.search(_ascii_digits(line)):
+        return None
+    if foreign_numbers(line, [text]) or _foreign_percent(line, [text]):
+        return None
+    return line
+
+
+def verify_organize(reply: object, passages: Sequence[Mapping[str, Any]]) -> OrganizeVerdict:
+    """Checks on a parsed organize reply `{"passages": [{id, topic, keyword_en, question_ar, keep, order,
+    merge_with}]}` for `passages` (`{id, text, page}` in document order).
+
+    The whole reply is rejected for a bad shape, an unknown or repeated id. Each value is then checked on
+    its own: topic ≤ 40, keyword_en ≤ 60 without Arabic letters, question_ar ≤ 160 with Arabic letters;
+    none may hold a contact, link, K-id or a number that is not in that passage. `order` is used only when
+    it is a permutation 1..n over every passage; `merge_with` only between neighbours on the same page whose
+    joined text stays ≤ 600 characters. The model never supplies passage text, so none is accepted.
+    """
+    if not isinstance(reply, Mapping):
+        return OrganizeVerdict(False, INVALID_JSON)
+    items = reply.get("passages")
+    if not isinstance(items, list) or set(reply) - {"passages"}:
+        return OrganizeVerdict(False, BAD_SHAPE)
+    index = {str(p["id"]): i for i, p in enumerate(passages)}
+    seen: set[str] = set()
+    for item in items:
+        if not isinstance(item, Mapping) or not isinstance(item.get("id"), str):
+            return OrganizeVerdict(False, BAD_SHAPE)
+        if item["id"] not in index or item["id"] in seen:
+            return OrganizeVerdict(False, FOREIGN_ID)
+        seen.add(item["id"])
+    fields: dict[str, dict[str, Any]] = {}
+    rejected = 0
+    orders: dict[str, int] = {}
+    merges: list[tuple[str, str]] = []
+    for item in items:
+        pid = item["id"]
+        p = passages[index[pid]]
+        text = str(p.get("text") or "")
+        got: dict[str, Any] = {}
+        rejected += len(set(item) - _ORGANIZE_KEYS)
+        topic = _organize_line(item.get("topic"), text, ORGANIZE_TOPIC_MAX)
+        keyword = _organize_line(item.get("keyword_en"), text, ORGANIZE_KEYWORD_MAX)
+        if keyword is not None and _ARABIC_LETTER.search(keyword):
+            keyword = None
+        question = _organize_line(item.get("question_ar"), text, ORGANIZE_QUESTION_MAX)
+        if question is not None and not _ARABIC_LETTER.search(question):
+            question = None
+        for name, raw, ok in (("topic", item.get("topic"), topic), ("keyword_en", item.get("keyword_en"), keyword),
+                              ("question_ar", item.get("question_ar"), question)):
+            if ok is not None:
+                got[name] = ok
+            elif raw not in (None, ""):
+                rejected += 1
+        keep = item.get("keep")
+        if isinstance(keep, bool):
+            got["keep"] = keep
+        elif keep is not None:
+            rejected += 1
+        order = item.get("order")
+        if isinstance(order, int) and not isinstance(order, bool):
+            orders[pid] = order
+        elif order is not None:
+            rejected += 1
+        other = item.get("merge_with")
+        if other is not None:
+            j = index.get(other) if isinstance(other, str) else None
+            q = passages[j] if j is not None else None
+            if (
+                q is not None
+                and j is not None
+                and abs(j - index[pid]) == 1
+                and q.get("page") == p.get("page")
+                and len(text) + 1 + len(str(q.get("text") or "")) <= ORGANIZE_MERGED_MAX
+            ):
+                pair = (pid, other) if index[pid] < j else (other, pid)
+                if pair not in merges:
+                    merges.append(pair)
+            else:
+                rejected += 1
+        fields[pid] = got
+    accepted_order: list[str] | None = None
+    if orders:
+        if len(orders) == len(passages) and sorted(orders.values()) == list(range(1, len(passages) + 1)):
+            accepted_order = sorted(orders, key=lambda k: orders[k])
+        else:
+            rejected += 1
+    # A passage may be merged once: keep the first pair in document order, drop overlapping ones.
+    used: set[str] = set()
+    kept_merges: list[tuple[str, str]] = []
+    for a, b in sorted(merges, key=lambda m: index[m[0]]):
+        if a in used or b in used:
+            rejected += 1
+            continue
+        used |= {a, b}
+        kept_merges.append((a, b))
+    return OrganizeVerdict(True, None, fields, accepted_order, kept_merges, rejected)

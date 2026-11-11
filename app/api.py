@@ -33,9 +33,15 @@ from app.agent import Agent
 from app import interns as interns_view
 from app.errors import ApiError
 from app.kb import Row
+from app.kb_import import service as kb_import
 from app.logging_setup import log_event
 from app.schemas import (
     BODY_MAX_BYTES,
+    IMPORT_BODY_MAX_BYTES,
+    ApproveRequest,
+    ApproveResponse,
+    DraftPatch,
+    ImportCreate,
     AdminLogin,
     AdminSession,
     KB_ID_RE,
@@ -78,6 +84,8 @@ KB_LOCK_WAIT_S = 2.0
 PROBE_MIN_INTERVAL_S = 10.0  # `/api/health?probe=1` re-probes the LLM at most this often
 _ACTIVITY_RE = re.compile(r"^[A-Z]{1,2}-[A-Za-z0-9-]{1,32}$")
 _BODY_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+#: P12.1: the only route with a larger body limit (a base64 document), and only with a valid admin token.
+IMPORT_PATH = "/api/admin/kb/imports"
 # The web client is fully bundled (scripts, styles, fonts under /assets) and talks to its own origin only.
 # React style props are set through the CSSOM, which style-src 'self' allows. No CORS headers are sent.
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; "
@@ -128,6 +136,18 @@ def validation_field(exc: RequestValidationError) -> tuple[str | None, str]:
     return (".".join(loc) or None), msg
 
 
+def _admin_header_ok(scope: Scope, headers: dict[bytes, bytes]) -> bool:
+    """True when the request carries a valid admin token (checked before the body is read, so only the
+    admin can send the larger import body)."""
+    auth = getattr(getattr(scope.get("app"), "state", None), "admin", None)
+    raw = headers.get(b"authorization", b"").decode("latin-1")
+    token = raw[len("Bearer "):].strip() if raw.startswith("Bearer ") else None
+    try:
+        return bool(auth is not None and auth.valid(token))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 class RequestContextMiddleware:
     """Pure ASGI: request id + X-Request-Id, security headers, the 32 KB body limit (before parsing),
     last-resort 500 (generic body; the exception type goes to the log, never a stack trace)."""
@@ -151,13 +171,16 @@ class RequestContextMiddleware:
             return
         rid = uuid.uuid4().hex[:12]
         scope.setdefault("state", {})["request_id"] = rid
-        too_big = error_body("payload_too_large", f"request body exceeds {self.max_body // 1024} KB", rid)
-
         headers = dict(scope.get("headers") or [])
+        max_body = self.max_body
+        if scope.get("method") == "POST" and scope.get("path") == IMPORT_PATH and _admin_header_ok(scope, headers):
+            max_body = IMPORT_BODY_MAX_BYTES
+        too_big = error_body("payload_too_large", f"request body exceeds {max_body // 1024} KB", rid)
+
         length = headers.get(b"content-length")
         if length is not None:
             try:
-                if int(length) > self.max_body:
+                if int(length) > max_body:
                     await self._json(send, 413, too_big, rid)
                     return
             except ValueError:
@@ -179,7 +202,7 @@ class RequestContextMiddleware:
                     break
                 chunk = message.get("body", b"")
                 size += len(chunk)
-                if size > self.max_body:
+                if size > max_body:
                     await self._json(send, 413, too_big, rid)
                     return
                 chunks.append(chunk)
@@ -219,7 +242,7 @@ class RequestContextMiddleware:
 def _install_errors(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _api_error(request: Request, exc: ApiError) -> JSONResponse:
-        if exc.status >= 500:
+        if exc.status >= 500 and exc.code != "imports_unavailable":
             log_event("api_error", request_id=_rid(request), code=exc.code)
             return _error("internal_error", 500, "Internal error", request)
         return _error(exc.code, exc.status, exc.message, request, exc.field)
@@ -443,7 +466,47 @@ def build_router() -> APIRouter:
     def kb_reset(request: Request) -> JSONResponse:
         agent = _agent(request)
         _, ms = _timed_kb_write(agent, agent.kb.reset)
+        kb_import.after_kb_reset(_store(request))  # P12.1: approved drafts become pending again
         return _json(KbResetResponse(rows=len(agent.kb.rows()), version=agent.kb.version(), reindex_ms=ms))
+
+    # -------------------------------------------------------------------------- document import (P12.1)
+    @r.get("/admin/kb/import/capabilities", dependencies=ADMIN_ONLY)
+    def kb_import_capabilities(request: Request) -> JSONResponse:
+        return _json(kb_import.capabilities(_agent(request).llm_on()))
+
+    @r.post("/admin/kb/imports", status_code=201, dependencies=ADMIN_ONLY)
+    def kb_import_create(body: ImportCreate, request: Request) -> JSONResponse:
+        agent = _agent(request)
+        use_llm = body.organize and agent.llm_on()
+        detail = kb_import.create_import(_store(request), agent.kb, body, llm=agent.llm, use_llm=use_llm)
+        return _json(detail, 201)
+
+    @r.get("/admin/kb/imports", dependencies=ADMIN_ONLY)
+    def kb_import_list(request: Request) -> JSONResponse:
+        return _json(kb_import.list_imports(_store(request)))
+
+    @r.get("/admin/kb/imports/{import_id}", dependencies=ADMIN_ONLY)
+    def kb_import_get(import_id: str, request: Request) -> JSONResponse:
+        if not re.match(PROFILE_ID_RE, import_id):
+            raise ApiError("not_found", 404, "unknown import")
+        return _json(kb_import.get_import(_store(request), import_id))
+
+    @r.patch("/admin/kb/drafts/{draft_id}", dependencies=ADMIN_ONLY)
+    def kb_draft_patch(draft_id: str, body: DraftPatch, request: Request) -> JSONResponse:
+        if not re.match(PROFILE_ID_RE, draft_id):
+            raise ApiError("not_found", 404, "unknown draft")
+        return _json(kb_import.patch_draft(_store(request), draft_id, body))
+
+    @r.post("/admin/kb/imports/{import_id}/approve", dependencies=ADMIN_ONLY)
+    def kb_import_approve(import_id: str, body: ApproveRequest, request: Request) -> JSONResponse:
+        if not re.match(PROFILE_ID_RE, import_id):
+            raise ApiError("not_found", 404, "unknown import")
+        agent = _agent(request)
+        store = _store(request)
+        (rows, drafts), ms = _timed_kb_write(agent, lambda: kb_import.approve(store, agent.kb, import_id,
+                                                                               list(body.draft_ids)))
+        return _json(ApproveResponse(rows=[_kb_row(x) for x in rows], drafts=drafts, version=agent.kb.version(),
+                                     reindex_ms=ms, oos_disabled=list(agent.retriever.last_disabled)))
 
     # -------------------------------------------------------------------------- admin sign-in
     @r.post("/admin/login")
@@ -616,5 +679,5 @@ def install_api(app: FastAPI) -> None:
     app.include_router(build_router())
 
 
-__all__ = ["CSP", "KB_LOCK_WAIT_S", "SECURITY_HEADERS", "RequestContextMiddleware", "build_router", "error_body", "install_api",
+__all__ = ["CSP", "IMPORT_PATH", "KB_LOCK_WAIT_S", "SECURITY_HEADERS", "RequestContextMiddleware", "build_router", "error_body", "install_api",
            "validation_field", "wait_for_reindex"]
