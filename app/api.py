@@ -94,6 +94,8 @@ from app import request_comments as comments_view  # P15 comments and files on m
 from app.schemas import COMMENT_BODY_MAX_BYTES, AdminCommentCreate, RequestCommentCreate  # P15
 from app.store import alias_problem, store_status
 from app.premise import with_premise  # P16.5 premise correction
+from app import mailer  # P18.2 email notifications
+from app.schemas import MAIL_LOG_LIMIT, MailLogEntry, MailLogResponse, MailTestResponse  # P18.2
 
 KB_LOCK_WAIT_S = 2.0
 PROBE_MIN_INTERVAL_S = 10.0  # `/api/health?probe=1` re-probes the LLM at most this often
@@ -458,6 +460,22 @@ def _own_request(store: Any, request_id: str, intern_id: str | None = None) -> d
     return found[0]  # type: ignore[no-any-return]
 
 
+# ------------------------------------------------------------------ email notifications (P18.2) helpers
+def _mailer(request: Request) -> mailer.Mailer | None:
+    """The app's mailer (None in an app built without one: nothing is sent or recorded)."""
+    return getattr(request.app.state, "mailer", None)
+
+
+def _with_email(store: Any, intern: dict[str, Any]) -> dict[str, Any]:
+    """The intern record plus its email for the admin views (None when unset or the column is unavailable)."""
+    return {**intern, "email": store.intern_email(str(intern["id"]))}
+
+
+def _save_email(request: Request, store: Any, intern_id: str, email: str | None) -> None:
+    if not store.set_intern_email(intern_id, email):
+        log_event("intern_email_not_saved", request_id=_rid(request))
+
+
 # ======================================================================================= routes
 def build_router() -> APIRouter:
     r = APIRouter(prefix="/api")
@@ -703,26 +721,35 @@ def build_router() -> APIRouter:
 
     @r.post("/admin/interns", status_code=201, dependencies=ADMIN_ONLY)
     def admin_intern_add(body: InternCreate, request: Request) -> JSONResponse:
-        rec = _store(request).create_intern(body.name_ar, body.name_en, body.role)
+        store = _store(request)
+        rec = store.create_intern(body.name_ar, body.name_en, body.role)
         if not rec:
             raise ApiError("validation_error", 400, "intern not created: check the names", "name_ar")
         log_event("intern_added", request_id=_rid(request), role=body.role)
+        if body.email is not None:  # P18.2
+            _save_email(request, store, str(rec["id"]), body.email)
+            rec = _with_email(store, rec)
         return _json(interns_view.out(rec), 201)
 
     @r.patch("/admin/interns/{intern_id}", dependencies=ADMIN_ONLY)
     def admin_intern_edit(intern_id: str, body: InternPatch, request: Request) -> JSONResponse:
         store = _store(request)
         _intern_or_404(store, intern_id)
-        rec = store.update_intern(intern_id, body.changes())
+        changes = body.changes()
+        email_set = "email" in changes  # P18.2: stored on its own (migration 0007), not with the names
+        email = changes.pop("email", None)
+        rec = store.update_intern(intern_id, changes)
         if not rec:
             raise ApiError("validation_error", 400, "intern not updated: check the names", None)
+        if email_set:
+            _save_email(request, store, intern_id, email)
         log_event("intern_updated", request_id=_rid(request), fields=sorted(body.model_fields_set))
-        return _json(interns_view.out(rec))
+        return _json(interns_view.out(_with_email(store, rec)))
 
     @r.get("/admin/interns/{intern_id}", dependencies=ADMIN_ONLY)
     def admin_intern_detail(intern_id: str, request: Request) -> JSONResponse:
         store = _store(request)
-        intern = _intern_or_404(store, intern_id)
+        intern = _with_email(store, _intern_or_404(store, intern_id))  # P18.2: the edit form shows the email
         agent = _agent(request)
         profiles = store.intern_profiles(intern["id"])
         act = store.activity([str(p["id"]) for p in profiles])
@@ -753,10 +780,12 @@ def build_router() -> APIRouter:
         """The intern moves one of their own requests between new, in progress and done (any direction)."""
         store = _store(request)
         intern = _profile_intern(store, body.profile_id)
-        _own_request(store, request_id, intern["id"])
+        before = _own_request(store, request_id, intern["id"])
         rec = _requests_or_503(store.mentor_request_update(request_id, {"status": body.status}))
         if not rec:
             raise ApiError("not_found", 404, "unknown request")
+        if rec.get("status") == "done" and before.get("status") != "done":
+            mailer.request_done(_mailer(request), rec)  # P18.2: to ADMIN_EMAIL, in the background
         return _json(requests_view.view(rec, _kb_source(request), _agent(request).features.plan, intern["role"],
                                         _comment_counts(store, [request_id]).get(request_id, 0)))
 
@@ -783,6 +812,7 @@ def build_router() -> APIRouter:
         created = _requests_or_503(store.mentor_requests_create([{**fields, "intern_id": t["id"]} for t in targets]))
         log_event("requests_added", request_id=_rid(request), count=len(created), kind=body.kind,
                   target="track" if body.track else "intern")
+        mailer.request_created(_mailer(request), created)  # P18.2: to each intern, in the background
         return _request_list(request, created, 201)
 
     @r.patch("/admin/requests/{request_id}", dependencies=ADMIN_ONLY)
@@ -815,11 +845,13 @@ def build_router() -> APIRouter:
     def thread_of(store: Any, request_id: str) -> JSONResponse:
         return _json(comments_view.thread(request_id, _requests_or_503(store.request_comments(request_id))))
 
-    def add_comment(request: Request, store: Any, request_id: str, author: str,
+    def add_comment(request: Request, store: Any, req: dict[str, Any], author: str,
                     body: AdminCommentCreate) -> JSONResponse:
+        request_id = str(req["id"])
         comment, files, blobs = comments_view.prepare(request_id, author, body)
         saved = _requests_or_503(store.request_comment_add(comment, files, blobs))
         log_event("request_comment_added", request_id=_rid(request), author=author, files=len(files))
+        mailer.comment_added(_mailer(request), req, saved, blobs)  # P18.2: files attached, in the background
         return _json(comments_view.view(saved), 201)
 
     def file_of(store: Any, request_id: str, file_id: str) -> Response:
@@ -829,12 +861,12 @@ def build_router() -> APIRouter:
         return Response(content=rec["data"], media_type=str(rec["content_type"]),
                         headers=comments_view.download_headers(rec))
 
-    def intern_scope(store: Any, request_id: str, profile_id: str | None) -> None:
+    def intern_scope(store: Any, request_id: str, profile_id: str | None) -> dict[str, Any]:
         """The intern's own request only (another intern's request is 404, like an unknown one)."""
         if not profile_id:
             raise ApiError("validation_error", 400, "profile_id is required", "profile_id")
         intern = _profile_intern(store, profile_id)
-        _own_request(store, request_id, intern["id"])
+        return _own_request(store, request_id, intern["id"])
 
     @r.get("/requests/{request_id}/comments")
     def request_thread(request_id: str, request: Request, profile_id: str | None = None) -> JSONResponse:
@@ -845,8 +877,8 @@ def build_router() -> APIRouter:
     @r.post("/requests/{request_id}/comments", status_code=201)
     def request_comment(request_id: str, body: RequestCommentCreate, request: Request) -> JSONResponse:
         store = _store(request)
-        intern_scope(store, request_id, body.profile_id)
-        return add_comment(request, store, request_id, "intern", body)
+        req = intern_scope(store, request_id, body.profile_id)
+        return add_comment(request, store, req, "intern", body)
 
     @r.get("/requests/{request_id}/files/{file_id}")
     def request_file(request_id: str, file_id: str, request: Request, profile_id: str | None = None) -> Response:
@@ -863,14 +895,38 @@ def build_router() -> APIRouter:
     @r.post("/admin/requests/{request_id}/comments", status_code=201, dependencies=ADMIN_ONLY)
     def admin_request_comment(request_id: str, body: AdminCommentCreate, request: Request) -> JSONResponse:
         store = _store(request)
-        _own_request(store, request_id)
-        return add_comment(request, store, request_id, "admin", body)
+        req = _own_request(store, request_id)
+        return add_comment(request, store, req, "admin", body)
 
     @r.get("/admin/requests/{request_id}/files/{file_id}", dependencies=ADMIN_ONLY)
     def admin_request_file(request_id: str, file_id: str, request: Request) -> Response:
         store = _store(request)
         _own_request(store, request_id)
         return file_of(store, request_id, file_id)
+
+    # -------------------------------------------------------------------------- email (P18.2)
+    @r.get("/admin/mail/log", dependencies=ADMIN_ONLY)
+    def admin_mail_log(request: Request) -> JSONResponse:
+        """The last 50 emails (sent, failed or skipped). Never a password, host or SMTP reply."""
+        rows = _store(request).mail_log(MAIL_LOG_LIMIT)
+        if rows is None:
+            raise ApiError("requests_unavailable", 503, "the email log is not available on this store now")
+        m = _mailer(request)
+        entries = [MailLogEntry(id=r["id"], event=r["event"], to_addr=r["to_addr"], subject=r["subject"],
+                                status=r["status"], error=r.get("error"), created_at=requests_view.iso(r["created_at"]))
+                   for r in rows]
+        return _json(MailLogResponse(entries=entries, configured=bool(m and m.configured),
+                                     admin_email_set=bool(m and m.admin_email)))
+
+    @r.post("/admin/mail/test", status_code=202, dependencies=ADMIN_ONLY)
+    def admin_mail_test(request: Request) -> JSONResponse:
+        """A test email to ADMIN_EMAIL, sent in the background (the result appears in the log)."""
+        m = _mailer(request)
+        if m is None:
+            return _json(MailTestResponse(status="skipped", error="not_configured"), 202)
+        status, error = mailer.send_test(m)
+        log_event("mail_test", request_id=_rid(request), status=status)
+        return _json(MailTestResponse(status=status, error=error), 202)  # type: ignore[arg-type]
 
     # -------------------------------------------------------------------------- Rumour Check (P14.2)
     @r.post("/check")

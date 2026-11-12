@@ -66,6 +66,7 @@ def out(intern: dict[str, Any]) -> schemas.InternOut:
     return schemas.InternOut(
         id=intern["id"], name_ar=intern["name_ar"], name_en=intern.get("name_en"), role=intern["role"],
         active=bool(intern["active"]), created_at=iso(intern["created_at"]), updated_at=iso(intern["updated_at"]),
+        email=intern.get("email") or None,  # P18.2: admin views only (the API adds it to the record)
     )
 
 

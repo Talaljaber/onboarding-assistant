@@ -110,6 +110,9 @@ FIXTURES: dict[str, type[BaseModel]] = {
     "request_comment_admin_create_request.json": s.AdminCommentCreate,
     # P16.5 premise correction
     "chat_answer_premise.json": s.ChatResponse,
+    # P18.2 email notifications
+    "mail_log.json": s.MailLogResponse,
+    "mail_test.json": s.MailTestResponse,
 }
 
 # One response fixture per endpoint (the request fixtures are listed in FIXTURES above).
@@ -156,6 +159,9 @@ ENDPOINT_FIXTURES = {
     "POST /api/requests/{id}/comments": "request_comment.json",
     "GET /api/admin/requests/{id}/comments": "request_thread.json",
     "POST /api/admin/requests/{id}/comments": "request_comment.json",
+    # P18.2
+    "GET /api/admin/mail/log": "mail_log.json",
+    "POST /api/admin/mail/test": "mail_test.json",
 }
 
 REQUEST_MODELS: dict[type[BaseModel], str] = {
@@ -699,3 +705,31 @@ def test_english_helper_fields_keep_the_arabic_shape() -> None:
     prop = load("chat_progress_proposal.json")["reply"]["proposal"]
     with pytest.raises(ValidationError):
         s.Proposal.model_validate({**prop, "titles_en": [*prop["titles_en"], "extra"]})
+
+
+# ------------------------------------------------------------------ P18.2 email notifications
+
+
+def test_mail_log_has_no_secret_and_intern_email_is_admin_only() -> None:
+    log = load("mail_log.json")
+    keys = all_keys(log)
+    assert not any(w in k for k in keys for w in ("password", "secret", "host", "user", "body", "text")), keys
+    assert {e["status"] for e in log["entries"]} == set(s.MAIL_STATUSES)
+    assert all(e["error"] is None or re.fullmatch(r"[a-z_]{1,40}", e["error"]) for e in log["entries"])
+    with pytest.raises(ValidationError):
+        s.MailLogEntry.model_validate({**log["entries"][0], "error": "535 5.7.8 Username and Password not accepted"})
+    with pytest.raises(ValidationError):
+        s.MailLogEntry.model_validate({**log["entries"][0], "event": "newsletter"})
+    assert "email" not in s.InternPublic.model_fields and "email" in s.InternOut.model_fields
+    assert load("intern.json")["email"] and load("intern_detail.json")["intern"]["email"] is None
+    req = load("intern_create_request.json")
+    assert s.InternCreate.model_validate({**req, "email": ""}).email is None
+    for bad in ("not-an-email", "a b@example.com", "a@example.com\nBcc: x@example.com", "x@" + "e" * 260 + ".com"):
+        with pytest.raises(ValidationError):
+            s.InternCreate.model_validate({**req, "email": bad})
+    assert s.InternPatch.model_validate({"email": None}).changes() == {"email": None}
+    ts = TYPES_TS.read_text(encoding="utf-8")
+    for name in ("export interface MailLogEntry", "export interface MailLogResponse", "export interface MailTestResponse",
+                 "email: string | null", "email?: string | null"):
+        assert name in ts, name
+    assert "6j. Email notifications" in CONTRACT_MD.read_text(encoding="utf-8")

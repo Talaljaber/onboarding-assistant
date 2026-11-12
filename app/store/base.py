@@ -2,8 +2,8 @@
 
 What it does: defines the `Store` interface the server uses for KB rows + history, interns (added by
 the admin), their profiles, progress, practice attempts, turn logs, the admin's per-intern records and
-mentor requests (P13.2) with their comments and files (P15), plus pure helpers that validate and shape
-records before any store writes them.
+mentor requests (P13.2) with their comments and files (P15), intern emails and the mail log (P18.2), plus
+pure helpers that validate and shape records before any store writes them.
 What it must never do: touch the network or a database, accept chat/answer text for a turn log,
 or accept an alias shaped like an email or a phone number.
 """
@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
 
 from app.logging_setup import log_event
+from app.schemas import EMAIL_MAX, EMAIL_RE  # P18.2
 
 StoreName = Literal["supabase", "local"]
 
@@ -240,6 +241,26 @@ class Store(Protocol):
 
     def request_file(self, request_id: str, file_id: str) -> dict[str, Any] | None:
         """One file of the request: its record plus `data` (the bytes); {} when unknown; None on failure."""
+        ...
+
+    # Email notifications (P18.2) -----------------------------------------------------------------------
+    # Same failure rule as the requests tables (None -> unavailable, never flips the store).
+
+    def intern_email(self, intern_id: str) -> str | None:
+        """The intern's email (None when unset, unknown or unavailable)."""
+        ...
+
+    def set_intern_email(self, intern_id: str, email: str | None) -> bool | None:
+        """Set or clear (None) the intern's email. True when saved, False when the intern is unknown or the
+        address is invalid, None on failure."""
+        ...
+
+    def mail_log_add(self, record: dict[str, Any]) -> bool:
+        """Store one mail log row (validated with `mail_record`). False when invalid or on failure."""
+        ...
+
+    def mail_log(self, limit: int = 50) -> list[dict[str, Any]] | None:
+        """The newest `limit` mail log rows (MAIL_COLUMNS), newest first; None when unavailable."""
         ...
 
     def close(self) -> None: ...
@@ -792,3 +813,51 @@ def comment_input(
             return None
         clean.append(f)
     return c, clean
+
+
+# Email notifications (P18.2) -------------------------------------------------------------------------------
+# `interns.email` (admin-entered, optional) and `mail_log` (one row per email sent, failed or skipped) come with
+# migration 0007. Like the requests tables they never flip the store: None means "not available now".
+
+MAIL_COLUMNS = ("id", "event", "to_addr", "subject", "status", "error", "created_at")
+MAIL_EVENTS = frozenset({"request_created", "admin_comment", "intern_comment", "request_done", "question_submitted",
+                         "question_answered", "test"})
+MAIL_STATUSES = frozenset({"sent", "failed", "skipped"})
+MAIL_SUBJECT_MAX = 200
+_MAIL_ERROR_RE = re.compile(r"^[a-z_]{1,40}$")
+
+
+def clean_email(value: object) -> str | None:
+    """The stored form of an intern email (trimmed), or None when it is not one valid address."""
+    if not isinstance(value, str):
+        return None
+    v = value.strip()
+    return v if len(v) <= EMAIL_MAX and EMAIL_RE.fullmatch(v) else None
+
+
+def mail_record(rec: object) -> dict[str, Any] | None:
+    """A new mail log row (exactly MAIL_COLUMNS; id and time filled in), or None when invalid."""
+    if not isinstance(rec, dict):
+        return None
+    out = {k: rec.get(k) for k in MAIL_COLUMNS}
+    out["id"] = valid_uuid(out["id"]) or str(uuid.uuid4())
+    to = out["to_addr"] if out["to_addr"] is not None else ""
+    if out["event"] not in MAIL_EVENTS or out["status"] not in MAIL_STATUSES:
+        return None
+    if to != "" and clean_email(to) != to:
+        return None
+    subject = out["subject"]
+    if not isinstance(subject, str) or not 1 <= len(subject) <= MAIL_SUBJECT_MAX or "\n" in subject or "\r" in subject:
+        return None
+    if out["error"] is not None and not (isinstance(out["error"], str) and _MAIL_ERROR_RE.match(out["error"])):
+        return None
+    out["to_addr"] = to
+    out["created_at"] = out["created_at"] if isinstance(out["created_at"], str) and out["created_at"] else now_iso()
+    return out
+
+
+def mail_row(r: dict[str, Any]) -> dict[str, Any]:
+    out = {k: r.get(k) for k in MAIL_COLUMNS}
+    out["id"] = str(out["id"])
+    out["to_addr"] = out["to_addr"] or ""
+    return out

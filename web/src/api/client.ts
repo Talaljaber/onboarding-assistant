@@ -462,3 +462,15 @@ export async function downloadRequestFile(path: string, filename: string, admin:
   }
   return { ok: true, value: true };
 }
+
+// ---------------------------------------------------------------- email notifications (P18.2, admin only)
+
+import { isMailLogResponse, isMailTestResponse, type MailLogResponse, type MailTestResponse } from "./types";
+
+/** The last 50 emails the server sent, failed to send or skipped. */
+export const getMailLog = (signal?: AbortSignal) =>
+  request<MailLogResponse>("/api/admin/mail/log", { guard: isMailLogResponse, signal, admin: true });
+
+/** A test email to ADMIN_EMAIL, sent in the background (the result appears in the log). */
+export const sendTestMail = (signal?: AbortSignal) =>
+  request<MailTestResponse>("/api/admin/mail/test", { method: "POST", body: {}, guard: isMailTestResponse, signal, admin: true });

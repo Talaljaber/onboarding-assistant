@@ -14,6 +14,7 @@ from pydantic import Field, SecretStr, ValidationError, field_validator, model_v
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.errors import StartupError
+from app.schemas import EMAIL_MAX, EMAIL_RE  # P18.2
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -86,6 +87,16 @@ class Settings(BaseSettings):
     supabase_secret_key: SecretStr | None = None
     database_url: SecretStr | None = None
 
+    # P18.2 email notifications (Gmail SMTP with an app password, STARTTLS). Unset user or password = no
+    # email is sent (each event is recorded as `skipped`). MAIL_FROM defaults to SMTP_USER; ADMIN_EMAIL
+    # receives the intern-side events and the admin's test email.
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_user: str | None = None
+    smtp_password: SecretStr | None = None
+    mail_from: str | None = None
+    admin_email: str | None = None
+
     @field_validator("llm_model")
     @classmethod
     def _model(cls, v: str) -> str:
@@ -99,6 +110,33 @@ class Settings(BaseSettings):
             return SecretStr(DEMO_ADMIN_PASSWORD)  # empty in .env = the demo default
         if isinstance(raw, str) and not 4 <= len(raw.strip()) <= 64:
             raise ValueError("use 4 to 64 characters")
+        return v
+
+    @field_validator("smtp_host")
+    @classmethod
+    def _smtp_host(cls, v: str) -> str:
+        host = (v or "").strip()
+        if not host:
+            return "smtp.gmail.com"  # empty in .env = the Gmail default
+        if not re.fullmatch(r"[A-Za-z0-9.-]{1,253}", host):
+            raise ValueError("use a host name such as smtp.gmail.com")
+        return host
+
+    @field_validator("smtp_user", "mail_from", "admin_email", mode="before")
+    @classmethod
+    def _email_setting(cls, v: object) -> object:
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return None  # empty in .env = not set
+        if isinstance(v, str) and (len(v.strip()) > EMAIL_MAX or not EMAIL_RE.fullmatch(v.strip())):
+            raise ValueError("use an email address such as name@gmail.com")
+        return v.strip() if isinstance(v, str) else v
+
+    @field_validator("smtp_password", mode="before")
+    @classmethod
+    def _smtp_password(cls, v: object) -> object:
+        raw = v.get_secret_value() if isinstance(v, SecretStr) else v
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            return None  # empty in .env = not set
         return v
 
     @field_validator("log_level")
