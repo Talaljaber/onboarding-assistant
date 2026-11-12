@@ -132,6 +132,7 @@ from app.schemas import (  # P20
     QuizSetList,
     QuizSetPatch,
 )
+from app.schemas import FINAL_REPORT_NOTE_AR, CheckpointMyResult, FinalReport  # P21.2 final report
 
 KB_LOCK_WAIT_S = 2.0
 PROBE_MIN_INTERVAL_S = 10.0  # `/api/health?probe=1` re-probes the LLM at most this often
@@ -817,10 +818,38 @@ def build_router() -> APIRouter:
 
         extra = _request_stamps(store, str(intern["id"])).get(str(intern["id"]), [])
         tasks = requests_view.task_summary(store.mentor_requests(intern_id=str(intern["id"])), datetime.now(UTC))  # P21.1
+        asked = store.mentor_questions(intern_id=str(intern["id"]))  # P21.2: questions sent (None: unavailable)
         detail = interns_view.detail(intern, profiles, act, agent.features.plan, scenario_value, kb_topic, extra,
-                                     tasks)
+                                     tasks, None if asked is None else len(asked))
         detail.checkpoints = intern_checkpoints(store, intern)  # P20: checkpoint quizzes only (D-P20-checkpoint)
         return _json(detail)
+
+    @r.get("/admin/report", dependencies=ADMIN_ONLY)
+    def admin_report(request: Request, track: Role | None = None) -> JSONResponse:
+        """P21.2: the final report, every ACTIVE intern side by side (optionally one track). Evidence only: no
+        ranking, no composite score, no "best" label; the mentor compares and decides."""
+        store = _store(request)
+        plan = _agent(request).features.plan
+        interns = [i for i in (store.list_interns() or []) if i["active"] and (track is None or i["role"] == track)]
+        profiles = store.intern_profiles()
+        act = store.activity([str(p["id"]) for p in profiles])
+        stamps = _request_stamps(store)
+        reqs = store.mentor_requests()
+        now = datetime.now(UTC)
+        questions = store.mentor_questions()
+        ctx = _checkpoint_context(store)
+        rows = []
+        for i in interns:
+            iid = str(i["id"])
+            mine = [p for p in profiles if str(p.get("intern_id")) == iid]
+            tasks = requests_view.task_summary(None if reqs is None else
+                                               [q for q in reqs if str(q.get("intern_id")) == iid], now)
+            sent = None if questions is None else sum(1 for q in questions if str(q.get("intern_id")) == iid)
+            rows.append(interns_view.report_row(i, mine, _group(act, {str(p["id"]) for p in mine}), plan,
+                                                stamps.get(iid, []), tasks, intern_checkpoints(store, i, ctx), sent))
+        log_event("final_report", request_id=_rid(request), interns=len(rows), track=track)
+        return _json(FinalReport(generated_at=interns_view.iso(now.isoformat()), interns=rows,
+                                 label_ar=FINAL_REPORT_NOTE_AR))
 
     # -------------------------------------------------------------------------- mentor requests (P13.2)
     @r.get("/requests")
@@ -1268,19 +1297,30 @@ def check_set_answer(request: Request, item_id: str, option: str, profile_id: st
                       explanation_row=row).to_schema()
 
 
-def intern_checkpoints(store: Any, intern: dict[str, Any]) -> list[DetailCheckpoint]:
-    """D-P20-checkpoint: this intern's CHECKPOINT sets (published for them, or answered by them), first answers
-    only. Practice sets and the official quiz never appear. [] when the quiz tables are unavailable."""
+#: (checkpoint sets newest first, item ids per set, first answer per (intern, item)) — read once per request.
+CheckpointContext = tuple[list[dict[str, Any]], dict[str, list[str]], dict[tuple[str, str], tuple[bool, datetime]]]
+
+
+def _checkpoint_context(store: Any, intern_id: str | None = None) -> CheckpointContext:
+    """Every CHECKPOINT set, its item ids and the first answers of active interns (of one intern when given).
+    Empty when there are none or the quiz tables are unavailable."""
     sets = [s for s in (store.quiz_sets() or []) if s.get("mode") == "checkpoint"]
     if not sets:
-        return []
+        return [], {}, {}
     items = store.quiz_items(set_ids=[s["id"] for s in sets]) or []
     by_set: dict[str, list[str]] = {}
     for i in items:
         by_set.setdefault(i["set_id"], []).append(i["id"])
+    answers = (store.quiz_answers([i["id"] for i in items]) or []) if items else []
+    return sets, by_set, quiz_sets.first_answers(answers, _intern_of(store, intern_id))
+
+
+def intern_checkpoints(store: Any, intern: dict[str, Any], ctx: CheckpointContext | None = None) -> list[DetailCheckpoint]:
+    """D-P20-checkpoint: this intern's CHECKPOINT sets (published for them, or answered by them), first answers
+    only. Practice sets and the official quiz never appear. [] when the quiz tables are unavailable. `ctx`: read
+    once for many interns (the final report)."""
     iid = str(intern["id"])
-    mine = _intern_of(store, iid)
-    first = quiz_sets.first_answers(store.quiz_answers([i["id"] for i in items]) or [] if items else [], mine)
+    sets, by_set, first = ctx if ctx is not None else _checkpoint_context(store, iid)
     out = []
     for s in reversed(sets):  # oldest first
         ids = by_set.get(s["id"], [])
@@ -1289,6 +1329,23 @@ def intern_checkpoints(store: Any, intern: dict[str, Any]) -> list[DetailCheckpo
             out.append(DetailCheckpoint(set_id=s["id"], title_ar=s["title_ar"], title_en=s.get("title_en"),
                                         answered=answered, first_attempt_right=right, total=len(ids),
                                         finished_at=finished))
+    return out
+
+
+def _my_checkpoint_results(store: Any, intern: dict[str, Any], visible: list[dict[str, Any]]
+                           ) -> dict[str, CheckpointMyResult]:
+    """P21.2: the signed-in intern's own shared result per visible CHECKPOINT set, with the admin's rule (first
+    answer per question over all the set's items; later answers never change it). Practice sets get none."""
+    ids = {s["id"] for s in visible if s.get("mode") == "checkpoint"}
+    if not ids:
+        return {}
+    sets, by_set, first = _checkpoint_context(store, str(intern["id"]))
+    out = {}
+    for s in sets:
+        if s["id"] in ids:
+            answered, right, _ = quiz_sets.checkpoint_counts(str(intern["id"]), by_set.get(s["id"], []), first)
+            out[s["id"]] = CheckpointMyResult(answered=answered, first_attempt_right=right,
+                                              total=len(by_set.get(s["id"], [])))
     return out
 
 
@@ -1484,10 +1541,11 @@ def add_quiz_set_routes(r: APIRouter) -> None:
             items = (store.quiz_items(set_ids=[s["id"] for s in visible]) or []) if visible else []
             items = _answerable(request, items)
             percent = _percent(request, store, profile_id, prof)
+            mine = _my_checkpoint_results(store, intern, visible)  # P21.2
             for s in visible:
                 count = sum(1 for i in items if i["set_id"] == s["id"])
                 if count:
-                    out.append(quiz_sets.set_summary(s, count, percent))
+                    out.append(quiz_sets.set_summary(s, count, percent, mine.get(s["id"])))
         return _json(QuizSetList(sets=out))
 
     @r.get("/quiz-sets/{set_id}")

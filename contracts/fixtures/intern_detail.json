@@ -249,5 +249,7 @@
     "done_late": 1,
     "overdue": 0,
     "open": 2
-  }
+  },
+  "started_at": "2026-11-10T09:02:00.000+00:00",
+  "questions_sent": 1
 }

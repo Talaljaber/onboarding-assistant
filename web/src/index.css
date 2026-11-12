@@ -123,7 +123,11 @@ h1, h2, h3, h4 {
   }
 }
 
-/* Print: hide the shell, black on white (Day 90 summary). */
+/* Print: hide the shell, black on white (Day 90 summary, P21.2 intern report on A4). */
+@page {
+  size: A4;
+  margin: 14mm 12mm;
+}
 @media print {
   [data-shell], [data-toast-region], [data-composer], [role="dialog"], [data-dialog-overlay] {
     display: none !important;

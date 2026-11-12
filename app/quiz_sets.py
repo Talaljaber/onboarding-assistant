@@ -229,10 +229,14 @@ def official_summary(item_count: int) -> schemas.QuizSetSummary:
                                   opens_at_percent=0, open=True, official=True, mode="practice")
 
 
-def set_summary(rec: Mapping[str, Any], item_count: int, percent: int) -> schemas.QuizSetSummary:
+def set_summary(rec: Mapping[str, Any], item_count: int, percent: int,
+                my_result: schemas.CheckpointMyResult | None = None) -> schemas.QuizSetSummary:
+    """`my_result` (P21.2): the intern's own shared result, kept only for a checkpoint set."""
+    mode: schemas.QuizMode = "checkpoint" if rec.get("mode") == "checkpoint" else "practice"
     return schemas.QuizSetSummary(id=rec["id"], title_ar=rec["title_ar"], title_en=rec.get("title_en"),
                                   item_count=item_count, opens_at_percent=int(rec.get("opens_at_percent") or 0),
-                                  open=is_open(rec, percent), official=False, mode=rec.get("mode") or "practice")
+                                  open=is_open(rec, percent), official=False, mode=mode,
+                                  my_result=my_result if mode == "checkpoint" else None)
 
 
 # ------------------------------------------------------------------ attempts: first answers, signals, checkpoints

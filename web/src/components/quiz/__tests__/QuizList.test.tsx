@@ -146,16 +146,57 @@ describe("taking an assigned set", () => {
     expect(screen.getByText("هذه المحاولة للتدرّب: النتيجة المُشارَكة هي إجاباتك الأولى.")).toBeInTheDocument();
   });
 
-  it("a checkpoint answered in an earlier visit is not taken for the first attempt: no shared number is claimed", async () => {
-    localStorage.setItem(`dada.v1.checkpoint.${PID}.${SET.id}`, "1");
-    stubApi({ "/api/quiz-sets": sets(openSet("checkpoint")), "/api/quiz/check": () => json(quizCheckSet) });
+  it("a checkpoint answered in an earlier visit (the server's my_result): no notice, the shared result is the server's", async () => {
+    const mine = { answered: 3, first_attempt_right: 2, total: 3 };
+    stubApi({
+      "/api/quiz-sets": sets({ sets: [quizSets.sets[0], { ...SET, open: true, mode: "checkpoint", my_result: mine }] }),
+      "/api/quiz/check": () => json(quizCheckSet),
+    });
+    renderScreen(<QuizRunner setId={SET.id} />, { data: { profile_id: PID } });
+    // every question already has its first answer: straight to the questions (a practice run)
+    expect(await screen.findByText(items[0]!.question_ar)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ابدأ" })).toBeNull();
+    await answerAll(3);
+    expect(await screen.findByText("3 من 3 صحيحة (تدريب)")).toBeInTheDocument();
+    expect(screen.getByText("هذه المحاولة للتدرّب: النتيجة المُشارَكة هي إجاباتك الأولى.")).toBeInTheDocument();
+    // the same number the mentor sees (first answers), not this run's 3 / 3
+    expect(document.querySelector("[data-shared-result]")).toHaveTextContent("نتيجتك المُشارَكة مع مشرفك: 2 / 3");
+    // P21.2: nothing is kept in this browser any more
+    expect(Object.keys(localStorage).filter((k) => k.startsWith("dada.v1.checkpoint"))).toEqual([]);
+  });
+
+  it("a checkpoint started in an earlier visit keeps the notice; this run is practice and claims no number of its own", async () => {
+    const mine = { answered: 1, first_attempt_right: 0, total: 3 };
+    stubApi({
+      "/api/quiz-sets": sets({ sets: [quizSets.sets[0], { ...SET, open: true, mode: "checkpoint", my_result: mine }] }),
+      "/api/quiz/check": () => json(quizCheckSet),
+    });
     renderScreen(<QuizRunner setId={SET.id} />, { data: { profile_id: PID } });
     await userEvent.click(await screen.findByRole("button", { name: "ابدأ" }));
     await answerAll(3);
     expect(await screen.findByText("3 من 3 صحيحة (تدريب)")).toBeInTheDocument();
     expect(screen.getByText("هذه المحاولة للتدرّب: النتيجة المُشارَكة هي إجاباتك الأولى.")).toBeInTheDocument();
-    expect(document.querySelector("[data-shared-result]")).toBeNull();
-    localStorage.removeItem(`dada.v1.checkpoint.${PID}.${SET.id}`);
+    expect(document.querySelector("[data-shared-result]")).toHaveTextContent("0 / 3");
+  });
+
+  it("a first attempt shows the server's shared result once it is in (re-read after finishing)", async () => {
+    let calls = 0;
+    const list = () => {
+      calls += 1;
+      const mine = calls === 1 ? { answered: 0, first_attempt_right: 0, total: 3 } : { answered: 3, first_attempt_right: 2, total: 3 };
+      return json({ sets: [quizSets.sets[0], { ...SET, open: true, mode: "checkpoint", my_result: mine }] });
+    };
+    let n = 0;
+    stubApi({
+      "/api/quiz-sets": (url) => (url.startsWith("/api/quiz-sets?") || url === "/api/quiz-sets" ? list() : json(setQuiz)),
+      "/api/quiz/check": () => json(n++ === 1 ? { ...quizCheckSet, correct: false } : quizCheckSet),
+    });
+    renderScreen(<QuizRunner setId={SET.id} />, { data: { profile_id: PID } });
+    await userEvent.click(await screen.findByRole("button", { name: "ابدأ" }));
+    await answerAll(3);
+    await waitFor(() => expect(document.querySelector("[data-shared-result]")).toHaveTextContent("نتيجتك المُشارَكة مع مشرفك: 2 / 3"));
+    expect(calls).toBe(2);
+    expect(screen.getByText("إعادة المحاولة للتدرّب فقط ولا تغيّر النتيجة المُشارَكة.")).toBeInTheDocument();
   });
 
   it("after a wrong answer «اسأل مشرفي عن هذا» opens the sheet with the question and its K-id, sent as source quiz", async () => {

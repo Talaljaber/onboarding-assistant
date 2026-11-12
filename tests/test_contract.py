@@ -150,6 +150,8 @@ FIXTURES: dict[str, type[BaseModel]] = {
     # P20 checkpoint quizzes (D-P20-checkpoint)
     "checkpoint_results.json": s.CheckpointResults,
     "error_400_quiz_mode.json": s.ErrorBody,
+    # P21.2 final report
+    "final_report.json": s.FinalReport,
 }
 
 # One response fixture per endpoint (the request fixtures are listed in FIXTURES above).
@@ -219,6 +221,7 @@ ENDPOINT_FIXTURES = {
     "GET /api/quiz-sets": "quiz_sets.json",
     "GET /api/quiz-sets/{id}": "quiz_set.json",
     "GET /api/admin/quiz-sets/{id}/results": "checkpoint_results.json",  # D-P20-checkpoint
+    "GET /api/admin/report": "final_report.json",  # P21.2
 }
 
 REQUEST_MODELS: dict[type[BaseModel], str] = {
@@ -371,23 +374,32 @@ def test_quiz_get_never_has_the_correct_option() -> None:
 
 #: D-P20-checkpoint: owner-approved; shared only for checkpoint quizzes the intern was told about; first attempt
 #: only; practice results never shared. The ONLY correctness key an admin shape may carry, and only in
-#: `CheckpointResult` (GET /api/admin/quiz-sets/{id}/results) and the intern detail's `checkpoints` entries.
+#: `CheckpointResult` (GET /api/admin/quiz-sets/{id}/results), the intern detail's `checkpoints` entries and (P21.2)
+#: the final report rows' `checkpoints` entries (the same `DetailCheckpoint` shape).
 CHECKPOINT_ALLOWED = frozenset({"first_attempt_right"})
 CHECKPOINT_MODELS = (s.CheckpointResult, s.CheckpointResults, s.DetailCheckpoint)
 
 
 def test_admin_intern_views_have_no_correctness_or_score() -> None:
     banned = re.compile(r"correct|score|grade|accuracy|rating|right|wrong")
+    # P21.2: the final report adds no ranking either (no rank, position, best, top, overall or composite score).
+    ranking = re.compile(r"rank|position|best|^top(_|$)|overall|composite|percentile|winner")
     models = (s.InternSummary, s.InternDetail, s.DetailProgress, s.DetailScenario, s.DetailQuiz, s.DetailQuizDay,
-              s.DetailChat, s.TimelineEvent)
+              s.DetailChat, s.TimelineEvent, s.FinalReport, s.FinalReportRow, s.TaskSummary)
     detail = load("intern_detail.json")
+    report = load("final_report.json")
+    report_rows = [{k: v for k, v in r.items() if k != "checkpoints"} for r in report["interns"]]
     keys = all_keys(load("admin_interns.json")) | all_keys({k: v for k, v in detail.items() if k != "checkpoints"})
-    keys |= {f for m in models for f in m.model_fields}
+    keys |= all_keys({**report, "interns": report_rows})
+    keys |= {f for m in models for f in m.model_fields if f != "checkpoints"}
     assert not [k for k in keys if banned.search(k)]
+    assert not [k for k in keys if ranking.search(k)]
     # The checkpoint shapes: nothing banned except the allow-listed first-attempt count (D-P20-checkpoint).
     cp_keys = {f for m in CHECKPOINT_MODELS for f in m.model_fields}
     cp_keys |= all_keys(detail["checkpoints"]) | all_keys(load("checkpoint_results.json"))
+    cp_keys |= all_keys([r["checkpoints"] for r in report["interns"]])
     assert {k for k in cp_keys if banned.search(k)} == CHECKPOINT_ALLOWED
+    assert s.FinalReportRow.model_fields["checkpoints"].annotation == list[s.DetailCheckpoint]
     # P20: the admin's practice-quiz shapes. `AdminQuizItem.correct_option` is the item's own answer (metadata the
     # admin wrote), not anyone's result; signals are anonymous cohort shares, never per intern.
     quiz_models = (s.AdminQuizSet, s.AdminOfficialQuiz, s.AdminQuizSetList, s.AdminQuizSetDetail, s.QuizImportResult,
@@ -1014,3 +1026,41 @@ def test_task_deadlines_contract() -> None:
                    "due_at?: string | null"):
         assert needle in ts, needle
     assert "Task deadlines and reminders (P21.1)" in CONTRACT_MD.read_text(encoding="utf-8")
+
+
+# ------------------------------------------------------------------ P21.2 final report
+
+
+def test_final_report_contract() -> None:
+    """P21.2: every active intern side by side; counts, dates, task timings and checkpoint first answers only. The
+    rows come in roster order (no ranking); the fixed note says the mentor decides; the intern detail carries what
+    the printable page needs; the intern's own checkpoint result exists only for checkpoint sets."""
+    report = load("final_report.json")
+    assert report["label_ar"] == s.FINAL_REPORT_NOTE_AR
+    assert "القرار لك" in s.FINAL_REPORT_NOTE_AR and "لا يرتّب" in s.FINAL_REPORT_NOTE_AR
+    for r in report["interns"]:
+        assert r["activities_done"] <= r["activities_total"]
+        t = r["tasks"]
+        assert t["total"] == t["done"] + t["open"] + t["overdue"]
+        for cp in r["checkpoints"]:
+            assert cp["first_attempt_right"] <= cp["answered"] <= cp["total"]
+    detail = load("intern_detail.json")
+    assert detail["started_at"] and detail["questions_sent"] is not None
+    with pytest.raises(ValidationError):
+        s.FinalReportRow.model_validate({**report["interns"][0], "rank": 1})
+    # my_result: the intern's own shared result, checkpoint sets only (never practice or the official quiz).
+    sets = load("quiz_sets.json")["sets"]
+    assert sets[0]["my_result"] is None and sets[1]["mode"] == "checkpoint" and sets[1]["my_result"] is not None
+    with pytest.raises(ValidationError):
+        s.QuizSetSummary.model_validate({**sets[0], "my_result": {"answered": 1, "first_attempt_right": 1, "total": 5}})
+    with pytest.raises(ValidationError):
+        s.QuizSetSummary.model_validate({**sets[1], "mode": "practice"})
+    with pytest.raises(ValidationError):
+        s.CheckpointMyResult.model_validate({"answered": 2, "first_attempt_right": 3, "total": 3})
+    ts = TYPES_TS.read_text(encoding="utf-8")
+    for needle in ("export interface FinalReport", "export interface FinalReportRow", "export function isFinalReport",
+                   "questions_sent_to_mentor", "my_result?: CheckpointMyResult | null", "questions_sent?: number | null",
+                   "started_at?: string"):
+        assert needle in ts, needle
+    doc = CONTRACT_MD.read_text(encoding="utf-8")
+    assert "Final report (P21.2" in doc and "GET /api/admin/report" in doc

@@ -293,3 +293,23 @@ invented a contact. The earlier held-out 1 run, before the panel, gave offline 2
   follow-up, not an employment evaluation (the real probation review in K14 belongs to HR).
 - An intern sees only the published sets for them (everyone, their track or chosen interns), opening when their
   suggested-plan progress reaches the set's level; the correct option is never sent before they answer.
+- **The intern sees their own shared result (P21.2).** For a checkpoint set the intern's quiz list carries their own
+  first-answer result (`my_result`), computed with the same rule as the admin's, so the intern sees exactly what the
+  mentor sees. Nobody else's result is sent to an intern, and nothing about it is kept in the browser any more.
+
+## 9. The final report (P21.2)
+
+- **What it shows the admin.** One row per active intern (and a printable page per intern): suggested-plan
+  completion (and the date of each activity), the mentor's tasks with their deadline, done time and timing (on
+  time · late · overdue · open, from P21.1), each **checkpoint** quiz's first-answer result (D-P20-checkpoint),
+  scenarios practised, practice questions answered (a count, never right or wrong), questions the intern sent to the
+  mentor (a count) and the last activity. Practice-quiz and official-quiz correctness never appear; chat text never
+  appears (counts come from turn logs that hold ids only).
+- **No ranking.** The system does not rank interns, compute a composite or overall score, or label anyone "best".
+  The rows keep the list order; the admin may sort a column themselves. Both report screens show the fixed note
+  «تجمع هذه الصفحة الأدلة لمساعدتك على المقارنة؛ القرار لك. لا يرتّب النظام المتدربين ولا يحسب درجة إجمالية.»
+  The decision about interns is the mentor's, made with their own judgment (the printable page has an empty
+  «ملاحظات المشرف» box for it).
+- **No new storage.** The report is read from what is already stored (plan ticks, quiz attempts, scenario practice,
+  turn logs, mentor requests, questions inbox). Nothing in it reaches the assistant or a model. The interns are
+  fictional demo personas and the tracks, scenarios and plan are fictional competition examples.

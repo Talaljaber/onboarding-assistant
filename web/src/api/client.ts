@@ -653,3 +653,11 @@ export const getCheckpointResults = (setId: string, signal?: AbortSignal) =>
     signal,
     admin: true,
   });
+
+// ---- final report (P21.2, admin only): evidence side by side, no ranking
+
+import { isFinalReport, type FinalReport } from "./types";
+
+/** Every active intern's evidence (optionally one track). */
+export const getFinalReport = (track?: Role | null, signal?: AbortSignal) =>
+  request<FinalReport>(`/api/admin/report${track ? `?track=${q(track)}` : ""}`, { guard: isFinalReport, signal, admin: true });

@@ -1,8 +1,8 @@
 """Interns: the startup seed and the admin's per-intern views (list rows and the detail page).
 
 What it does: `SEED` holds the four fictional demo interns inserted when the interns table is empty;
-`summary_row` and `detail` turn an intern, their profiles (one per track) and the timestamped records of
-those profiles (`Store.activity`) into the admin's list row and detail page.
+`summary_row`, `detail` and `report_row` turn an intern, their profiles (one per track) and the timestamped
+records of those profiles (`Store.activity`) into the admin's list row, detail page and final-report row (P21.2).
 What it must never do: hold a real person's name or contact (the organizer forbids real data: the seed
 is invented personas), show quiz correctness or any score, or read chat text (turn logs hold ids and
 labels only). Answer, agent, LLM and prompt code never import this module: a name never reaches them.
@@ -52,6 +52,17 @@ def _last(values: Iterable[object]) -> str | None:
     return max(stamps).astimezone(UTC).isoformat(timespec="milliseconds") if stamps else None
 
 
+def _first(values: Iterable[object]) -> str | None:
+    stamps = [d for d in (_ts(v) for v in values) if d is not None]
+    return min(stamps).astimezone(UTC).isoformat(timespec="milliseconds") if stamps else None
+
+
+def started_at(intern: dict[str, Any], act: dict[str, list[dict[str, Any]]]) -> str:
+    """P21.2: the intern's first recorded activity (plan tick, quiz answer, scenario, chat turn), else the day the
+    admin added them."""
+    return _first(_stamps(act)) or iso(intern["created_at"])
+
+
 def _stamps(act: dict[str, list[dict[str, Any]]]) -> list[object]:
     return ([r.get("completed_at") for r in act["progress"]] + [r.get("at") for r in act["quiz"]]
             + [r.get("at") for r in act["scenarios"]] + [r.get("at") for r in act["turns"]])
@@ -96,7 +107,7 @@ def summary_row(intern: dict[str, Any], profiles: list[dict[str, Any]], act: dic
 def detail(intern: dict[str, Any], profiles: list[dict[str, Any]], act: dict[str, list[dict[str, Any]]],
            plan: PlanBook, scenario_value: Callable[[str], str | None],
            kb_topic: Callable[[str], str | None], extra: Iterable[object] = (),
-           tasks: schemas.TaskSummary | None = None) -> schemas.InternDetail:
+           tasks: schemas.TaskSummary | None = None, questions_sent: int | None = None) -> schemas.InternDetail:
     role = intern["role"]
     roles = {str(p["id"]): str(p["role"]) for p in profiles}
     current = _current_ids(profiles, role)
@@ -168,6 +179,22 @@ def detail(intern: dict[str, Any], profiles: list[dict[str, Any]], act: dict[str
         scenarios=scenarios, quiz=quiz, chat=chat, timeline=events[:TIMELINE_MAX],
         label_ar=schemas.INTERNS_LABEL_AR,
         tasks=tasks,  # P21.1: mentor requests by deadline outcome (counts only)
+        started_at=started_at(intern, act), questions_sent=questions_sent,  # P21.2: the printable report
+    )
+
+
+def report_row(intern: dict[str, Any], profiles: list[dict[str, Any]], act: dict[str, list[dict[str, Any]]],
+               plan: PlanBook, extra: Iterable[object], tasks: schemas.TaskSummary | None,
+               checkpoints: list[schemas.DetailCheckpoint], questions_sent: int | None) -> schemas.FinalReportRow:
+    """P21.2: one intern of the final report, from the same counts as the interns list (`summary_row`). Evidence
+    only: no ranking, no composite score; practice and official-quiz correctness never appear."""
+    row = summary_row(intern, profiles, act, plan, extra)
+    return schemas.FinalReportRow(
+        intern_id=intern["id"], name_ar=intern["name_ar"], name_en=intern.get("name_en"), track=intern["role"],
+        started_at=started_at(intern, act), plan_percent=row.percent, activities_done=row.activities_done,
+        activities_total=row.activities_total, tasks=tasks, checkpoints=checkpoints,
+        scenarios_practised=row.scenarios_practised, quiz_questions_answered=row.quiz_attempts,
+        questions_sent_to_mentor=questions_sent, last_active=row.last_active,
     )
 
 
@@ -187,4 +214,5 @@ def request_stamps(requests: Iterable[dict[str, Any]],
     return out
 
 
-__all__ = ["QUESTION_TOOLS", "SEED", "detail", "iso", "out", "public", "request_stamps", "summary_row"]
+__all__ = ["QUESTION_TOOLS", "SEED", "detail", "iso", "out", "public", "report_row", "request_stamps", "started_at",
+           "summary_row"]

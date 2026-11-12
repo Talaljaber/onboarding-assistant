@@ -1277,6 +1277,10 @@ class InternDetail(_Model):
     checkpoints: list[DetailCheckpoint] = Field(default_factory=list)
     #: P21.1: mentor requests by deadline outcome; null when the requests cannot be read now.
     tasks: TaskSummary | None
+    #: P21.2 (the printable intern report): the first recorded activity (else the day the intern was added) and
+    #: how many questions the intern sent to the mentor (any status; null when they cannot be read now).
+    started_at: str
+    questions_sent: NonNeg | None
 
 
 # --------------------------------------------------------------------------------------
@@ -2165,6 +2169,21 @@ class QuizSignals(_Model):
     label_ar: str
 
 
+class CheckpointMyResult(_Model):
+    """P21.2 (D-P20-checkpoint): the signed-in intern's OWN shared result in a checkpoint set, with the same
+    first-answer rule as the admin's results (later answers never change it). Zeros before the first answer."""
+
+    answered: NonNeg
+    first_attempt_right: NonNeg
+    total: NonNeg
+
+    @model_validator(mode="after")
+    def _counts(self) -> CheckpointMyResult:
+        if not self.first_attempt_right <= self.answered <= self.total:
+            raise ValueError("first_attempt_right <= answered <= total")
+        return self
+
+
 class QuizSetSummary(_Model):
     """One set on the intern's Quiz screen. `open`: the intern's suggested-plan progress reached
     `opens_at_percent` (the official quiz is always open)."""
@@ -2178,6 +2197,8 @@ class QuizSetSummary(_Model):
     official: bool
     #: P20: "checkpoint" = the first answer per question is shared with the mentor (shown before starting).
     mode: QuizMode = "practice"
+    #: P21.2: the intern's own shared result; only for a checkpoint set and a signed-in intern, else null.
+    my_result: CheckpointMyResult | None = None
 
     @model_validator(mode="after")
     def _official(self) -> QuizSetSummary:
@@ -2187,6 +2208,8 @@ class QuizSetSummary(_Model):
             raise ValueError("the official quiz is always open")
         if self.official and self.mode != "practice":
             raise ValueError("the official quiz is always practice")
+        if self.my_result is not None and self.mode != "checkpoint":
+            raise ValueError("my_result is only for checkpoint sets")
         return self
 
 
@@ -2218,7 +2241,54 @@ class QuizSetList(_Model):
     sets: list[QuizSetSummary]
 
 
+# --------------------------------------------------------------------------------------
+# Final report (P21.2, admin only): the evidence per intern, side by side. No ranking, no composite score,
+# no "best" label: the system gathers the evidence and the mentor decides.
+# --------------------------------------------------------------------------------------
+
+#: The fixed note on the report screens (shown in the UI language; this is the Arabic text).
+FINAL_REPORT_NOTE_AR = "تجمع هذه الصفحة الأدلة لمساعدتك على المقارنة؛ القرار لك. لا يرتّب النظام المتدربين ولا يحسب درجة إجمالية."
+
+
+class FinalReportRow(_Model):
+    """One active intern. Counts, dates and task timings; `checkpoints` are the intern's checkpoint quizzes (first
+    answer per question only, D-P20-checkpoint). Practice and official-quiz correctness never appear."""
+
+    intern_id: InternId
+    name_ar: str
+    name_en: str | None
+    track: Role
+    #: the first recorded activity, else the day the intern was added
+    started_at: str
+    plan_percent: Percent
+    activities_done: NonNeg
+    activities_total: NonNeg
+    #: mentor requests by deadline outcome (P21.1); null when the requests cannot be read now
+    tasks: TaskSummary | None
+    checkpoints: list[DetailCheckpoint]
+    #: distinct scenarios practised
+    scenarios_practised: NonNeg
+    #: practice questions answered (every attempt, as on the interns list)
+    quiz_questions_answered: NonNeg
+    #: questions the intern sent to the mentor (any status); null when they cannot be read now
+    questions_sent_to_mentor: NonNeg | None
+    last_active: str | None
+
+
+class FinalReport(_Model):
+    """`GET /api/admin/report[?track=Sales|Delivery]`: every ACTIVE intern (roster order; the admin sorts)."""
+
+    generated_at: str
+    interns: list[FinalReportRow]
+    #: the fixed note (FINAL_REPORT_NOTE_AR)
+    label_ar: str
+
+
 __all__ = [
+    "CheckpointMyResult",
+    "FINAL_REPORT_NOTE_AR",
+    "FinalReport",
+    "FinalReportRow",
     "CHECK_CLAIMS_MAX",
     "CHECK_LABELS",
     "CHECK_LABEL_AR",

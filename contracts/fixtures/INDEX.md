@@ -83,7 +83,7 @@ row; `verify.compare_claim` label `differs`). Every other reply leaves the key o
 | `intern_create_request.json` | `POST /api/admin/interns` body (admin) | `InternCreate` |
 | `intern_patch_request.json` | `PATCH /api/admin/interns/{id}` body (admin) | `InternPatch` |
 | `intern.json` | `POST /api/admin/interns` (201), `PATCH /api/admin/interns/{id}` | `InternOut` |
-| `intern_detail.json` | `GET /api/admin/interns/{id}` (admin; Sara after ticks, chat, a scenario and quiz practice; P21.1: `tasks` counts her three requests) | `InternDetail` |
+| `intern_detail.json` | `GET /api/admin/interns/{id}` (admin; Sara after ticks, chat, a scenario and quiz practice; P21.1: `tasks` counts her three requests; P21.2: `started_at` = her first activity, `questions_sent` = questions she sent to the mentor) | `InternDetail` |
 | `admin_login_request.json` | `POST /api/admin/login` body | `AdminLogin` |
 | `admin_session.json` | `POST /api/admin/login`, `GET /api/admin/session` | `AdminSession` |
 | `health.json` | `GET /api/health` (offline, local store) | `Health` |
@@ -217,7 +217,7 @@ private reply is illustrative and is never a K-row.
 | `quiz_import_request.json` | `POST /api/admin/quiz-sets/{id}/import` body (a 4-line CSV as base64) | `QuizImportRequest` |
 | `quiz_import_result.json` | `POST /api/admin/quiz-sets/{id}/import` (line 2 added; 3: a number not in K14; 4: unknown row; 5: correct option D) | `QuizImportResult` |
 | `quiz_signals.json` | `GET /api/admin/quiz-sets/{id}/signals` (also `official`; the third question has fewer than 3 interns: null) | `QuizSignals` |
-| `quiz_sets.json` | `GET /api/quiz-sets?profile_id=` (the official quiz, then a Sales set still locked at 30 %) | `QuizSetList` |
+| `quiz_sets.json` | `GET /api/quiz-sets?profile_id=` (the official quiz, then a Sales set still locked at 30 %; P21.2: `my_result` is null for the official quiz and Sara's own zeros for the checkpoint set) | `QuizSetList` |
 | `quiz_set.json` | `GET /api/quiz-sets/{id}?profile_id=` (items without the correct option) | `QuizResponse` |
 | `quiz_check_set_request.json` | `POST /api/quiz/check` body for a set item (`M` id) | `QuizCheckRequest` |
 | `quiz_check_set.json` | `POST /api/quiz/check` for a set item (the explanation is the cited row) | `QuizCheckResponse` |
@@ -240,3 +240,12 @@ are illustrative; the cited rows are official rows verbatim. No fixture carries 
 Sales set is a checkpoint, the draft and the official quiz are practice); `intern_detail.json` carries
 `checkpoints` (Sara's result in that set). Owner-approved: shared only for checkpoint quizzes the intern was told
 about, first attempt only; practice results are never shared.
+
+### Final report (P21.2, admin only)
+
+| File | Endpoint | Model |
+|---|---|---|
+| `final_report.json` | `GET /api/admin/report` (the four active interns in roster order: Sara with a late task and a finished checkpoint; Omar with an overdue task; Layan with two tasks on time and the checkpoint not started; Yousef with nothing yet) | `FinalReport` |
+
+Counts, dates, task timings and checkpoint first answers only. No rank, no composite score, no "best" field: the
+rows keep the roster order and the admin sorts them. Names, times and counts are illustrative.
