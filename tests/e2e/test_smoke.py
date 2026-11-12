@@ -225,12 +225,19 @@ def storyboard(r: Run) -> None:
     expect(summary).to_have_count(0)
 
     # 13. quiz
+    # P20/P23: #/quiz is the list; the official quiz runs on the server and explains in the end report.
     r.go("/quiz")
+    official = page.locator('[data-quiz-card="official"]')
+    expect(official).to_be_visible()
+    official.get_by_role("link").first.click()
     q = page.locator('[data-quiz="question"]')
     expect(q).to_be_visible()
     q.get_by_role("radio").first.click()
-    page.get_by_role("button", name="تحقق").click()
-    expect(page.locator("[data-source-id]").first).to_be_visible()
+    page.get_by_role("button", name="اعتمد الإجابة").click()
+    page.get_by_role("button", name="إنهاء الاختبار").click()
+    page.get_by_role("button", name="أنهِ الاختبار").click()
+    expect(page.locator('[data-quiz="review"]')).to_be_visible()
+    expect(page.locator('[data-quiz="review"] [data-source-id]').first).to_be_visible()
     r.no_overflow("13")
     r.shot("13_quiz_explanation")
 
