@@ -112,7 +112,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
           aria-invalid={tooLong || undefined}
           aria-describedby="chat-composer-count"
           style={{ maxHeight: `${MAX_HEIGHT_REM}rem`, outline: "none" }}
-          className="min-h-10 min-w-0 flex-1 resize-none self-center bg-transparent py-2 text-base leading-6 text-fg-1 placeholder:text-fg-3"
+          className="min-h-11 min-w-0 flex-1 resize-none self-center bg-transparent py-2.5 text-base leading-6 text-fg-1 placeholder:text-fg-3"
         />
         <button
           type="submit"

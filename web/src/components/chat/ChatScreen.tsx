@@ -4,7 +4,7 @@
 // P16.5: the greeting and starters stay in view on first load (compact mentor bar, collapsed first-day card,
 // reachable later from a small header link), a recall banner when saved answers' sources changed, and the
 // Rumour Check chip first.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FocusEvent } from "react";
 import { currentPath, navigate, replace } from "@/router";
 import { useLang, useT } from "@/i18n";
 import { FirstDayCard } from "@/components/welcome/FirstDayCard";
@@ -171,6 +171,11 @@ function ChatInner() {
   // ---- P16.5 first-day card: on the empty thread (collapsed); after the first message from a header link.
   const [firstDayOpen, setFirstDayOpen] = useState(false);
 
+  // ---- P19.2: while the composer has focus on a short screen (a phone keyboard, a phone held sideways) the
+  // strip of bars above it folds away, so the dock does not cover the thread (it left ~80 px at 360 x 440).
+  const [typing, setTyping] = useState(false);
+  const onDockFocus = (e: FocusEvent) => setTyping(e.target === composerRef.current);
+
   // ---- practice mode
   const liveId = [...items]
     .reverse()
@@ -302,6 +307,9 @@ function ChatInner() {
         <div
           ref={dockRef}
           data-chat-dock
+          data-typing={typing || undefined}
+          onFocus={onDockFocus}
+          onBlur={() => setTyping(false)}
           className={cn(
             "sticky bottom-(--da-bottom-nav) z-10 -mx-4 bg-page px-4 pb-2 pt-2 sm:-mx-6 sm:px-6 md:pb-5",
             "lg:-mx-8 lg:px-8",
@@ -309,12 +317,15 @@ function ChatInner() {
         >
           {/* P17 (QA B1): the recall banner and the mentor bar sit in the dock, so a long chat that opens at its
               newest message shows them without scrolling (they used to sit above the thread, off-screen). */}
-          <div data-chat-strip className="mb-2 flex flex-wrap gap-2 empty:hidden">
+          <div
+            data-chat-strip
+            className={cn("mb-2 flex flex-wrap gap-2 empty:hidden", typing && "[@media(max-height:32rem)]:hidden")}
+          >
             {recalled.length > 0 && (
               <div
                 data-recall-banner
                 role="status"
-                className={cn(surface.amber, "flex min-h-11 min-w-0 flex-[1_1_14rem] items-center gap-2 ps-3 pe-1")}
+                className={cn(surface.amber, "flex min-h-11 min-w-0 flex-[1_1_16rem] items-center gap-2 ps-3 pe-1")}
               >
                 <Icon name="alert" size={16} className="shrink-0 text-amber-ink" />
                 <p className="min-w-0 flex-1 text-sm font-semibold text-fg-1">
@@ -342,7 +353,7 @@ function ChatInner() {
               <button
                 type="button"
                 onClick={chat.endPractice}
-                className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-md px-2 text-sm font-semibold text-accent transition-colors duration-(--da-motion-fast) hover:bg-surface-0"
+                className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-2 text-sm font-semibold text-accent transition-colors duration-(--da-motion-fast) hover:bg-surface-0"
               >
                 <Icon name="close" size={16} />
                 {t("scenario.end")}

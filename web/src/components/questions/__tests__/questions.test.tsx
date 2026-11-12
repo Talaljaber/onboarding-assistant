@@ -119,6 +119,10 @@ describe("questions inbox", () => {
     renderMessage(item(oos));
     await userEvent.click(await screen.findByRole("button", { name: ar("questions.sendIt") }));
     const sheet = await screen.findByRole("dialog");
+    // P19.2: Send and Cancel stay at the sheet's bottom edge (in view when the keyboard makes the sheet short)
+    const actions = sheet.querySelector<HTMLElement>("[data-sheet-actions]")!;
+    expect(actions).toHaveClass("sticky", "bottom-0");
+    expect(within(actions).getByRole("button", { name: ar("questions.send") })).toBeInTheDocument();
     const box = within(sheet).getByLabelText(ar("questions.textLabel"));
     await userEvent.clear(box);
     await userEvent.type(box, "رقمي 0791234567");
@@ -159,6 +163,9 @@ describe("questions inbox", () => {
     renderScreen(<MyQuestionsPanel busy={false} onReask={onReask} />, { data: { profile_id: PID } });
     const bar = await screen.findByRole("button", { expanded: false });
     expect(bar).toHaveTextContent(ar("questions.answeredTitle"));
+    // P19.2: in the dock the bar shows a chevron; «عرض الأسئلة» stays as the button's name for screen readers
+    expect(bar).toHaveAccessibleName(new RegExp(ar("questions.show")));
+    expect(bar.querySelector("[data-bar-action]")).toHaveClass("sr-only");
     await userEvent.click(bar);
     const done = document.querySelector<HTMLElement>('[data-status="answered"]')!;
     const row = answered.row;

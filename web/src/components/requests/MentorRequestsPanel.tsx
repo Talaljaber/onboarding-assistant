@@ -82,7 +82,7 @@ export function MentorRequestsPanel({ docked = false }: { docked?: boolean } = {
       className={cn(
         surface.soft,
         "flex flex-col",
-        docked ? "min-w-0 flex-[1_1_12rem]" : "mb-3",
+        docked ? "min-w-0 flex-[1_1_15rem]" : "mb-3",
         expanded && "gap-3 pb-3 sm:pb-4",
         expanded && docked && "basis-full",
       )}
@@ -97,7 +97,10 @@ export function MentorRequestsPanel({ docked = false }: { docked?: boolean } = {
           className="flex min-h-11 w-full items-center gap-2 rounded-lg ps-3 pe-2 text-start transition-colors duration-(--da-motion-fast) hover:bg-surface-0/60"
         >
           <Icon name="mail" size={16} className="shrink-0 text-accent" />
-          <span className="min-w-0 truncate">{t("mentorReq.title")}</span>
+          {/* P19.2: wraps instead of "From your …" when the dock row is shared (768 px with the recall banner) */}
+          <span data-bar-title className="min-w-0 py-2 leading-snug [overflow-wrap:anywhere]">
+            {t("mentorReq.title")}
+          </span>
           {openCount > 0 && (
             <span
               data-request-count
@@ -110,8 +113,11 @@ export function MentorRequestsPanel({ docked = false }: { docked?: boolean } = {
             </span>
           )}
           <span className="ms-auto inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-accent">
-            {/* docked on a phone: the chevron alone, so the title is not cut ("From your me…") */}
-            <span className={cn(docked && "max-sm:sr-only")}>{t(expanded ? "mentorReq.hide" : "mentorReq.show")}</span>
+            {/* docked: the chevron alone at every width (P19.2), so the title is not cut ("From your me…") when the
+                bars share a row with the recall banner; the label stays for screen readers */}
+            <span data-bar-action className={cn(docked && "sr-only")}>
+              {t(expanded ? "mentorReq.hide" : "mentorReq.show")}
+            </span>
             <Icon name="chevron-down" size={16} className={cn("shrink-0 transition-transform", expanded && "rotate-180")} />
           </span>
         </button>

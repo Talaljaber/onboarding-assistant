@@ -156,7 +156,7 @@ export function RequestThread({ req, side, profileId }: { req: MentorRequest; si
                                 onClick={() => void download(f)}
                                 aria-label={t("requestThread.download", { name: f.filename })}
                                 data-file-id={f.id}
-                                className="inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-full border border-line-strong bg-surface-0 px-3 text-sm text-fg-1 hover:border-accent sm:min-h-9"
+                                className="inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-full border border-line-strong bg-surface-0 px-3 text-sm text-fg-1 hover:border-accent lg:min-h-9"
                               >
                                 <Icon name="file" size={16} className="shrink-0 text-accent" />
                                 <span dir="auto" className="min-w-0 truncate">
@@ -210,7 +210,7 @@ export function RequestThread({ req, side, profileId }: { req: MentorRequest; si
                         setProblem(null);
                       }}
                       aria-label={t("requestThread.remove", { name: f.name })}
-                      className="grid size-11 shrink-0 place-items-center rounded-full text-fg-2 hover:bg-surface-2 sm:size-9"
+                      className="grid size-11 shrink-0 place-items-center rounded-full text-fg-2 hover:bg-surface-2 lg:size-9"
                     >
                       <Icon name="close" size={14} />
                     </button>
@@ -240,13 +240,13 @@ export function RequestThread({ req, side, profileId }: { req: MentorRequest; si
                 variant="secondary"
                 size="sm"
                 icon="upload"
-                className="max-sm:min-h-11"
+                className="max-lg:min-h-11"
                 disabled={sending || files.length >= COMMENT_LIMITS.filesMax}
                 onClick={() => fileInput.current?.click()}
               >
                 {t("requestThread.attach")}
               </Button>
-              <Button variant="accent" size="sm" icon="send" className="max-sm:min-h-11" loading={sending} onClick={() => void send()} data-testid="thread-send">
+              <Button variant="accent" size="sm" icon="send" className="max-lg:min-h-11" loading={sending} onClick={() => void send()} data-testid="thread-send">
                 {t("requestThread.send")}
               </Button>
             </div>

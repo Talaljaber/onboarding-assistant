@@ -165,6 +165,37 @@ describe("mentor bar in the dock (P17, QA B1)", () => {
     expect(dock.firstElementChild).toBe(strip);
     expect(dock.querySelector("textarea")).not.toBeNull();
   });
+
+  it("P19.2: the bars show a chevron, not a visible Show label, and fold away on short screens while typing", async () => {
+    backend([], { kb: kb("v2", K02_18) }, listFx);
+    render(
+      <Harness initial={seed(savedK02())}>
+        <ChatScreen />
+      </Harness>,
+    );
+    const bar = await waitFor(() => {
+      const el = document.querySelector<HTMLElement>("[data-mentor-requests]");
+      if (!el) throw new Error("not yet");
+      return el;
+    });
+    // the title wraps instead of being cut; the Show label is for screen readers only (it still names the button)
+    expect(bar.querySelector("[data-bar-title]")).not.toHaveClass("truncate");
+    expect(bar.querySelector("[data-bar-action]")).toHaveClass("sr-only");
+    const toggle = within(bar).getByRole("button", { expanded: false });
+    expect(toggle).toHaveAccessibleName(/Show requests/);
+    const dock = document.querySelector<HTMLElement>("[data-chat-dock]")!;
+    const strip = dock.querySelector<HTMLElement>("[data-chat-strip]")!;
+    expect(dock).not.toHaveAttribute("data-typing");
+    // focusing a bar is not typing
+    act(() => toggle.focus());
+    expect(dock).not.toHaveAttribute("data-typing");
+    act(() => screen.getByRole("textbox").focus());
+    expect(dock).toHaveAttribute("data-typing");
+    expect(strip.className).toContain("[@media(max-height:32rem)]:hidden");
+    act(() => screen.getByRole("textbox").blur());
+    expect(dock).not.toHaveAttribute("data-typing");
+    expect(strip.className).not.toContain("max-height");
+  });
 });
 
 describe("first-day card (P16.5)", () => {
