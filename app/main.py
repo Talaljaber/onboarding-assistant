@@ -13,6 +13,8 @@ import json
 import subprocess
 import sys
 import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
@@ -31,6 +33,8 @@ from app.logging_setup import log_event, setup_logging
 from app.mailer import Mailer
 from app.interns import SEED as SEED_INTERNS
 from app.store import get_store
+
+MAIL_DRAIN_S = 15.0  # seconds a shutdown waits for emails still being sent
 
 DIST = ROOT / "web" / "dist"
 
@@ -65,7 +69,15 @@ def create_app(settings: Settings | None = None, *, agent: Agent | None = None, 
         # D-W5-probe-retry: a slow first connection (DNS/TLS) should not start the demo offline.
         agent.probe_llm(5.0)
 
-    app = FastAPI(title="Dada Academy", version=__version__, docs_url=None, redoc_url=None, openapi_url=None)
+    @asynccontextmanager
+    async def lifespan(live: FastAPI) -> AsyncIterator[None]:
+        yield
+        mail = getattr(live.state, "mailer", None)
+        if mail is not None and not mail.wait(MAIL_DRAIN_S):  # queued emails get a chance to leave first
+            log_event("mail_shutdown_pending")
+
+    app = FastAPI(title="Dada Academy", version=__version__, docs_url=None, redoc_url=None, openapi_url=None,
+                  lifespan=lifespan)
     app.state.settings = s
     app.state.agent = agent
     app.state.store = st

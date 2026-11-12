@@ -506,3 +506,19 @@ def test_supabase_without_migration_0007_never_flips(tmp_path: Path) -> None:
     assert sb.mail_log() is None
     assert sb.name == "supabase" and sb.fallback_reason is None
     sb.close()
+
+
+def test_shutdown_waits_for_a_queued_email(tmp_path: Path) -> None:
+    """A test email queued just before the server stops is still delivered (the lifespan drains the mailer)."""
+    s = get_settings().model_copy(update={"data_live": tmp_path})
+    store = LocalStore(tmp_path)
+    app = create_app(s, agent=build_agent(s, store=store), store=store)
+    app.state.mailer = Mailer(configured(tmp_path), store)
+    FakeSMTP.gate = threading.Event()
+    with TestClient(app) as client:
+        token = client.post("/api/admin/login",
+                            json={"password": s.admin_password.get_secret_value()}).json()["token"]
+        assert client.post("/api/admin/mail/test", headers={"Authorization": f"Bearer {token}"}).status_code == 202
+        threading.Timer(0.3, FakeSMTP.gate.set).start()  # the server answers after the app starts closing
+    assert [r["status"] for r in store.mail_log() or []] == ["sent"]
+    store.close()
