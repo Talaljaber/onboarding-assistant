@@ -113,7 +113,8 @@ export default function ProgressScreen() {
                 <div className="flex min-w-0 flex-col py-1.5">
                   <h2 className="m-0 flex items-center gap-2 text-sm font-semibold text-fg-1">
                     <Icon name="help" size={16} className="shrink-0 text-fg-3" />
-                    {t("quiz.title")}
+                    {/* P22: the official quiz (the only one recorded here), not the mentor's assigned sets */}
+                    {t("quizSets.official")}
                   </h2>
                   {quiz.last ? (
                     <p className="m-0 ps-6 text-sm text-fg-2" data-testid="quiz-last">

@@ -97,7 +97,7 @@ export default function AboutScreen() {
               <p className={body}>{t("about.leavesText")}</p>
             </Part>
             <Part title={t("about.stored")}>
-              <p className={body}>{t("about.storedText")}</p>
+              <p className={body}>{t("p22Intern.storedText")}</p>
               <p className={cn(body, "mt-2")} data-mail-privacy>
                 {t("mail.aboutPrivacy")}
               </p>

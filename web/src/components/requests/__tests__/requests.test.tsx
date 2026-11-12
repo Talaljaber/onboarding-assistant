@@ -208,6 +208,47 @@ describe("intern: From your mentor", () => {
     const sorted = sortForIntern(listFx.requests as MentorRequest[]);
     expect(sorted.map((r) => r.status)).toEqual(["new", "in_progress", "done"]);
   });
+
+  it("P22: inside an open group the nearest deadline (overdue first) comes before newer requests; no deadline last", () => {
+    const base = listFx.requests[0] as MentorRequest;
+    const r = (id: string, status: MentorRequest["status"], created: string, due: string | null): MentorRequest => ({
+      ...base,
+      id,
+      status,
+      created_at: created,
+      due_at: due,
+    });
+    const sorted = sortForIntern([
+      r("none-newest", "new", "2026-11-12T12:00:00Z", null),
+      r("in-4-days", "new", "2026-11-12T11:00:00Z", "2026-11-16T09:00:00Z"),
+      r("overdue", "new", "2026-11-10T09:00:00Z", "2026-11-12T06:00:00Z"),
+      r("in-5-hours", "new", "2026-11-12T10:00:00Z", "2026-11-12T23:00:00Z"),
+      r("none-older", "new", "2026-11-11T09:00:00Z", null),
+      r("progress-overdue", "in_progress", "2026-11-09T09:00:00Z", "2026-11-11T09:00:00Z"),
+      r("done-new", "done", "2026-11-12T12:30:00Z", "2026-11-11T09:00:00Z"),
+      r("done-old", "done", "2026-11-08T12:30:00Z", "2026-11-20T09:00:00Z"),
+    ]);
+    expect(sorted.map((x) => x.id)).toEqual([
+      "overdue",
+      "in-5-hours",
+      "in-4-days",
+      "none-newest",
+      "none-older",
+      "progress-overdue",
+      "done-new",
+      "done-old",
+    ]);
+  });
+
+  it("P22: the open list scrolls inside a positioned box (hidden radios do not hang below the page)", async () => {
+    backend();
+    mount(<MentorRequestsPanel docked />, "ar");
+    await screen.findByRole("region", { name: /من مشرفك/ });
+    await expand();
+    const box = document.querySelector("[data-mentor-requests] .overflow-y-auto");
+    expect(box).not.toBeNull();
+    expect(box!.className).toContain("relative");
+  });
 });
 
 describe("admin: requests on the intern page", () => {

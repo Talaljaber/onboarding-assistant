@@ -20,9 +20,22 @@ import { RequestThread } from "./RequestThread";
 
 const ORDER: Record<RequestStatus, number> = { new: 0, in_progress: 1, done: 2 };
 
-/** Open requests first (new, then in progress), then done; newest first inside each group. */
+/** An open request's deadline as a number for sorting (no deadline last); done requests keep their order. */
+function dueRank(r: MentorRequest): number {
+  if (r.status === "done" || !r.due_at) return Number.POSITIVE_INFINITY;
+  const t = new Date(r.due_at).getTime();
+  return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
+}
+
+/** Open requests first (new, then in progress), then done. P22: inside an open group the nearest deadline comes
+ *  first (overdue, then due soon; no deadline last), so an overdue task is not buried under newer ones; then
+ *  newest first. */
 export function sortForIntern(list: MentorRequest[]): MentorRequest[] {
-  return [...list].sort((a, b) => ORDER[a.status] - ORDER[b.status] || b.created_at.localeCompare(a.created_at));
+  return [...list].sort((a, b) => {
+    const da = dueRank(a);
+    const db = dueRank(b);
+    return ORDER[a.status] - ORDER[b.status] || (da === db ? 0 : da < db ? -1 : 1) || b.created_at.localeCompare(a.created_at);
+  });
 }
 
 /** `docked` (P17, QA B1): in the chat dock above the composer; it shares a row with the recall banner and its
@@ -123,7 +136,9 @@ export function MentorRequestsPanel({ docked = false }: { docked?: boolean } = {
         </button>
       </h2>
       {expanded && (
-        <div className={cn("flex flex-col gap-3", docked && "max-h-[45dvh] overflow-y-auto overscroll-contain")}>
+        // P22: `relative` keeps the visually hidden radios and legends (absolute) inside this scroll box; without
+        // it they hung below the page and left a long blank scroll area under the chat at every width
+        <div className={cn("flex flex-col gap-3", docked && "relative max-h-[45dvh] overflow-y-auto overscroll-contain")}>
           <p className="m-0 px-3 text-sm text-fg-2 sm:px-4">{t("mentorReq.intro")}</p>
           <ul id={listId} className="m-0 flex list-none flex-col gap-3 px-3 sm:px-4">
             {sorted.map((req) => (

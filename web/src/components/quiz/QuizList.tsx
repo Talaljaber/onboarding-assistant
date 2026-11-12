@@ -12,10 +12,10 @@ import { Page, PageHeader } from "@/components/ui/Page";
 import { link, surface } from "@/components/ui/recipes";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useLang, useT } from "@/i18n";
-import { pluralForm } from "@/lib/plural";
+import { questionCount } from "@/lib/format";
 import { useAppState } from "@/state/useAppState";
 import { getQuizSets } from "@/api/client";
-import type { QuizSetSummary } from "@/api/types";
+import type { CheckpointMyResult, QuizSetSummary } from "@/api/types";
 import { quizSetHref } from "./hashParam";
 
 /** «للتعلّم فقط: لا تُعرض إجاباتك أو نتيجتك على المشرف.» */
@@ -25,6 +25,29 @@ export function PrivacyNote({ small = false }: { small?: boolean }) {
     <p data-quiz-privacy className={cn("m-0 flex items-start gap-2 text-fg-2", small ? "text-xs" : "text-sm")}>
       <Icon name="shield" size={small ? 14 : 16} className="mt-0.5 shrink-0 text-accent" />
       {t("quizSets.note")}
+    </p>
+  );
+}
+
+/** P22: the intern's own shared checkpoint result from the server (first answers): "2 / 3" once every question
+ *  has a first answer, else how many are answered so far. Kept on the card and the set page, so it shows again
+ *  after a reload or on another device. Null for practice sets or before the first answer. */
+export function SharedResultLine({ mine, className }: { mine: CheckpointMyResult | null | undefined; className?: string }) {
+  const t = useT();
+  if (!mine || mine.answered <= 0) return null;
+  const complete = mine.answered >= mine.total;
+  return (
+    <p data-shared-result={complete ? "complete" : "partial"} className={cn("m-0 font-semibold text-fg-1", className)}>
+      {complete ? (
+        <>
+          {t("quizSets.sharedResult")}{" "}
+          <bdi dir="ltr">
+            {mine.first_attempt_right} / {mine.total}
+          </bdi>
+        </>
+      ) : (
+        t("p22Intern.sharedSoFar", { n: mine.answered, total: mine.total })
+      )}
     </p>
   );
 }
@@ -46,7 +69,7 @@ function QuizCard({ s }: { s: QuizSetSummary }) {
   const title: PickedContent = s.official
     ? { text: t("quizSets.official"), lang, dir: lang === "ar" ? "rtl" : "ltr", fallback: false }
     : pick(s.title_ar, s.title_en);
-  const count = s.item_count > 0 ? t(`quizSets.count${pluralForm(s.item_count, lang)}`, { n: s.item_count }) : null;
+  const count = s.item_count > 0 ? questionCount(s.item_count, lang, t) : null;
   return (
     <li data-quiz-card={s.id} data-open={s.open} className={cn(surface.card, "flex min-w-0 flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4 sm:p-5")}>
       <span
@@ -83,6 +106,7 @@ function QuizCard({ s }: { s: QuizSetSummary }) {
             </span>
           )}
         </p>
+        {s.mode === "checkpoint" && <SharedResultLine mine={s.my_result} className="text-sm" />}
         {s.mode !== "checkpoint" && <PrivacyNote small />}
       </div>
       {s.open && (
