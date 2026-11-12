@@ -1,7 +1,8 @@
 // The card family for knowledge answers and refusals (plan D2.2): AnswerCard (also the partial
 // variant), UnconfirmedCard, RefusalCard and EmploymentCard. Server texts and K-rows render verbatim.
 import type { AnswerReply, Mode, RefusalReason, RefusalReply } from "@/api/types";
-import { useLang, useT, type DictKey } from "@/i18n";
+import { translate, useLang, useT, type DictKey } from "@/i18n";
+import { writtenInEnglish } from "@/lib/textDir";
 import { Icon } from "../ui/Icon";
 import { Notice } from "../ui/Notice";
 import { surface } from "../ui/recipes";
@@ -13,6 +14,34 @@ export const PARTIAL_NOTE_AR = "بقية سؤالك غير موجود في قا�
 
 /** Body text of every answer-like card. */
 const ANSWER_TEXT = "whitespace-pre-line text-base leading-[1.85] text-fg-1 sm:text-[1.0625rem]";
+
+/**
+ * The fixed English line of a fixed Arabic server text. A question asked in English leads with it (in either UI
+ * language); in the English UI an Arabic question gets it as a helper line below. The Arabic stays the reference.
+ */
+function FixedText({ ar, enKey, question }: { ar: string; enKey: DictKey; question?: string | null }) {
+  const { lang } = useLang();
+  if (writtenInEnglish(question)) {
+    return (
+      <>
+        <p data-en-lead lang="en" dir="ltr" className={ANSWER_TEXT}>
+          {translate("en", enKey)}
+        </p>
+        <p lang="ar" dir="rtl" className="mt-2 text-sm leading-7 text-fg-2">
+          {ar}
+        </p>
+      </>
+    );
+  }
+  return (
+    <>
+      <p lang="ar" dir="rtl" className={ANSWER_TEXT}>
+        {ar}
+      </p>
+      {lang === "en" && <EnHelper text={translate("en", enKey)} />}
+    </>
+  );
+}
 
 /** Fixed English helper line under a fixed Arabic server text (English UI only); the Arabic stays the reference. */
 function EnHelper({ text }: { text: string }) {
@@ -101,10 +130,13 @@ export function UnconfirmedCard({ reply, question }: { reply: AnswerReply; quest
   return (
     <article data-kind="unconfirmed" className="w-full min-w-0">
       <Notice tone="warn" icon="alert">
-        <p lang="ar" dir="rtl" className={ANSWER_TEXT}>
-          {reply.text_ar || t("chat.unconfirmed")}
-        </p>
-        {lang === "en" && reply.text_ar && <EnHelper text={t("chatEn.notConfirmed")} />}
+        {reply.text_ar ? (
+          <FixedText ar={reply.text_ar} enKey="chatEn.notConfirmed" question={question} />
+        ) : (
+          <p lang="ar" dir="rtl" className={ANSWER_TEXT}>
+            {t("chat.unconfirmed")}
+          </p>
+        )}
         {/* P16.5: the number difference is visible even while the related row stays folded. */}
         {related && reply.premise?.row_id === related.id && (
           <div className="mt-2">
@@ -132,17 +164,19 @@ export function UnconfirmedCard({ reply, question }: { reply: AnswerReply; quest
  * Contact, out-of-scope and injection refusals: the fixed server text, no sources. A calm ivory
  * note (never red): "not in my sources" is a correct outcome, not an error.
  */
-export function RefusalCard({ reply }: { reply: RefusalReply }) {
+export function RefusalCard({ reply, question }: { reply: RefusalReply; question?: string | null }) {
   const t = useT();
-  const { lang } = useLang();
   const en = REFUSAL_EN[reply.reason];
   return (
     <article data-kind="refusal" className="w-full min-w-0">
       <Notice tone="neutral" icon="shield" className="shadow-1">
-        <p lang="ar" dir="rtl" className={ANSWER_TEXT}>
-          {reply.text_ar}
-        </p>
-        {lang === "en" && en && <EnHelper text={t(en)} />}
+        {en ? (
+          <FixedText ar={reply.text_ar} enKey={en} question={question} />
+        ) : (
+          <p lang="ar" dir="rtl" className={ANSWER_TEXT}>
+            {reply.text_ar}
+          </p>
+        )}
         <p className="mt-2 text-sm text-fg-2">{t("chat.refusalNote")}</p>
       </Notice>
     </article>
@@ -150,16 +184,12 @@ export function RefusalCard({ reply }: { reply: RefusalReply }) {
 }
 
 /** Employment-decision guard: the disclaimer, plus the cited rows when the server attached some. */
-export function EmploymentCard({ reply }: { reply: RefusalReply }) {
+export function EmploymentCard({ reply, question }: { reply: RefusalReply; question?: string | null }) {
   const t = useT();
-  const { lang } = useLang();
   return (
     <article data-kind="employment" className={`${surface.card} w-full min-w-0 p-4 sm:p-5`}>
       <Notice tone="info" icon="lock" title={<span className="text-base">{t("chat.employmentTitle")}</span>}>
-        <p lang="ar" dir="rtl" className={ANSWER_TEXT}>
-          {reply.text_ar}
-        </p>
-        {lang === "en" && <EnHelper text={t("chatEn.employment")} />}
+        <FixedText ar={reply.text_ar} enKey="chatEn.employment" question={question} />
       </Notice>
       <SourcesBlock sources={reply.sources} />
     </article>

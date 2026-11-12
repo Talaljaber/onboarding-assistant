@@ -685,7 +685,7 @@ describe("English helper translation (P11.1)", () => {
   it("fixed refusals keep the Arabic text and add a fixed English line", async () => {
     backend([oos]);
     mount();
-    await ask("discount?");
+    await ask("خصم؟"); // an Arabic question in the English UI: Arabic first, English helper below
     await waitFor(() => expect(card("refusal")).not.toBeNull());
     expect(card("refusal")).toHaveTextContent(oos.reply.text_ar);
     expect(card("refusal")!.querySelector("[data-en-helper]")).toHaveTextContent(/not in my approved knowledge base/);
@@ -708,6 +708,47 @@ describe("English helper translation (P11.1)", () => {
     expect(card("answer")!.querySelector("[data-text-en]")).not.toBeNull();
     expect(card("answer")!.querySelector("[data-no-translation]")).toBeNull();
     expect(screen.getByText("Shown for an English question")).toBeInTheDocument();
+  });
+});
+
+describe("fixed replies follow the question's language (owner screenshot)", () => {
+  const mountAr = () =>
+    render(
+      <LangScope lang="ar">
+        <ToastProvider>
+          <AppStateProvider initial={seed()}>
+            <ChatScreen />
+          </AppStateProvider>
+        </ToastProvider>
+      </LangScope>,
+    );
+
+  it("an English question in the Arabic UI gets the English refusal first, the Arabic below", async () => {
+    backend([oos]);
+    mountAr();
+    await ask("which project will i work on");
+    await waitFor(() => expect(card("refusal")).not.toBeNull());
+    const lead = card("refusal")!.querySelector("[data-en-lead]");
+    expect(lead).toHaveTextContent(/not in my approved knowledge base/);
+    expect(lead).toHaveAttribute("dir", "ltr");
+    expect(card("refusal")).toHaveTextContent(oos.reply.text_ar);
+  });
+
+  it("an English employment question in the Arabic UI leads with the English disclaimer", async () => {
+    backend([employment]);
+    mountAr();
+    await ask("will I be confirmed after probation?");
+    await waitFor(() => expect(card("employment")).not.toBeNull());
+    expect(card("employment")!.querySelector("[data-en-lead]")).toHaveTextContent(/cannot make or predict decisions/);
+  });
+
+  it("an Arabic question in the Arabic UI stays Arabic only", async () => {
+    backend([oos]);
+    mountAr();
+    await ask("شو المشروع اللي رح أشتغل عليه؟");
+    await waitFor(() => expect(card("refusal")).not.toBeNull());
+    expect(card("refusal")!.querySelector("[data-en-lead]")).toBeNull();
+    expect(card("refusal")!.querySelector("[data-en-helper]")).toBeNull();
   });
 });
 

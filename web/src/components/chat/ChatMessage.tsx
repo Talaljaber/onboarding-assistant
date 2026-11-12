@@ -65,10 +65,10 @@ export function ChatMessage(p: ChatMessageProps) {
       card = <UnconfirmedCard reply={r as AnswerReply} question={p.question} />;
       break;
     case "refusal":
-      card = <RefusalCard reply={r as RefusalReply} />;
+      card = <RefusalCard reply={r as RefusalReply} question={p.question} />;
       break;
     case "employment":
-      card = <EmploymentCard reply={r as RefusalReply} />;
+      card = <EmploymentCard reply={r as RefusalReply} question={p.question} />;
       break;
     case "scenario_start":
       card = r.scenario ? (

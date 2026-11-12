@@ -9,3 +9,15 @@ export function textDir(text: string, fallback: "rtl" | "ltr" = "rtl"): "rtl" | 
   }
   return fallback;
 }
+
+/** True when a message is written mostly in Latin letters (an English question in either UI language). */
+export function writtenInEnglish(text: string | null | undefined): boolean {
+  if (!text) return false;
+  let latin = 0;
+  let arabic = 0;
+  for (const ch of text) {
+    if (LATIN.test(ch)) latin += 1;
+    else if (ARABIC.test(ch)) arabic += 1;
+  }
+  return latin > arabic;
+}
