@@ -171,3 +171,17 @@ Server output for the sample on the official KB; rows verbatim.
 | `kb_impact.json` | `GET /api/admin/kb/{id}/impact` (K02: Sara's answers cited it; two plan activities; no quiz item) | `KbImpact` |
 
 The intern is the seeded fictional demo persona. Ids only, from turn logs: no chat text, no count per intern.
+
+## Questions inbox (P18.1)
+
+| File | Endpoint | Model |
+|---|---|---|
+| `question_create_request.json` | `POST /api/questions` body (the intern's own question from a chat refusal) | `QuestionCreate` |
+| `question.json` | `POST /api/questions` (201, open) | `MentorQuestion` |
+| `questions.json` | `GET /api/questions?profile_id=` (Sara: one answered with K19, one from the Rumour Check, one dismissed) | `MentorQuestionList` |
+| `admin_questions.json` | `GET /api/admin/questions?status=` (the intern and, for open questions, the nearest row's topic and keyword) | `AdminQuestionList` |
+| `question_answer_request.json` | `POST /api/admin/questions/{id}/answer` body | `QuestionAnswer` |
+| `question_answered.json` | `POST /api/admin/questions/{id}/answer` (the question answered and the K19 row added) | `QuestionAnswered` |
+| `question_dismissed.json` | `POST /api/admin/questions/{id}/dismiss` | `MentorQuestion` |
+
+Question and answer texts, ids, times and the version are illustrative; K19 is an `added` row (not official).

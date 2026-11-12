@@ -14,6 +14,11 @@ import { TextArea } from "@/components/ui/TextField";
 import { toneColor, type Tone } from "@/components/ui/tone";
 import { useServerLabel, useT, type DictKey } from "@/i18n";
 import { useAppState } from "@/state/useAppState";
+import { useMyQuestions } from "@/components/questions/myQuestions"; // P18.1
+import { SendClaimButton } from "@/components/questions/SendToMentor"; // P18.1
+
+/** P18.1: claims with no confirming row can be sent to the mentor. */
+const SEND_LABELS: ReadonlySet<CheckLabel> = new Set<CheckLabel>(["not_found", "related"]);
 
 /** The demo sample (data, not UI text: the server checks Arabic). Opened by the chat chip with `#/check?sample=1`. */
 export const CHECK_SAMPLE_AR = "قالولي إنو عنا 17 معرض، وفترة التجربة 60 يوم، والإجازة بتطلبها عالواتساب.";
@@ -102,7 +107,7 @@ function RowQuote({ source, mark }: { source: Source; mark?: { start: number; le
 }
 
 /** One claim card: the fixed label, the user's sentence (claim number struck for `differs`) and the row. */
-export function ClaimCard({ claim }: { claim: CheckClaim }) {
+export function ClaimCard({ claim, action }: { claim: CheckClaim; action?: ReactNode }) {
   const t = useT();
   const n = claim.numbers;
   const tone = LABEL_TONE[claim.label];
@@ -132,6 +137,7 @@ export function ClaimCard({ claim }: { claim: CheckClaim }) {
       {claim.source && (
         <RowQuote source={claim.source} mark={n ? { start: n.row_start, len: n.row.length } : undefined} />
       )}
+      {action}
     </li>
   );
 }
@@ -156,6 +162,7 @@ function initialText(): string | null {
 export default function CheckScreen() {
   const t = useT();
   const app = useAppState();
+  useMyQuestions(app.profileId); // P18.1: a claim already sent shows as sent
   const [text, setText] = useState(() => initialText() ?? "");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -250,7 +257,11 @@ export default function CheckScreen() {
             ) : (
               <ol className="flex flex-col gap-3" data-check-results>
                 {result.claims.map((c) => (
-                  <ClaimCard key={`${c.i}-${c.start}`} claim={c} />
+                  <ClaimCard
+                    key={`${c.i}-${c.start}`}
+                    claim={c}
+                    action={SEND_LABELS.has(c.label) ? <SendClaimButton text={c.text} /> : undefined}
+                  />
                 ))}
               </ol>
             )}

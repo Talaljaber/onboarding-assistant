@@ -98,6 +98,7 @@ export default function AboutScreen() {
             </Part>
             <Part title={t("about.stored")}>
               <p className={body}>{t("about.storedText")}</p>
+              <p data-privacy-questions className={cn(body, "mt-2")}>{t("questions.privacy")}</p>
               <button
                 type="button"
                 onClick={() => setConfirm(true)}

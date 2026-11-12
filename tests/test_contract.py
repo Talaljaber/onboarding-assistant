@@ -110,6 +110,14 @@ FIXTURES: dict[str, type[BaseModel]] = {
     "request_comment_admin_create_request.json": s.AdminCommentCreate,
     # P16.5 premise correction
     "chat_answer_premise.json": s.ChatResponse,
+    # P18.1 questions inbox
+    "question_create_request.json": s.QuestionCreate,
+    "question.json": s.MentorQuestion,
+    "questions.json": s.MentorQuestionList,
+    "admin_questions.json": s.AdminQuestionList,
+    "question_answer_request.json": s.QuestionAnswer,
+    "question_answered.json": s.QuestionAnswered,
+    "question_dismissed.json": s.MentorQuestion,
 }
 
 # One response fixture per endpoint (the request fixtures are listed in FIXTURES above).
@@ -156,6 +164,12 @@ ENDPOINT_FIXTURES = {
     "POST /api/requests/{id}/comments": "request_comment.json",
     "GET /api/admin/requests/{id}/comments": "request_thread.json",
     "POST /api/admin/requests/{id}/comments": "request_comment.json",
+    # P18.1 questions inbox
+    "POST /api/questions": "question.json",
+    "GET /api/questions": "questions.json",
+    "GET /api/admin/questions": "admin_questions.json",
+    "POST /api/admin/questions/{id}/answer": "question_answered.json",
+    "POST /api/admin/questions/{id}/dismiss": "question_dismissed.json",
 }
 
 REQUEST_MODELS: dict[type[BaseModel], str] = {
@@ -178,6 +192,8 @@ REQUEST_MODELS: dict[type[BaseModel], str] = {
     s.CheckRequest: "check_request.json",
     s.RequestCommentCreate: "request_comment_create_request.json",
     s.AdminCommentCreate: "request_comment_admin_create_request.json",
+    s.QuestionCreate: "question_create_request.json",  # P18.1
+    s.QuestionAnswer: "question_answer_request.json",  # P18.1
 }
 
 
@@ -699,3 +715,32 @@ def test_english_helper_fields_keep_the_arabic_shape() -> None:
     prop = load("chat_progress_proposal.json")["reply"]["proposal"]
     with pytest.raises(ValidationError):
         s.Proposal.model_validate({**prop, "titles_en": [*prop["titles_en"], "extra"]})
+
+
+def test_questions_inbox_contract() -> None:
+    """P18.1: a question is the intern's own text (1..600), the answer row is a live row verbatim, the admin
+    list names the intern and suggests the nearest row only for open questions; no score anywhere."""
+    for bad in ({"text": ""}, {"text": "س" * 601}, {"source": "email"}, {"profile_id": "nope"}):
+        with pytest.raises(ValidationError):
+            s.QuestionCreate.model_validate({**load("question_create_request.json"), **bad})
+    answered = load("question_answered.json")
+    assert answered["question"]["answer_row_id"] == answered["row"]["id"]
+    assert answered["question"]["answer_row"]["answer_ar"] == answered["row"]["answer_ar"]
+    assert answered["row"]["status"] == "added" and answered["row"]["source_document"] == s.QUESTION_ANSWER_DOCUMENT
+    req = load("question_answer_request.json")
+    assert req["answer_ar"] == answered["row"]["answer_ar"]
+    for bad in ({"answer_ar": "قصير"}, {"answer_ar": "ا" * 601}, {"topic": ""}, {"topic": "t" * 41}):
+        with pytest.raises(ValidationError):
+            s.QuestionAnswer.model_validate({**req, **bad})
+    for q in load("admin_questions.json")["questions"]:
+        assert (q["suggestion"] is not None) == (q["status"] == "open")
+    for q in load("questions.json")["questions"]:
+        assert (q["answer_row"] is not None) == (q["status"] == "answered")
+    banned = re.compile(r"score|grade|rating|correct")
+    keys = set().union(*(all_keys(load(n)) for n in ("questions.json", "admin_questions.json", "question_answered.json")))
+    assert not [k for k in keys if banned.search(k)]
+    ts = TYPES_TS.read_text(encoding="utf-8")
+    for value in (*s.QUESTION_SOURCES, *s.QUESTION_STATUSES):
+        assert f'"{value}"' in ts, value
+    for guard in ("isMentorQuestion", "isMentorQuestionList", "isAdminQuestionList", "isQuestionAnswered"):
+        assert f"export function {guard}" in ts, guard

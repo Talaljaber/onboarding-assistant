@@ -1,0 +1,50 @@
+{
+  "questions": [
+    {
+      "id": "00000c01-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "intern_id": "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "source": "chat",
+      "text": "هل يوجد موقف سيارات للموظفين في المقر؟",
+      "status": "answered",
+      "answer_row_id": "K19",
+      "created_at": "2026-11-12T09:10:00.000+00:00",
+      "answered_at": "2026-11-12T10:30:00.000+00:00",
+      "answer_row": {
+        "id": "K19",
+        "topic": "Company",
+        "answer_ar": "يوجد موقف سيارات مجاني للموظفين خلف مبنى المقر الرئيسي.",
+        "source_document": "Mentor answer",
+        "source_page": 1,
+        "edited": true,
+        "status": "added"
+      }
+    },
+    {
+      "id": "00000c02-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "intern_id": "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "source": "check",
+      "text": "عنا موقف سيارات مجاني للموظفين ورا المبنى",
+      "status": "open",
+      "answer_row_id": null,
+      "created_at": "2026-11-12T09:05:00.000+00:00",
+      "answered_at": null,
+      "answer_row": null
+    },
+    {
+      "id": "00000c03-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "intern_id": "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "source": "chat",
+      "text": "هل يوجد مطعم للموظفين في المقر؟",
+      "status": "dismissed",
+      "answer_row_id": null,
+      "created_at": "2026-11-11T15:00:00.000+00:00",
+      "answered_at": "2026-11-12T10:35:00.000+00:00",
+      "answer_row": null
+    }
+  ],
+  "counts": {
+    "open": 1,
+    "answered": 1,
+    "dismissed": 1
+  }
+}

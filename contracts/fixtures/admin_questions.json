@@ -1,0 +1,71 @@
+{
+  "questions": [
+    {
+      "id": "00000c01-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "intern_id": "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "source": "chat",
+      "text": "هل يوجد موقف سيارات للموظفين في المقر؟",
+      "status": "open",
+      "answer_row_id": null,
+      "created_at": "2026-11-12T09:10:00.000+00:00",
+      "answered_at": null,
+      "answer_row": null,
+      "intern": {
+        "id": "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+        "name_ar": "سارة الخطيب",
+        "name_en": "Sara Al-Khatib",
+        "role": "Sales"
+      },
+      "suggestion": {
+        "row_id": "K15",
+        "topic": "Policy",
+        "keyword_en": "Attendance"
+      }
+    },
+    {
+      "id": "00000c02-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "intern_id": "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "source": "check",
+      "text": "عنا موقف سيارات مجاني للموظفين ورا المبنى",
+      "status": "open",
+      "answer_row_id": null,
+      "created_at": "2026-11-12T09:05:00.000+00:00",
+      "answered_at": null,
+      "answer_row": null,
+      "intern": {
+        "id": "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+        "name_ar": "سارة الخطيب",
+        "name_en": "Sara Al-Khatib",
+        "role": "Sales"
+      },
+      "suggestion": {
+        "row_id": "K15",
+        "topic": "Policy",
+        "keyword_en": "Attendance"
+      }
+    },
+    {
+      "id": "00000c03-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "intern_id": "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "source": "chat",
+      "text": "هل يوجد مطعم للموظفين في المقر؟",
+      "status": "dismissed",
+      "answer_row_id": null,
+      "created_at": "2026-11-11T15:00:00.000+00:00",
+      "answered_at": "2026-11-12T10:35:00.000+00:00",
+      "answer_row": null,
+      "intern": {
+        "id": "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+        "name_ar": "سارة الخطيب",
+        "name_en": "Sara Al-Khatib",
+        "role": "Sales"
+      },
+      "suggestion": null
+    }
+  ],
+  "counts": {
+    "open": 2,
+    "answered": 0,
+    "dismissed": 1
+  }
+}

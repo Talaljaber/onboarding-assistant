@@ -16,6 +16,7 @@ import { surface } from "../ui/recipes";
 import { AskAgainHint, RecallNotice } from "./RecallNotice";
 import { askAgainHint, recallOf, type LiveKb } from "./recall";
 import { RECALL_KINDS } from "./attention";
+import { SendQuestionPrompt } from "../questions/SendToMentor"; // P18.1
 
 export interface ChatMessageProps {
   item: ReplyItem;
@@ -147,6 +148,18 @@ export function ChatMessage(p: ChatMessageProps) {
       <div className="flex w-full min-w-0 flex-col gap-2">
         {card}
         <AskAgainHint {...reask} />
+      </div>
+    );
+  }
+
+  // P18.1: no answer for a question the guards let through (out of scope, or the not-confirmed band): offer to
+  // send it to the mentor. Never for guarded turns (contact, employment, injection, a pay question).
+  const guarded = Boolean(item.trace?.guards.employment || item.trace?.guards.contact || item.trace?.injection_suspected);
+  if (recall.length === 0 && !guarded && (kind === "unconfirmed" || (kind === "refusal" && (r as RefusalReply).reason === "out_of_scope"))) {
+    card = (
+      <div className="flex w-full min-w-0 flex-col gap-3">
+        {card}
+        <SendQuestionPrompt itemId={item.id} question={p.question} />
       </div>
     );
   }

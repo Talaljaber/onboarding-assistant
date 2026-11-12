@@ -6,18 +6,41 @@ import { useToast } from "@/components/ui/Toast";
 import { translate, useLang, useT, type DictKey } from "@/i18n";
 import { replace, usePath } from "@/router";
 import { BrandMark } from "../shell/BrandMark";
+import { useOpenQuestionCount } from "../questions/openCount"; // P18.1
 
 interface Item {
   href: string;
   key: DictKey;
   icon: IconName;
   current: (path: string) => boolean;
+  /** P18.1: shows the open-question count. */
+  count?: boolean;
 }
 
 const ITEMS: Item[] = [
   { href: "#/admin/interns", key: "uiIntern.navInterns", icon: "user", current: (p) => p.startsWith("/admin/interns") },
   { href: "#/kb", key: "nav.kb", icon: "book", current: (p) => p === "/kb" || p.startsWith("/admin/kb/") },
+  // P18.1 questions inbox
+  { href: "#/admin/questions", key: "adminQuestions.nav", icon: "mail", current: (p) => p === "/admin/questions", count: true },
 ];
+
+/** P18.1: the open-question count beside the nav item (nothing while 0 or unknown). */
+function OpenCount({ path }: { path: string }) {
+  const t = useT();
+  const n = useOpenQuestionCount(path);
+  if (!n) return null;
+  return (
+    <span
+      data-open-questions
+      aria-label={t("adminQuestions.openAria", { n })}
+      className="inline-grid min-w-6 shrink-0 place-items-center rounded-full bg-accent px-1.5 text-xs font-bold leading-6 text-on-accent"
+    >
+      <span aria-hidden="true" className="font-id" dir="ltr">
+        {n}
+      </span>
+    </span>
+  );
+}
 
 const roundBtn =
   "grid size-11 shrink-0 place-items-center rounded-full border border-line bg-surface-0 text-fg-1 shadow-1 transition-colors hover:border-accent-line hover:bg-accent-soft";
@@ -46,8 +69,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
       return (
         <li key={i.href} className="flex flex-1 md:flex-none">
           <a href={i.href} aria-current={current ? "page" : undefined} className={cn(cls, current ? on : off)}>
-            <Icon name={i.icon} size={18} className="shrink-0" />
+            <Icon name={i.icon} size={18} className="shrink-0 max-sm:hidden" />
             {t(i.key)}
+            {i.count && <OpenCount path={path} />}
           </a>
         </li>
       );

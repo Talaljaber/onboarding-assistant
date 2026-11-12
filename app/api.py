@@ -94,6 +94,15 @@ from app import request_comments as comments_view  # P15 comments and files on m
 from app.schemas import COMMENT_BODY_MAX_BYTES, AdminCommentCreate, RequestCommentCreate  # P15
 from app.store import alias_problem, store_status
 from app.premise import with_premise  # P16.5 premise correction
+from app import questions as questions_view  # P18.1 questions inbox
+from app.schemas import (  # P18.1
+    QUESTION_ANSWER_DOCUMENT,
+    AdminQuestionList,
+    QuestionAnswer,
+    QuestionAnswered,
+    QuestionCreate,
+    QuestionStatus,
+)
 
 KB_LOCK_WAIT_S = 2.0
 PROBE_MIN_INTERVAL_S = 10.0  # `/api/health?probe=1` re-probes the LLM at most this often
@@ -374,6 +383,13 @@ def _timed_kb_write(agent: Agent, fn: Callable[[], Any]) -> tuple[Any, int]:
         lock.release()
 
 
+def kb_add_row(agent: Agent, body: KbNewRow) -> tuple[Row, int]:
+    """The KB editor's add: the next K id (status `added`), re-index and version bump under the KB lock. Also
+    the path of an answered intern question (P18.1)."""
+    row, ms = _timed_kb_write(agent, lambda: agent.kb.add(body))
+    return row, ms
+
+
 def _intern_or_404(store: Any, intern_id: str) -> dict[str, Any]:
     intern = store.get_intern(intern_id) if re.match(INTERN_ID_RE, intern_id) else None
     if not intern:
@@ -545,7 +561,7 @@ def build_router() -> APIRouter:
     @r.post("/kb", status_code=201, dependencies=ADMIN_ONLY)
     def kb_add(body: KbNewRow, request: Request) -> JSONResponse:
         agent = _agent(request)
-        row, ms = _timed_kb_write(agent, lambda: agent.kb.add(body))
+        row, ms = kb_add_row(agent, body)
         return _json(KbWriteResponse(row=_kb_row(row), version=agent.kb.version(), reindex_ms=ms,
                                      oos_disabled=list(agent.retriever.last_disabled)), 201)
 
@@ -923,7 +939,100 @@ def build_router() -> APIRouter:
         )
         return _json(body)
 
+    add_question_routes(r)  # P18.1 questions inbox
     return r
+
+
+# ======================================================================================= questions inbox (P18.1)
+def _questions_or_503(value: Any) -> Any:
+    if value is None:
+        raise ApiError("requests_unavailable", 503, "mentor questions are not available on this store now")
+    return value
+
+
+def _nearest_row(agent: Agent) -> Callable[[str], tuple[str, str, str] | None]:
+    """The top hybrid-search row for a text: (id, topic, keyword_en), to pre-fill the answer form."""
+
+    def nearest(text: str) -> tuple[str, str, str] | None:
+        hits = agent.retriever.search(text, k=1)
+        row = agent.kb.get(hits[0].id) if hits else None
+        return (row.id, row.topic, row.keyword_en) if row is not None else None
+
+    return nearest
+
+
+def _admin_questions(request: Request, recs: list[dict[str, Any]]) -> list[Any]:
+    store = _store(request)
+    interns = {str(i["id"]): i for i in (store.list_interns() or [])}
+    nearest = _nearest_row(_agent(request))
+    return [questions_view.admin_view(rec, _kb_source(request), interns_view.public(interns[str(rec["intern_id"])]),
+                                      nearest)
+            for rec in recs if str(rec["intern_id"]) in interns]
+
+
+def _open_question(store: Any, question_id: str) -> dict[str, Any]:
+    """The stored question (404 unknown; 400 `field: status` when it is already answered or dismissed)."""
+    found = _questions_or_503(store.mentor_questions(ids=[question_id])) if re.match(PROFILE_ID_RE, question_id) else []
+    if not found:
+        raise ApiError("not_found", 404, "unknown question")
+    if found[0]["status"] != "open":
+        raise ApiError("validation_error", 400, "the question is already answered or dismissed", "status")
+    return found[0]  # type: ignore[no-any-return]
+
+
+def add_question_routes(r: APIRouter) -> None:
+    """Intern: send a question (only on their explicit Send) and see their own; admin: list, answer with a new
+    K-row through the KB editor's add path, or dismiss."""
+
+    @r.post("/questions", status_code=201)
+    def question_add(body: QuestionCreate, request: Request) -> JSONResponse:
+        store = _store(request)
+        intern = _profile_intern(store, body.profile_id)
+        questions_view.check_question(body.text)
+        rec = _questions_or_503(store.mentor_question_create(
+            {"intern_id": intern["id"], "source": body.source, "text": body.text}))
+        log_event("question_sent", request_id=_rid(request), source=body.source)
+        return _json(questions_view.view(rec, _kb_source(request)), 201)
+
+    @r.get("/questions")
+    def questions_own(request: Request, profile_id: str | None = None) -> JSONResponse:
+        """The signed-in intern's own questions, scoped by their session profile id (as requests are)."""
+        if not profile_id:
+            raise ApiError("validation_error", 400, "profile_id is required", "profile_id")
+        store = _store(request)
+        intern = _profile_intern(store, profile_id)
+        recs = _questions_or_503(store.mentor_questions(intern_id=intern["id"]))
+        return _json(questions_view.listing(recs, _kb_source(request)))
+
+    @r.get("/admin/questions", dependencies=ADMIN_ONLY)
+    def admin_questions(request: Request, status: QuestionStatus | None = None) -> JSONResponse:
+        recs = _questions_or_503(_store(request).mentor_questions())
+        shown = [q for q in recs if status is None or q["status"] == status]
+        return _json(AdminQuestionList(questions=_admin_questions(request, shown),
+                                       counts=questions_view.counts(recs)))
+
+    @r.post("/admin/questions/{question_id}/answer", dependencies=ADMIN_ONLY)
+    def admin_question_answer(question_id: str, body: QuestionAnswer, request: Request) -> JSONResponse:
+        store = _store(request)
+        agent = _agent(request)
+        _open_question(store, question_id)
+        questions_view.check_answer(body.model_dump())
+        new_row = KbNewRow(topic=body.topic, answer_ar=body.answer_ar, keyword_en=body.keyword_en,
+                           source_document=body.source_document or QUESTION_ANSWER_DOCUMENT, source_page=1)
+        row, ms = kb_add_row(agent, new_row)
+        rec = _questions_or_503(store.mentor_question_update(question_id, {"status": "answered",
+                                                                           "answer_row_id": row.id}))
+        log_event("question_answered", request_id=_rid(request), row_id=row.id)
+        return _json(QuestionAnswered(question=questions_view.view(rec, _kb_source(request)), row=_kb_row(row),
+                                      version=agent.kb.version(), reindex_ms=ms))
+
+    @r.post("/admin/questions/{question_id}/dismiss", dependencies=ADMIN_ONLY)
+    def admin_question_dismiss(question_id: str, request: Request) -> JSONResponse:
+        store = _store(request)
+        _open_question(store, question_id)
+        rec = _questions_or_503(store.mentor_question_update(question_id, {"status": "dismissed"}))
+        log_event("question_dismissed", request_id=_rid(request))
+        return _json(questions_view.view(rec, _kb_source(request)))
 
 
 def install_api(app: FastAPI) -> None:

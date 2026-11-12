@@ -1572,6 +1572,93 @@ class RequestCommentCreate(AdminCommentCreate):
     profile_id: ProfileId
 
 
+# --------------------------------------------------------------------------------------
+# Questions inbox (P18.1): a question the intern chooses to send to the mentor; the answer becomes a K-row
+# --------------------------------------------------------------------------------------
+
+QUESTION_TEXT_MAX = 600
+#: The K-row document when the admin leaves it empty (page 1).
+QUESTION_ANSWER_DOCUMENT = "Mentor answer"
+QuestionSource = Literal["check", "chat"]
+QuestionStatus = Literal["open", "answered", "dismissed"]
+QUESTION_SOURCES: tuple[str, ...] = get_args(QuestionSource)
+QUESTION_STATUSES: tuple[str, ...] = get_args(QuestionStatus)
+
+
+class QuestionCreate(_Model):
+    """`POST /api/questions`: sent only by the intern's explicit Send (the text they saw and could edit)."""
+
+    profile_id: ProfileId
+    source: QuestionSource
+    text: Annotated[Block, Field(min_length=1, max_length=QUESTION_TEXT_MAX)]
+
+
+class MentorQuestion(_Model):
+    """One question. `answer_row` is the answer K-row verbatim from the live KB (null until answered, or when the
+    row is no longer in the KB)."""
+
+    id: UuidStr
+    intern_id: InternId
+    source: QuestionSource
+    text: str
+    status: QuestionStatus
+    answer_row_id: KbId | None
+    created_at: str
+    answered_at: str | None
+    answer_row: Source | None
+
+
+class QuestionCounts(_Model):
+    open: NonNeg
+    answered: NonNeg
+    dismissed: NonNeg
+
+
+class MentorQuestionList(_Model):
+    """`GET /api/questions?profile_id=`: the intern's own questions, newest first; `counts` covers them all."""
+
+    questions: list[MentorQuestion]
+    counts: QuestionCounts
+
+
+class QuestionSuggestion(_Model):
+    """The nearest live row to an open question (its topic and keyword pre-fill the answer form)."""
+
+    row_id: KbId
+    topic: str
+    keyword_en: str
+
+
+class AdminQuestion(MentorQuestion):
+    intern: InternPublic
+    suggestion: QuestionSuggestion | None
+
+
+class AdminQuestionList(_Model):
+    """`GET /api/admin/questions?status=`: newest first; `counts` covers every question (not only the filter)."""
+
+    questions: list[AdminQuestion]
+    counts: QuestionCounts
+
+
+class QuestionAnswer(_Model):
+    """`POST /api/admin/questions/{id}/answer`: the K-row the answer becomes (KB editor limits; page 1)."""
+
+    answer_ar: KbAnswer
+    topic: KbTopic
+    keyword_en: KbKeyword = ""
+    source_document: KbDocument | None = None
+
+
+class QuestionAnswered(_Model):
+    """The answered question and the K-row added (status `added`) through the KB editor's add path."""
+
+    question: MentorQuestion
+    row: KbRow
+    version: str
+    reindex_ms: NonNeg
+
+
 __all__ = [
     "CHECK_CLAIMS_MAX",
     "CHECK_LABELS",
@@ -1708,4 +1795,18 @@ __all__ = [
     "RequestThread",
     # P16.5 premise correction
     "Premise",
+    # P18.1 questions inbox
+    "QUESTION_ANSWER_DOCUMENT",
+    "QUESTION_SOURCES",
+    "QUESTION_STATUSES",
+    "QUESTION_TEXT_MAX",
+    "AdminQuestion",
+    "AdminQuestionList",
+    "MentorQuestion",
+    "MentorQuestionList",
+    "QuestionAnswer",
+    "QuestionAnswered",
+    "QuestionCounts",
+    "QuestionCreate",
+    "QuestionSuggestion",
 ]

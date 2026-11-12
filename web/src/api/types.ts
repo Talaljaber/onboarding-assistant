@@ -1565,3 +1565,119 @@ export function isRequestComment(x: unknown): x is RequestComment {
 export function isRequestThread(x: unknown): x is RequestThread {
   return isObj(x) && isStr(x.request_id) && isArrayOf(x.comments, isRequestComment);
 }
+
+// ---------------------------------------------------------------- P18.1 questions inbox
+// A question the intern chooses to send to the mentor (Rumour Check or a chat refusal). The admin answers it once
+// with a new K-row (status "added", the KB editor's add path) or dismisses it. No score anywhere.
+
+export const QUESTION_SOURCES = ["check", "chat"] as const;
+export type QuestionSource = (typeof QUESTION_SOURCES)[number];
+export const QUESTION_STATUSES = ["open", "answered", "dismissed"] as const;
+export type QuestionStatus = (typeof QUESTION_STATUSES)[number];
+export const QUESTION_LIMITS = { textMax: 600 } as const;
+
+/** `POST /api/questions`: only on the intern's explicit Send, with the text they saw and could edit. */
+export interface QuestionCreate {
+  profile_id: string;
+  source: QuestionSource;
+  text: string;
+}
+
+export interface MentorQuestion {
+  id: string;
+  intern_id: string;
+  source: QuestionSource;
+  text: string;
+  status: QuestionStatus;
+  answer_row_id: string | null;
+  created_at: string;
+  answered_at: string | null;
+  /** The answer K-row verbatim from the live KB; null until answered (or when the row is gone). */
+  answer_row: Source | null;
+}
+
+export interface QuestionCounts {
+  open: number;
+  answered: number;
+  dismissed: number;
+}
+
+/** `GET /api/questions?profile_id=`: the intern's own, newest first. */
+export interface MentorQuestionList {
+  questions: MentorQuestion[];
+  counts: QuestionCounts;
+}
+
+/** The nearest live row of an open question (pre-fills the answer form). */
+export interface QuestionSuggestion {
+  row_id: string;
+  topic: string;
+  keyword_en: string;
+}
+
+export interface AdminQuestion extends MentorQuestion {
+  intern: InternPublic;
+  suggestion: QuestionSuggestion | null;
+}
+
+/** `GET /api/admin/questions?status=`: newest first; `counts` covers every question. */
+export interface AdminQuestionList {
+  questions: AdminQuestion[];
+  counts: QuestionCounts;
+}
+
+/** `POST /api/admin/questions/{id}/answer`: the K-row the answer becomes (KB editor limits; page 1). */
+export interface QuestionAnswer {
+  answer_ar: string;
+  topic: string;
+  keyword_en?: string;
+  source_document?: string | null;
+}
+
+export interface QuestionAnswered {
+  question: MentorQuestion;
+  row: KbRow;
+  version: string;
+  reindex_ms: number;
+}
+
+export function isMentorQuestion(x: unknown): x is MentorQuestion {
+  return (
+    isObj(x) &&
+    isStr(x.id) &&
+    isStr(x.intern_id) &&
+    isOneOf(QUESTION_SOURCES, x.source) &&
+    isStr(x.text) &&
+    isOneOf(QUESTION_STATUSES, x.status) &&
+    isStrOrNull(x.answer_row_id) &&
+    isStr(x.created_at) &&
+    isStrOrNull(x.answered_at) &&
+    (x.answer_row === null || isSource(x.answer_row))
+  );
+}
+
+function isQuestionCounts(x: unknown): x is QuestionCounts {
+  return isObj(x) && isNum(x.open) && isNum(x.answered) && isNum(x.dismissed);
+}
+
+export function isMentorQuestionList(x: unknown): x is MentorQuestionList {
+  return isObj(x) && isArrayOf(x.questions, isMentorQuestion) && isQuestionCounts(x.counts);
+}
+
+function isAdminQuestion(x: unknown): x is AdminQuestion {
+  if (!isMentorQuestion(x)) return false;
+  const o = x as unknown as Obj;
+  const s = o.suggestion;
+  return (
+    isInternPublic(o.intern) &&
+    (s === null || (isObj(s) && isStr(s.row_id) && isStr(s.topic) && isStr(s.keyword_en)))
+  );
+}
+
+export function isAdminQuestionList(x: unknown): x is AdminQuestionList {
+  return isObj(x) && isArrayOf(x.questions, isAdminQuestion) && isQuestionCounts(x.counts);
+}
+
+export function isQuestionAnswered(x: unknown): x is QuestionAnswered {
+  return isObj(x) && isMentorQuestion(x.question) && isKbRow(x.row) && isStr(x.version) && isNum(x.reindex_ms);
+}

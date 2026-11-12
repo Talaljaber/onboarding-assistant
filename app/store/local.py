@@ -52,6 +52,7 @@ from app.store.base import (
     file_row,
     thread_rows,
 )
+from app.store.base import QUESTION_COLUMNS, question_changes, question_record, question_row  # P18.1
 
 T = TypeVar("T")
 
@@ -201,6 +202,22 @@ create table if not exists mentor_request_files (
 create index if not exists mentor_request_files_comment_idx on mentor_request_files (comment_id);
 """
 
+# P18.1 questions inbox (the same table as supabase/migrations/0006_questions.sql).
+QUESTIONS_SCHEMA = """
+create table if not exists mentor_questions (
+    id text primary key,
+    intern_id text not null references interns (id) on delete cascade,
+    source text not null check (source in ('check', 'chat')),
+    text text not null check (length(trim(text)) between 1 and 600),
+    status text not null default 'open' check (status in ('open', 'answered', 'dismissed')),
+    answer_row_id text,
+    created_at text not null,
+    answered_at text
+);
+create index if not exists mentor_questions_intern_idx on mentor_questions (intern_id, created_at);
+create index if not exists mentor_questions_status_idx on mentor_questions (status);
+"""
+
 # Applied on open after SCHEMA (the same change as supabase/migrations/0002_interns.sql).
 def _migrate(conn: sqlite3.Connection) -> None:
     cols = {r[1] for r in conn.execute("pragma table_info(profiles)")}
@@ -236,6 +253,7 @@ class LocalStore:
         try:
             conn.execute("pragma foreign_keys = on")
             conn.executescript(SCHEMA)
+            conn.executescript(QUESTIONS_SCHEMA)  # P18.1
             _migrate(conn)
             conn.commit()
         except sqlite3.Error as exc:
@@ -890,6 +908,67 @@ class LocalStore:
             log_event("store_error", store="local", op="request_file", error=type(exc).__name__)
             return None
         return {**rec, "data": data}
+
+    # Questions inbox (P18.1) -----------------------------------------------------------------------
+
+    def mentor_questions(
+        self, *, intern_id: str | None = None, status: str | None = None, ids: list[str] | None = None
+    ) -> list[dict[str, Any]] | None:
+        where: list[str] = []
+        args: list[Any] = []
+        if intern_id is not None:
+            where.append("intern_id = ?")
+            args.append(valid_uuid(intern_id) or "")
+        if status is not None:
+            where.append("status = ?")
+            args.append(status)
+        if ids is not None:
+            clean = [i for i in (valid_uuid(x) for x in ids) if i]
+            if not clean:
+                return []
+            where.append(f"id in ({','.join('?' * len(clean))})")
+            args += clean
+        q = f"select {', '.join(QUESTION_COLUMNS)} from mentor_questions" + (
+            " where " + " and ".join(where) if where else "")
+
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            return [question_row(dict(r)) for r in c.execute(q + " order by created_at desc, rowid desc", args)]
+
+        return self._run("mentor_questions", None, op)
+
+    def mentor_question_create(self, record: dict[str, Any]) -> dict[str, Any] | None:
+        rec = question_record(record)
+        if rec is None:
+            log_event("store_rejected", store="local", op="mentor_question_create", reason="invalid_input")
+            return None
+        cols = ", ".join(QUESTION_COLUMNS)
+        marks = ", ".join(f":{k}" for k in QUESTION_COLUMNS)
+
+        def op(c: sqlite3.Connection) -> dict[str, Any]:
+            c.execute(f"insert into mentor_questions ({cols}) values ({marks})", rec)
+            return question_row(rec)
+
+        return self._run("mentor_question_create", None, op)
+
+    def mentor_question_update(self, question_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        qid = valid_uuid(question_id)
+        if qid is None:
+            return {}
+
+        def op(c: sqlite3.Connection) -> dict[str, Any] | None:
+            cur = c.execute("select status from mentor_questions where id = ?", (qid,)).fetchone()
+            if not cur:
+                return {}
+            clean = question_changes(changes, cur["status"])
+            if clean is None:
+                log_event("store_rejected", store="local", op="mentor_question_update", reason="invalid_input")
+                return None
+            sets = ", ".join(f"{k} = :{k}" for k in clean)
+            c.execute(f"update mentor_questions set {sets} where id = :id", {**clean, "id": qid})
+            r = c.execute(f"select {', '.join(QUESTION_COLUMNS)} from mentor_questions where id = ?", (qid,)).fetchone()
+            return question_row(dict(r))
+
+        return self._run("mentor_question_update", None, op)
 
     # Used by tests and the integrator's smoke only.
     def table_rows(self, table: str) -> list[dict[str, Any]]:

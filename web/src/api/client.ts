@@ -462,3 +462,47 @@ export async function downloadRequestFile(path: string, filename: string, admin:
   }
   return { ok: true, value: true };
 }
+
+// ---------------------------------------------------------------- questions inbox (P18.1)
+
+import {
+  isAdminQuestionList,
+  isMentorQuestion,
+  isMentorQuestionList,
+  isQuestionAnswered,
+  type AdminQuestionList,
+  type MentorQuestion,
+  type MentorQuestionList,
+  type QuestionAnswer,
+  type QuestionAnswered,
+  type QuestionCreate,
+  type QuestionStatus,
+} from "./types";
+
+/** Only on the intern's explicit Send (the confirm sheet). */
+export const postQuestion = (body: QuestionCreate, signal?: AbortSignal) =>
+  request<MentorQuestion>("/api/questions", { method: "POST", body, guard: isMentorQuestion, signal });
+
+/** The signed-in intern's own questions (scoped by their session profile id). */
+export const getMyQuestions = (profileId: string, signal?: AbortSignal) =>
+  request<MentorQuestionList>(`/api/questions?profile_id=${q(profileId)}`, { guard: isMentorQuestionList, signal });
+
+export const getAdminQuestions = (status?: QuestionStatus, signal?: AbortSignal) =>
+  request<AdminQuestionList>(`/api/admin/questions${status ? `?status=${q(status)}` : ""}`, {
+    guard: isAdminQuestionList,
+    signal,
+    admin: true,
+  });
+
+/** Adds the answer as a K-row (re-index included), then marks the question answered. */
+export const answerQuestion = (id: string, body: QuestionAnswer, signal?: AbortSignal) =>
+  request<QuestionAnswered>(`/api/admin/questions/${q(id)}/answer`, {
+    method: "POST",
+    body,
+    guard: isQuestionAnswered,
+    signal,
+    admin: true,
+  });
+
+export const dismissQuestion = (id: string, signal?: AbortSignal) =>
+  request<MentorQuestion>(`/api/admin/questions/${q(id)}/dismiss`, { method: "POST", guard: isMentorQuestion, signal, admin: true });

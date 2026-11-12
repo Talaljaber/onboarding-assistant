@@ -141,6 +141,7 @@ policies for anonymous or signed-in clients.
 | `turn_logs` | request id, profile id (if any), time, tool, mode, status, band, cited ids, verifier result and reason, latency, cached, model. **No message text, no answer text** |
 | `mentor_request_comments`, `mentor_request_files` (P15) | replies on a mentor request, both ways: author (intern or admin), text, time; and per attached file its name, type (PDF, Word, PNG or JPEG), size, sha256 and storage key (migration `0005_request_comments.sql`) |
 | Storage bucket `mentor-files` (P15, **private**) | the bytes of files attached to those replies (at most 3 per reply, 5 MB each), at `requests/{request id}/{file id}` |
+| `mentor_questions` (P18.1) | a question the intern **chose** to send to the mentor (Rumour Check or a chat refusal): intern id, source (check or chat), the text exactly as sent (≤ 600), status (open, answered, dismissed), the answer's K id, times (migration `0006_questions.sql`) |
 
 The store code refuses any turn log with a message, answer, text, prompt or reply field.
 
@@ -150,6 +151,12 @@ server reads or writes the files, with the secret key; the browser downloads the
 public or signed storage link, and the app never shows them inline. An intern sees only the replies and files on
 their own requests; the admin sees all. Deleting a request deletes its replies and files. Reply text and files never
 reach the AI service, a prompt or a turn log.
+
+**Chat text is not stored, except a question you choose to send to your mentor** (P18.1). The send is offered
+after a refusal or an unconfirmed answer in chat and on a Rumour Check claim with no confirming row; a confirm
+sheet shows the exact text (editable) and nothing is stored before the intern presses Send. Guarded questions
+(employment, contact, injection) and text with a phone number, email or link are refused. The mentor's answer
+becomes a new knowledge-base row (status `added`), cited from then on like any added row.
 
 **Local fallback.** Without Supabase, or when it does not answer (2 s probe at start, 3 s per call),
 the server uses `data/live/local.sqlite` with the same tables (and `data/live/mentor_files/` for reply
