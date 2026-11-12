@@ -50,13 +50,13 @@ afterEach(() => {
 });
 
 describe("App routes", () => {
-  it("registers all 14 routes, with the knowledge editor, document import and the interns screens admin only", () => {
+  it("registers all 15 routes, with the knowledge editor, document import, interns and questions screens admin only", () => {
     expect(ROUTES.map((r) => r.path)).toEqual([
       "/", "/chat", "/scenarios", "/plan", "/quiz", "/progress", "/check", "/kb", "/admin/interns", "/admin/interns/:id",
-      "/admin/kb/import", "/admin/kb/import/:id", "/admin", "/about",
+      "/admin/kb/import", "/admin/kb/import/:id", "/admin/questions", "/admin", "/about",
     ]);
     expect(ROUTES.filter((r) => r.needsAdmin).map((r) => r.path)).toEqual([
-      "/kb", "/admin/interns", "/admin/interns/:id", "/admin/kb/import", "/admin/kb/import/:id",
+      "/kb", "/admin/interns", "/admin/interns/:id", "/admin/kb/import", "/admin/kb/import/:id", "/admin/questions",
     ]);
   });
 

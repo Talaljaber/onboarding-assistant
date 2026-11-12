@@ -60,9 +60,17 @@ from app.store.base import (
     mail_record,
     mail_row,
 )
+from app.store.base import (  # P18.1 questions inbox
+    QUESTION_COLUMNS,
+    QUESTION_STATUSES,
+    question_changes,
+    question_record,
+    question_row,
+)
 from app.store.local import LocalStore
 
 T = TypeVar("T")
+_QUESTION_SELECT = ",".join(QUESTION_COLUMNS)  # P18.1
 
 REST_PATH = "/rest/v1"
 CALL_TIMEOUT_S = 3.0
@@ -959,3 +967,72 @@ class SupabaseStore:
             return [mail_row(r) for r in rows]
 
         return self._imports("mail_log", remote, lambda s: s.mail_log(n), None)
+
+    # Questions inbox (P18.1) -----------------------------------------------------------------------
+    # Like the requests table: never flips to the LocalStore. Without migration 0006 (PostgREST 404) or on a
+    # failing call only the questions feature is unavailable (None -> 503); everything else keeps Supabase.
+
+    def mentor_questions(
+        self, *, intern_id: str | None = None, status: str | None = None, ids: list[str] | None = None
+    ) -> list[dict[str, Any]] | None:
+        params = {"select": _QUESTION_SELECT, "order": "created_at.desc"}
+        if intern_id is not None:
+            params["intern_id"] = f"eq.{valid_uuid(intern_id) or '00000000-0000-0000-0000-000000000000'}"
+        if status is not None:
+            if status not in QUESTION_STATUSES:
+                return []
+            params["status"] = f"eq.{status}"
+        clean: list[str] = []
+        if ids is not None:
+            clean = [i for i in (valid_uuid(x) for x in ids) if i]
+            if not clean:
+                return []
+
+        def remote() -> list[dict[str, Any]] | None:
+            if ids is None:
+                return [question_row(r) for r in self._list("mentor_questions", params)]
+            out: list[dict[str, Any]] = []
+            for n in range(0, len(clean), _IN_CHUNK):
+                out += self._list("mentor_questions", {**params, "id": f"in.{_in_list(clean[n:n + _IN_CHUNK])}"})
+            return [question_row(r) for r in out]
+
+        return self._imports("mentor_questions", remote,
+                             lambda s: s.mentor_questions(intern_id=intern_id, status=status, ids=ids), None)
+
+    def mentor_question_create(self, record: dict[str, Any]) -> dict[str, Any] | None:
+        rec = question_record(record)
+        if rec is None:
+            log_event("store_rejected", store="supabase", op="mentor_question_create", reason="invalid_input")
+            return None
+
+        def remote() -> dict[str, Any] | None:
+            self._req("POST", "mentor_questions", json=rec, prefer="return=minimal")
+            return question_row(rec)
+
+        return self._imports("mentor_question_create", remote, lambda s: s.mentor_question_create(rec), None)
+
+    def mentor_question_update(self, question_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        qid = valid_uuid(question_id)
+        if qid is None:
+            return {}
+
+        def remote() -> dict[str, Any] | None:
+            found = self._list("mentor_questions", {"select": "id,status", "id": f"eq.{qid}"})
+            if not found:
+                return {}
+            clean = question_changes(changes, str(found[0].get("status")))
+            if clean is None:
+                log_event("store_rejected", store="supabase", op="mentor_question_update", reason="invalid_input")
+                return None
+            # Only from `open` (a second admin's answer in the meantime changes nothing).
+            data = self._req("PATCH", "mentor_questions",
+                             params={"select": _QUESTION_SELECT, "id": f"eq.{qid}", "status": "eq.open"},
+                             json=clean, prefer="return=representation")
+            if not isinstance(data, list):
+                raise TypeError("mentor_questions: expected a list")
+            if not data:
+                log_event("store_rejected", store="supabase", op="mentor_question_update", reason="not_open")
+                return None
+            return question_row(data[0])
+
+        return self._imports("mentor_question_update", remote, lambda s: s.mentor_question_update(qid, changes), None)

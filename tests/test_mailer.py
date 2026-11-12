@@ -522,3 +522,30 @@ def test_shutdown_waits_for_a_queued_email(tmp_path: Path) -> None:
         threading.Timer(0.3, FakeSMTP.gate.set).start()  # the server answers after the app starts closing
     assert [r["status"] for r in store.mail_log() or []] == ["sent"]
     store.close()
+
+
+def test_question_routes_email_the_mentor_then_the_intern(env: Env) -> None:
+    """Integrator wiring (P18.1 + P18.2): a sent question emails ADMIN_EMAIL; the answer emails the intern with
+    the new K-row verbatim."""
+    client, auth, store, m = env
+    sara = _interns(client)[0]
+    store.set_intern_email(sara.id, INTERN)
+    pid = InternSession.model_validate(client.post(f"/api/interns/{sara.id}/session").json()).profile_id
+    question = "هل يوجد موقف سيارات للموظفين عند المعرض الرئيسي؟"
+    r = client.post("/api/questions", json={"profile_id": pid, "source": "check", "text": question})
+    assert r.status_code == 201, r.text
+    assert m.wait(5)
+    asked = [c.messages[0] for c in FakeSMTP.instances if c.messages[0]["To"] == ADMIN]
+    assert len(asked) == 1 and question in body_of(asked[0], "plain")
+    answer = "يوجد موقف سيارات مجاني للموظفين خلف المعرض الرئيسي، ويُطلب تسجيل رقم السيارة عند قسم الموارد البشرية."
+    r = client.post(f"/api/admin/questions/{r.json()['id']}/answer", headers=auth,
+                    json={"answer_ar": answer, "topic": "Company", "keyword_en": "employee parking"})
+    assert r.status_code == 200, r.text
+    row_id = r.json()["row"]["id"]
+    assert m.wait(5)
+    got = [c.messages[0] for c in FakeSMTP.instances if c.messages[0]["To"] == INTERN]
+    assert len(got) == 1
+    text = body_of(got[0], "plain")
+    assert row_id in text and answer in text and question in text
+    events = [x["event"] for x in store.mail_log() or []]
+    assert events.count("question_submitted") == 1 and events.count("question_answered") == 1

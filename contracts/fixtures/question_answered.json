@@ -1,0 +1,34 @@
+{
+  "question": {
+    "id": "00000c01-4d3a-4e8b-9c71-2a5d0e7f3b14",
+    "intern_id": "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+    "source": "chat",
+    "text": "هل يوجد موقف سيارات للموظفين في المقر؟",
+    "status": "answered",
+    "answer_row_id": "K19",
+    "created_at": "2026-11-12T09:10:00.000+00:00",
+    "answered_at": "2026-11-12T10:30:00.000+00:00",
+    "answer_row": {
+      "id": "K19",
+      "topic": "Company",
+      "answer_ar": "يوجد موقف سيارات مجاني للموظفين خلف مبنى المقر الرئيسي.",
+      "source_document": "Mentor answer",
+      "source_page": 1,
+      "edited": true,
+      "status": "added"
+    }
+  },
+  "row": {
+    "id": "K19",
+    "topic": "Company",
+    "answer_ar": "يوجد موقف سيارات مجاني للموظفين خلف مبنى المقر الرئيسي.",
+    "source_document": "Mentor answer",
+    "source_page": 1,
+    "edited": true,
+    "status": "added",
+    "keyword_en": "employee parking",
+    "offline_edit": false
+  },
+  "version": "3f9a1c2b7d10",
+  "reindex_ms": 412
+}

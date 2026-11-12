@@ -263,6 +263,24 @@ class Store(Protocol):
         """The newest `limit` mail log rows (MAIL_COLUMNS), newest first; None when unavailable."""
         ...
 
+    # Questions inbox (P18.1) -----------------------------------------------------------------------
+    # A question the intern chose to send to the mentor. Same failure rule as the requests table (None -> 503
+    # `requests_unavailable`, never flips the store), e.g. Supabase without migration 0006.
+
+    def mentor_questions(
+        self, *, intern_id: str | None = None, status: str | None = None, ids: list[str] | None = None
+    ) -> list[dict[str, Any]] | None:
+        """Questions matching every given filter, newest first (QUESTION_COLUMNS); None when unavailable."""
+        ...
+
+    def mentor_question_create(self, record: dict[str, Any]) -> dict[str, Any] | None:
+        """Insert one validated question (`question_record`). The stored row, or None."""
+        ...
+
+    def mentor_question_update(self, question_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        """Answer or dismiss (see `question_changes`). The stored row; {} when unknown; None on failure."""
+        ...
+
     def close(self) -> None: ...
 
 
@@ -860,4 +878,53 @@ def mail_row(r: dict[str, Any]) -> dict[str, Any]:
     out = {k: r.get(k) for k in MAIL_COLUMNS}
     out["id"] = str(out["id"])
     out["to_addr"] = out["to_addr"] or ""
+    return out
+
+
+# Questions inbox (P18.1) ------------------------------------------------------------------------------------
+# A question the intern chose to send to the mentor (Rumour Check or a chat refusal). The admin answers it with
+# a new K-row (`answer_row_id`) or dismisses it; both happen once, from `open`.
+
+QUESTION_COLUMNS = ("id", "intern_id", "source", "text", "status", "answer_row_id", "created_at", "answered_at")
+QUESTION_SOURCES = frozenset({"check", "chat"})
+QUESTION_STATUSES = frozenset({"open", "answered", "dismissed"})
+QUESTION_TEXT_MAX = 600
+
+
+def question_record(rec: object) -> dict[str, Any] | None:
+    """A new open question to store (exactly QUESTION_COLUMNS; id and time filled in), or None when invalid."""
+    if not isinstance(rec, dict):
+        return None
+    out = {k: rec.get(k) for k in QUESTION_COLUMNS}
+    out["id"] = valid_uuid(out["id"]) or str(uuid.uuid4())
+    out["intern_id"] = valid_uuid(out["intern_id"])
+    text = out["text"]
+    if out["intern_id"] is None or out["source"] not in QUESTION_SOURCES:
+        return None
+    if not isinstance(text, str) or not 1 <= len(text.strip()) <= QUESTION_TEXT_MAX:
+        return None
+    out["status"], out["answer_row_id"], out["answered_at"] = "open", None, None
+    out["created_at"] = out["created_at"] if isinstance(out["created_at"], str) and out["created_at"] else now_iso()
+    return out
+
+
+def question_changes(changes: dict[str, Any], current_status: str | None) -> dict[str, Any] | None:
+    """`{status: answered, answer_row_id: K..}` or `{status: dismissed}` on an open question (answered_at set),
+    or None when anything is invalid, unknown or the question is not open."""
+    if current_status != "open":
+        return None
+    status, row_id = changes.get("status"), changes.get("answer_row_id")
+    if set(changes) - {"status", "answer_row_id"}:
+        return None
+    if status == "answered" and isinstance(row_id, str) and KB_ID_RE.match(row_id):
+        return {"status": status, "answer_row_id": row_id, "answered_at": now_iso()}
+    if status == "dismissed" and row_id is None:
+        return {"status": status, "answered_at": now_iso()}
+    return None
+
+
+def question_row(r: dict[str, Any]) -> dict[str, Any]:
+    out = {k: r.get(k) for k in QUESTION_COLUMNS}
+    out["id"] = str(out["id"])
+    out["intern_id"] = str(out["intern_id"])
     return out

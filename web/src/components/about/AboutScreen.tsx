@@ -101,6 +101,7 @@ export default function AboutScreen() {
               <p className={cn(body, "mt-2")} data-mail-privacy>
                 {t("mail.aboutPrivacy")}
               </p>
+              <p data-privacy-questions className={cn(body, "mt-2")}>{t("questions.privacy")}</p>
               <button
                 type="button"
                 onClick={() => setConfirm(true)}

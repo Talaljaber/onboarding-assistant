@@ -659,6 +659,50 @@ No body → **202** `MailTestResponse` `{status: "queued" | "skipped", error}`: 
 the background (the result appears in the log); `skipped` with `error` `offline`, `not_configured` or
 `no_recipient` when nothing can be sent (the log records it too).
 
+## 6k. Questions inbox (P18.1)
+
+A question the intern **chooses** to send to the mentor: from the Rumour Check (a claim labelled `not_found` or
+`related`) or from chat (a non-guard refusal or the not-confirmed band). Nothing is stored by a chat turn or a
+check; only this `POST`, after the intern saw (and could edit) the exact text in a confirm sheet. The admin
+answers it once with a new K-row (status `added`) through the KB editor's add path (same validation, re-index
+and version bump as `POST /api/kb`), or dismisses it. No score; question text never reaches the assistant's
+prompts or the turn log. Every route answers 503 `requests_unavailable` when the store cannot serve the table
+(Supabase before migration `0006_questions.sql`).
+
+`MentorQuestion` = `{id, intern_id, source: "check"|"chat", text, status: "open"|"answered"|"dismissed",
+answer_row_id, created_at, answered_at, answer_row: Source|null}`; `answer_row` is the answer row verbatim from
+the live KB (null until answered, or when the row is gone). `QuestionCounts` = `{open, answered, dismissed}`.
+
+### POST /api/questions
+
+Body `QuestionCreate` `{profile_id, source, text (1–600 after cleaning, line breaks kept)}` → 201
+`MentorQuestion` (open). Scoped like the request routes: 400 missing or malformed `profile_id`; 404 unknown,
+anonymous or deactivated intern's profile. 400 `field: "text"` when the guards stop it (employment, contact,
+injection: those keep the fixed refusal and are never sent) or the text holds an email, a link or a phone
+number.
+
+### GET /api/questions?profile_id=…
+
+→ `MentorQuestionList` `{questions (newest first), counts}`: the signed-in intern's own questions only.
+
+### GET /api/admin/questions?status=… (admin)
+
+→ `AdminQuestionList` `{questions: AdminQuestion[] (newest first, filtered by `status` when given), counts (every
+question)}`. `AdminQuestion` = `MentorQuestion` + `{intern: InternPublic, suggestion: {row_id, topic,
+keyword_en}|null}`; `suggestion` is the nearest live row (hybrid search) of an open question, to pre-fill the
+answer form's topic and keyword.
+
+### POST /api/admin/questions/{id}/answer (admin)
+
+Body `QuestionAnswer` `{answer_ar (5–600), topic (1–40), keyword_en? (≤ 60), source_document? (≤ 80; default
+«Mentor answer»)}`; the row's page is 1 → `QuestionAnswered` `{question, row: KbRow, version, reindex_ms}`. 400
+with `field` when a field holds an email, a link or a phone number (nothing is added); 400 `field: "status"`
+when the question is not open; 404 unknown; 423 while a reindex holds the KB lock.
+
+### POST /api/admin/questions/{id}/dismiss (admin)
+
+→ `MentorQuestion` (dismissed). 400 `field: "status"` when not open; 404 unknown.
+
 ## 7. Fixed labels
 
 | constant | text |
@@ -702,6 +746,8 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
   `mentor_request_patch_request.json`, `mentor_request_deleted.json`;
 - Rumour Check (P14.2): `check_request.json`, `check.json`;
 - premise correction (P16.5): `chat_answer_premise.json`;
+- questions inbox (P18.1): `question_create_request.json`, `question.json`, `questions.json`,
+  `admin_questions.json`, `question_answer_request.json`, `question_answered.json`, `question_dismissed.json`;
 - request threads (P15): `request_thread.json`, `request_comment.json`, `request_comment_create_request.json`,
   `request_comment_admin_create_request.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,

@@ -22,6 +22,7 @@ import ScenariosScreen from "@/components/scenarios/ScenariosScreen";
 import { AppShell } from "@/components/shell/AppShell";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import WelcomeScreen from "@/components/welcome/WelcomeScreen";
+import QuestionsScreen from "@/components/questions/QuestionsScreen"; // P18.1
 import { replace, usePath } from "@/router";
 import { AppStateProvider, useAppState } from "@/state/useAppState";
 
@@ -61,6 +62,7 @@ export const ROUTES: readonly RouteDef[] = [
     needsAdmin: true,
     match: /^\/admin\/kb\/import\/[0-9a-f-]{36}$/,
   },
+  { path: "/admin/questions", Screen: QuestionsScreen, needsRole: false, needsAdmin: true }, // P18.1
   { path: "/admin", Screen: AdminScreen, needsRole: false },
   { path: "/about", Screen: AboutScreen, needsRole: false },
 ];

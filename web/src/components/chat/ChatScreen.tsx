@@ -30,6 +30,7 @@ import { recalledItemIds } from "./attention";
 import { revealSoon } from "./reveal";
 import { STARTERS } from "./starters";
 import { useChat } from "./useChat";
+import { MyQuestionsPanel } from "../questions/MyQuestionsPanel"; // P18.1
 
 /** `?scenario=S02` from the hash, if any. */
 function scenarioParam(): string | null {
@@ -329,6 +330,7 @@ function ChatInner() {
               </div>
             )}
             <MentorRequestsPanel docked />
+            <MyQuestionsPanel busy={busy} onReask={chat.send} />
           </div>
           {active && (
             <div data-practice-banner className={`${surface.soft} da-rise-in mb-2 flex min-h-11 items-center gap-2 ps-3 pe-1`}>
