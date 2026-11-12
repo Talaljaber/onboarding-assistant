@@ -103,6 +103,35 @@ describe("Email log card (P18.2)", () => {
     await userEvent.click(screen.getByRole("button", { name: "أرسل رسالة تجريبية إليّ" }));
     expect(await screen.findByText("لم تُرسل الرسالة التجريبية: البريد غير مُعدّ")).toBeInTheDocument();
   });
+
+  it("an address breaks after the @ only, not after every letter (P19.3)", async () => {
+    backend();
+    mount(<MailLogCard />);
+    const addr = (await screen.findAllByText("mentor@example.com"))[0]!;
+    expect(addr.tagName).toBe("BDI");
+    expect(addr).not.toHaveClass("break-all");
+    expect(addr.querySelectorAll("wbr")).toHaveLength(1);
+    expect(addr.firstChild?.textContent).toBe("mentor@");
+  });
+
+  it("a phone shows the newest 5 emails, then «Show all» opens the rest (P19.3)", async () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({
+      matches: q.includes("max-width"),
+      media: q,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    const base = mailLog.entries[0]!;
+    const entries = Array.from({ length: 7 }, (_, i) => ({ ...base, id: `00000${i}e3-4d3a-4e8b-9c71-2a5d0e7f3b14` }));
+    backend({ "GET /api/admin/mail/log": () => json({ ...mailLog, entries }) });
+    mount(<MailLogCard />);
+    const more = await screen.findByTestId("mail-show-all");
+    expect(more).toHaveTextContent("Show all 7 emails");
+    expect(document.querySelectorAll("[data-mail-entry]")).toHaveLength(5);
+    await userEvent.click(more);
+    expect(document.querySelectorAll("[data-mail-entry]")).toHaveLength(7);
+    expect(screen.queryByTestId("mail-show-all")).toBeNull();
+  });
 });
 
 describe("Intern email field (P18.2)", () => {

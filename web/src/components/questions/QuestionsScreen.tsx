@@ -147,7 +147,8 @@ export default function QuestionsScreen() {
         <PageHeader icon="mail" title={t("adminQuestions.nav")} description={t("adminQuestions.lead")} />
         <Tabs
           idBase="aq"
-          className="self-start"
+          // Phones: a 2 x 2 grid, so no filter hides past the edge of the scrollbar-less pill row (P19.3).
+          className="self-start max-sm:grid max-sm:w-full max-sm:grid-cols-2 max-sm:rounded-2xl"
           label={t("adminQuestions.filterLabel")}
           value={filter}
           onChange={(id) => setFilter(id as Filter)}

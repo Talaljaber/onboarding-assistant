@@ -67,7 +67,7 @@ describe("admin interns list", () => {
     const calls = backend();
     mount(<InternsScreen />);
     const table = await screen.findByRole("table");
-    expect(within(table).getByText("Sara Al-Khatib")).toBeInTheDocument();
+    expect(within(table).getByRole("link", { name: "Sara Al-Khatib" })).toBeInTheDocument();
     expect(within(table).getByText("38%")).toBeInTheDocument();
     expect(within(table).getByText("3/8")).toBeInTheDocument();
     const heads = within(table).getAllByRole("columnheader").map((h) => h.textContent ?? "");
@@ -85,8 +85,29 @@ describe("admin interns list", () => {
     backend();
     mount(<InternsScreen />, "ar");
     const table = await screen.findByRole("table");
-    expect(within(table).getByText("سارة الخطيب")).toBeInTheDocument();
+    const link = within(table).getByRole("link", { name: "سارة الخطيب" });
+    // P19.3: a name wraps between words only, never inside one
+    expect([...link.querySelectorAll(".whitespace-nowrap")].map((s) => s.textContent)).toEqual(["سارة", "الخطيب"]);
     expect(within(table).queryByText("Sara Al-Khatib")).toBeNull();
+  });
+
+  it("phone cards: the name link to the detail page is a 44 px tap target (P19.3)", async () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({
+      matches: q.includes("max-width"),
+      media: q,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    backend();
+    mount(<InternsScreen />);
+    const cards = await waitFor(() => {
+      const el = document.querySelector<HTMLElement>("[data-intern-cards]");
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    const link = within(cards).getByRole("link", { name: "Sara Al-Khatib" });
+    expect(link.getAttribute("href")).toBe(`#/admin/interns/${adminInterns.interns[0]!.id}`);
+    expect(link).toHaveClass("inline-flex", "min-h-11");
   });
 
   it("adds an intern: names are validated before anything is sent", async () => {

@@ -942,6 +942,7 @@ export const en: Dict = {
     notConfigured: "Email is not set up: add SMTP_USER and SMTP_PASSWORD (a Gmail app password) to .env and restart the server.",
     noAdminEmail: "ADMIN_EMAIL is not set: intern replies and the test email cannot reach you.",
     empty: "No emails yet.",
+    showAll: "Show all {n} emails",
     colTime: "Time",
     colEvent: "Event",
     colTo: "To",
