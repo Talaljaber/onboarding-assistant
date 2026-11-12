@@ -1,0 +1,41 @@
+{
+  "items": [
+    {
+      "id": "M001",
+      "question_ar": "كم معرضاً تمتلك المجموعة؟",
+      "options": {
+        "A": "17 معرضاً",
+        "B": "12 معرضاً",
+        "C": "25 معرضاً"
+      },
+      "source_knowledge_id": "K02",
+      "question_en": null,
+      "options_en": null
+    },
+    {
+      "id": "M002",
+      "question_ar": "عبر أي نظام يُقدَّم طلب الإجازة؟",
+      "options": {
+        "A": "رسالة إلى الزملاء",
+        "B": "نظام الموارد البشرية",
+        "C": "لوحة الإعلانات في المعرض"
+      },
+      "source_knowledge_id": "K16",
+      "question_en": null,
+      "options_en": null
+    },
+    {
+      "id": "M003",
+      "question_ar": "ما الذي يجب المحافظة عليه بخصوص معلومات الشركة؟",
+      "options": {
+        "A": "نشرها على وسائل التواصل",
+        "B": "سريتها وعدم إفشائها دون تصريح",
+        "C": "مشاركتها مع العملاء"
+      },
+      "source_knowledge_id": "K17",
+      "question_en": null,
+      "options_en": null
+    }
+  ],
+  "label_ar": "اختبار تدريبي"
+}

@@ -16,7 +16,7 @@ Part D §7.4 is superseded by this file.
 - **Every model rejects unknown keys** (`extra="forbid"`), requests and responses alike.
 - The server serialises **every** field: unused fields are `null` (lists: `[]`), never omitted.
   Fixtures are exactly the serialised form.
-- Ids: K-rows `^K\d{2,3}$`; scenarios `^S0[1-6]$`; options `^S0[1-6]-O[1-3]$`; quiz `^Q\d{2}$`;
+- Ids: K-rows `^K\d{2,3}$`; scenarios `^S0[1-6]$`; options `^S0[1-6]-O[1-3]$`; quiz `^Q\d{2}$` (P20: or a practice-set item `^M\d{3}$`);
   activities `^[A-Z]{1,2}-[A-Za-z0-9-]{1,32}$` (canonical ids `SA-…` for Sales and `DE-…` for Delivery,
   e.g. `SA-D1-read-company`, `SA-D30-quiz`, `DE-D60-s05`); out-of-scope examples `^OOS\d{2,3}$`;
   `profile_id` and intern ids are lowercase UUID strings.
@@ -57,6 +57,8 @@ Every non-2xx response has this body (`ErrorBody`):
 
 No 5xx is ever caused by the LLM or the store: LLM failures become `mode: "offline"` inside a 200,
 store failures switch the process to the local store.
+
+P20: `imports_unavailable` (503) is also the answer of `POST /api/admin/quiz-sets/draft` when no model draft can be made (`message` `reason:llm_unavailable` or `reason:draft_failed`); `requests_unavailable` (503) covers the practice-quiz tables (migration 0009). No new error code: a grounding failure is 400 `validation_error` with `message` `reason:<code>` (§6l).
 
 ## 3. Input limits and text cleaning
 
@@ -257,7 +259,8 @@ Activity ids and titles come from `data/ours/plan_activities.csv` (8 per role).
 ### POST /api/quiz/check
 
 Body `QuizCheckRequest` `{id, option: "A"|"B"|"C", profile_id}` →
-`QuizCheckResponse` `{correct, correct_option, explanation: Source}`. 404 unknown id.
+`QuizCheckResponse` `{correct, correct_option, explanation: Source}`. 404 unknown id. P20: `id` may be a
+practice-set item (`M\d{3}`), which needs the `profile_id` of an intern who can see the open set (§6l).
 The result is practice feedback; with a `profile_id` the server records only that an attempt was made
 (the manager view never shows correctness).
 
@@ -716,6 +719,159 @@ reindex holds the KB lock (KB scope).
 
 → `MentorQuestion` (dismissed). 400 `field: "status"` when not open; 404 unknown.
 
+## 6l. Practice quizzes (P20)
+
+Named practice sets written by the admin, each question grounded in one K-row: typed by the admin, a model draft
+the admin approved, or a CSV line. The intern sees the official sample quiz (the built-in set `official`, Q01–Q05,
+always open, never edited) and the **published** sets for them; a set opens when the intern's suggested-plan
+progress reaches `opens_at_percent`. Attempts are recorded exactly as for the official quiz (`quiz_attempts`,
+`question_id` `M\d{3}` for set items). **For practice sets and the official quiz the admin never receives a
+per-intern result**: practice counts (who practised, how many questions answered) and anonymous content signals per
+question (only when ≥ 3 interns tried it) — "the quiz checks the knowledge base, never the employee". The only
+exception is a checkpoint set (below): the first answer per question, which the intern is told about before starting. Every route answers 503 `requests_unavailable`
+when the store cannot serve the tables (Supabase before migration `0009_quiz_sets.sql`).
+
+Ids: a set is a lowercase UUID (or `official`); a set item is `^M\d{3}$` (the next free number across all sets and
+past attempts: an id held by an item or a stored attempt is never handed out again); `QUIZ_ID_RE` is now
+`^(Q\d{2}|M\d{3})$`. Enums: audience `all | track | interns`; status `draft | published`; origin `manual | model |
+csv`; mode `practice | checkpoint`.
+
+**Grounding rules** (`app/quiz_sets.py::check_item`, one function for every path): the cited row exists in the
+live KB; question 5–300 characters, each option 1–120, the three options distinct after normalisation; no email,
+link or phone number anywhere; every number in the question and in the correct option appears in the row's
+`answer_ar` (distractors may carry other numbers). Model drafts also need the correct option to share ≥ 50 % of
+its content words with the row and must not be answerable by another option (two options found in the row, or a
+distractor found in the row while the correct one is not). A failure is 400 `validation_error` with the failing
+`field` (`question_ar`, `options`, `options.A|B|C`, `correct_option`, `source_knowledge_id`) and `message`
+`reason:<code>`; for `number_not_in_row` the message names the number: `reason:number_not_in_row:30`. Reason codes
+(`QuizReason`): `unknown_row`, `length`, `duplicate_options`, `contact`, `number_not_in_row`, `answer_not_in_row`,
+`ambiguous`, `invalid` (a missing or malformed field: CSV lines), `set_full` (the set already has 20 items).
+
+**Checkpoint quizzes (D-P20-checkpoint, owner-approved).** A set has `mode` `practice` (default) or
+`checkpoint`. For a checkpoint set the intern's **first** answer to each question (the earliest stored attempt per
+intern and item, over all their profiles) is shared with the admin; later answers are practice and never change
+it. The intern is told before starting (`QuizSetSummary.mode`). Practice sets and the official quiz (always
+`practice`) are never shared. The mode cannot change once anyone has answered one of the set's questions (400
+`field: "mode"`), so a practice answer never becomes a shared result.
+
+### GET /api/admin/quiz-sets (admin)
+
+→ `AdminQuizSetList` `{sets: AdminQuizSet[] (newest first), official: {id: "official", title_ar, title_en,
+item_count, interns_practised}}`. `AdminQuizSet` = `{id, title_ar, title_en, audience, track, intern_ids,
+opens_at_percent, status, item_count, interns_practised, created_at, updated_at, mode}`; `track` is set exactly for
+audience `track`, `intern_ids` is non-empty exactly for audience `interns`; `interns_practised` counts active
+interns who answered at least one of the set's questions.
+
+### POST /api/admin/quiz-sets (admin)
+
+Body `QuizSetCreate` `{title_ar (1–80), title_en? (≤ 80; "" = null), audience, track? (required for "track"),
+intern_ids? (active interns; required for "interns"), opens_at_percent? (0–100, default 0), mode? (default
+"practice")}` → 201 `AdminQuizSet`
+(draft). The field the audience does not use is ignored. 400 `field: "intern_ids"` for an unknown or deactivated
+intern; 400 with `field` when a title holds an email, a link or a phone number.
+
+### PATCH /api/admin/quiz-sets/{id} (admin)
+
+Body `QuizSetPatch` (any create field and `status`; at least one) → `AdminQuizSet`. The audience rule is checked
+on the merged set. Publishing a set with no items → 400 `field: "status"`. Changing `mode` after anyone answered
+one of its questions → 400 `field: "mode"`. 404 unknown set.
+
+### DELETE /api/admin/quiz-sets/{id} (admin)
+
+→ 204, no body. The items go with it; past attempts stay (they no longer resolve and signals ignore them).
+
+### GET /api/admin/quiz-sets/{id} (admin)
+
+→ `AdminQuizSetDetail` `{set: AdminQuizSet, items: AdminQuizItem[] (by position)}`. `AdminQuizItem` = `{id,
+position, question_ar, options {A, B, C}, correct_option, source_knowledge_id, origin, row: Source|null}`;
+`correct_option` is the item's own answer key (metadata the admin wrote), `row` the cited row verbatim from the
+live KB (null when the row is no longer in the KB, e.g. an added row after a KB reset).
+
+### POST /api/admin/quiz-sets/{id}/items (admin)
+
+Body `QuizItemIn` `{question_ar, options {A, B, C}, correct_option, source_knowledge_id, origin? (default
+"manual")}` → 201 `AdminQuizItem` (appended). Grounding failure → 400 as above; a full set (20) → 400 `field:
+"items"`, `reason:set_full`.
+
+### PATCH /api/admin/quiz-sets/{id}/items/{item_id} (admin)
+
+Body `QuizItemPatch` (any `QuizItemIn` field; `options` as a whole; at least one, none null) → `AdminQuizItem`;
+the merged item is checked again. 404 unknown set or an item of another set.
+
+### DELETE /api/admin/quiz-sets/{id}/items/{item_id} (admin)
+
+→ 204, no body. The remaining items keep their order (positions renumbered 0…n−1).
+
+### POST /api/admin/quiz-sets/{id}/items/order (admin)
+
+Body `QuizItemOrder` `{ids}` (every item id of the set exactly once) → `AdminQuizSetDetail`. 400 `field: "ids"`
+otherwise.
+
+### POST /api/admin/quiz-sets/draft (admin)
+
+Body `QuizDraftRequest` `{source_knowledge_id}` → `QuizDraft` `{question_ar, options, correct_option,
+source_knowledge_id, model, checks_passed: true}`. **Not stored**: the admin edits it and saves it through
+`POST …/items` with `origin: "model"`. The pinned answer model drafts one Arabic question from that one row
+(prompt `prompts/quiz_draft_v1.md`; JSON out); the reply must pass `check_item` with the model rules; when it does
+not, one call to the pinned escalation model (low reasoning effort); only a verified draft is cached. 400 `field:
+"source_knowledge_id"` for an unknown row. 503 `imports_unavailable` with `message` `reason:llm_unavailable`
+(offline, no key, budget exhausted) or `reason:draft_failed` (the call failed or no draft passed the checks).
+
+### POST /api/admin/quiz-sets/{id}/import (admin)
+
+Body `QuizImportRequest` `{filename, content_b64}`: a UTF-8 CSV (BOM allowed, ≤ 200 KB decoded; the body may reach
+300 KB on this route with a valid admin token) whose header has `question_ar, option_a, option_b, option_c,
+correct_option, source_knowledge_id` (an `id` column is ignored, so the official `sample_quiz.csv` layout works).
+→ `QuizImportResult` `{added: AdminQuizItem[] (origin "csv"), rejected: [{line, reason}]}`: every line is checked
+on its own (`line` is the file line; the header is line 1); lines past the 20-item cap are `set_full`. 400 `field:
+"content_b64"` for bad base64, a non-UTF-8 file or a header without the columns; 413 over 200 KB.
+
+### GET /api/admin/quiz-sets/{id}/signals (admin; `id` may be `official`)
+
+→ `QuizSignals` `{set_id, items: [{item_id, question_ar, source_knowledge_id, interns_tried, retry_share}],
+min_interns: 3, label_ar: «إشارات المحتوى — ليست تقييماً للأداء»}`. `interns_tried`: active interns (distinct, from
+their profiles) who answered the question; `retry_share`: the share of them whose **first** answer was wrong (2
+decimals), `null` when fewer than 3 tried it. No names, no profile ids, no per-intern data. For `official` the
+items are Q01–Q05.
+
+### GET /api/admin/quiz-sets/{id}/results (admin; checkpoint sets only)
+
+→ `CheckpointResults` `{results: [{intern_id, name_ar, name_en, track, answered, first_attempt_right, total,
+finished_at}]}`: every active intern in the set's audience (roster order), zeros and `finished_at: null` when not
+started. `answered` / `first_attempt_right` count the FIRST answer to each current question; `total` = the set's
+items; `finished_at` = when the last question got its first answer (null until all are answered). 400 `field:
+"mode"` for a practice set (`error_400_quiz_mode.json`); 404 unknown set or `official`. The admin intern detail
+(`GET /api/admin/interns/{id}`) also carries `checkpoints: [{set_id, title_ar, title_en, answered,
+first_attempt_right, total, finished_at}]`: the published checkpoint sets for that intern and any checkpoint set
+they answered (empty list when none). These are the only admin shapes with a correctness count.
+
+### GET /api/quiz-sets?profile_id=…
+
+→ `QuizSetList` `{sets: QuizSetSummary[]}`: the official quiz first (always open), then the published sets whose
+audience includes the signed-in intern (everyone, their track, or chosen), oldest first. `QuizSetSummary` = `{id,
+title_ar, title_en, item_count, opens_at_percent, open, official, mode}`; `open` = the intern's suggested-plan progress
+(`GET /api/progress`'s `percent`) ≥ `opens_at_percent`. Without `profile_id`, or with a profile that is not an
+active intern's, only the official quiz is listed. 400 malformed `profile_id`. Sets whose items all cite rows no
+longer in the KB are not listed; `item_count` counts the items the intern can answer.
+
+### GET /api/quiz-sets/{id}?profile_id=…
+
+→ `QuizResponse` (the existing quiz shape: items **without** the correct option; `question_en`/`options_en` null
+for set items). `official` returns Q01–Q05 (ordered for the profile's track as `GET /api/quiz?role=`). 404 when
+the set is not visible to this intern (unknown, draft, another audience, no intern profile); 400 `field:
+"progress"`, `message` `reason:locked:<opens_at_percent>` when it has not opened yet.
+
+### POST /api/quiz/check (set items)
+
+Unchanged shape. An `M` id needs the `profile_id` of an intern who can see the set and for whom it is open
+(else 404). The answer's explanation is the cited live row; the attempt is recorded as for Q items.
+
+### POST /api/questions with `source: "quiz"`
+
+After a wrong practice answer the intern may tap «اسأل مشرفي عن هذا»: the client pre-fills the text with the
+question and its K-id (e.g. «… (K16)»), the intern can edit it, and only Send stores it (same consent, guards and
+contact rule as §6k). The admin's email says the question came from a practice quiz.
+
 ## 7. Fixed labels
 
 | constant | text |
@@ -728,6 +884,8 @@ reindex holds the KB lock (KB scope).
 | admin interns `label_ar` | «متدربون للعرض بأسماء افتراضية — أعداد الإكمال والتدريب فقط، ليست تقييماً» |
 | mentor requests `label_ar` | «طلبات من المشرف للمتابعة — ليست تقييماً» |
 | rumour check `label_ar` | «هذا فحص للمعلومة، وليس حكماً على أحد» |
+| quiz signals `label_ar` (P20) | «إشارات المحتوى — ليست تقييماً للأداء» |
+| official practice set title (P20) | «الاختبار التدريبي الرسمي» / "Official practice quiz" |
 
 The refusal, not-confirmed, partial, contact, employment and injection texts are the fixed server texts
 of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
@@ -762,6 +920,13 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
 - questions inbox (P18.1): `question_create_request.json`, `question.json`, `questions.json`,
   `admin_questions.json`, `question_answer_request.json`, `question_answered.json`, `question_dismissed.json`;
   P18.5 private replies: `question_answer_private_request.json`, `question_answered_private.json`;
+- practice quizzes (P20): `admin_quiz_sets.json`, `quiz_set_create_request.json`, `admin_quiz_set.json`,
+  `quiz_set_patch_request.json`, `admin_quiz_set_detail.json`, `quiz_item_create_request.json`,
+  `admin_quiz_item.json`, `quiz_item_patch_request.json`, `quiz_item_order_request.json`,
+  `quiz_draft_request.json`, `quiz_draft.json`, `quiz_import_request.json`, `quiz_import_result.json`,
+  `quiz_signals.json`, `quiz_sets.json`, `quiz_set.json`, `quiz_check_set_request.json`, `quiz_check_set.json`,
+  `question_create_quiz_request.json`, `error_400_quiz_grounding.json`, `error_400_quiz_locked.json`,
+  `error_503_quiz_draft.json`; checkpoint quizzes: `checkpoint_results.json`, `error_400_quiz_mode.json`;
 - request threads (P15): `request_thread.json`, `request_comment.json`, `request_comment_create_request.json`,
   `request_comment_admin_create_request.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,
@@ -770,5 +935,5 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
 
 `tests/test_contract.py` checks that every fixture validates and is canonical, that every reply kind and
 refusal reason is covered, the request rules and limits, that no quiz GET carries the correct option, that
-the admin intern views have no correctness or score field, and that `types.ts` names every enum value.
+the admin intern views have no correctness or score field (except the checkpoint counts, D-P20-checkpoint), and that `types.ts` names every enum value.
 W3-A's `tests/test_api.py` should validate real responses with the same models.
