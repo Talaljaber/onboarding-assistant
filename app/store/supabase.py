@@ -16,11 +16,13 @@ import threading
 import time
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypeVar
 
 import httpx
 
+from app.deadlines import norm_ts, parse_ts  # P21.1
 from app.logging_setup import log_event
 from app.store.base import (
     KB_COLUMNS,
@@ -112,6 +114,11 @@ def failure_reason(exc: BaseException) -> str:
 
 def _in_list(values: list[str]) -> str:
     return "(" + ",".join(f'"{v}"' for v in values) + ")"
+
+
+def _pg_ts(dt: datetime) -> str:
+    """P21.1: a timestamp for a PostgREST filter, in UTC with `Z` and microseconds."""
+    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 class SupabaseStore:
@@ -771,7 +778,7 @@ class SupabaseStore:
             found = self._list("mentor_requests", {"select": _REQUEST_SELECT, "id": f"eq.{rid}"})
             if not found:
                 return {}
-            clean = request_changes(changes, str(found[0].get("status")))
+            clean = request_changes(changes, str(found[0].get("status")), found[0].get("due_at"))
             if clean is None:
                 log_event("store_rejected", store="supabase", op="mentor_request_update", reason="invalid_input")
                 return None
@@ -797,6 +804,41 @@ class SupabaseStore:
             return bool(data)
 
         return self._imports("mentor_request_delete", remote, lambda s: s.mentor_request_delete(rid), None)
+
+    # Deadline reminders (P21.1) ------------------------------------------------------------------
+    # Filters use the `Z` form of a timestamp (a `+` in a query string can be read as a space).
+
+    def mentor_requests_reminder_due(self, after: str, until: str) -> list[dict[str, Any]] | None:
+        lo, hi = parse_ts(after), parse_ts(until)
+        if lo is None or hi is None:
+            return []
+
+        def remote() -> list[dict[str, Any]] | None:
+            rows = self._list("mentor_requests", {
+                "select": _REQUEST_SELECT, "status": "neq.done", "reminder_sent_at": "is.null",
+                "and": f"(due_at.gt.{_pg_ts(lo)},due_at.lte.{_pg_ts(hi)})", "order": "due_at.asc",
+            })
+            out = [request_row(r) for r in rows]
+            return [r for r in out if (d := parse_ts(r["due_at"])) is not None and lo < d <= hi]
+
+        return self._imports("mentor_requests_reminder_due", remote,
+                             lambda s: s.mentor_requests_reminder_due(after, until), None)
+
+    def mentor_request_claim_reminder(self, request_id: str, due_at: str, at: str) -> bool | None:
+        rid, due, when = valid_uuid(request_id), parse_ts(due_at), norm_ts(at)
+        if rid is None or due is None or when is None:
+            return False
+
+        def remote() -> bool | None:
+            data = self._req("PATCH", "mentor_requests", params={
+                "select": "id", "id": f"eq.{rid}", "due_at": f"eq.{_pg_ts(due)}", "reminder_sent_at": "is.null",
+                "status": "neq.done"}, json={"reminder_sent_at": when}, prefer="return=representation")
+            if not isinstance(data, list):
+                raise TypeError("mentor_requests: expected a list")
+            return bool(data)
+
+        return self._imports("mentor_request_claim_reminder", remote,
+                             lambda s: s.mentor_request_claim_reminder(rid, due_at, at), None)
 
     # Comments and files on mentor requests (P15) ----------------------------------------------------
     # Same rule as the requests table: a failure (no migration 0005, Storage down) answers None -> 503 and

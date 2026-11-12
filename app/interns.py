@@ -95,7 +95,8 @@ def summary_row(intern: dict[str, Any], profiles: list[dict[str, Any]], act: dic
 
 def detail(intern: dict[str, Any], profiles: list[dict[str, Any]], act: dict[str, list[dict[str, Any]]],
            plan: PlanBook, scenario_value: Callable[[str], str | None],
-           kb_topic: Callable[[str], str | None], extra: Iterable[object] = ()) -> schemas.InternDetail:
+           kb_topic: Callable[[str], str | None], extra: Iterable[object] = (),
+           tasks: schemas.TaskSummary | None = None) -> schemas.InternDetail:
     role = intern["role"]
     roles = {str(p["id"]): str(p["role"]) for p in profiles}
     current = _current_ids(profiles, role)
@@ -166,6 +167,7 @@ def detail(intern: dict[str, Any], profiles: list[dict[str, Any]], act: dict[str
                                         milestones=milestones),
         scenarios=scenarios, quiz=quiz, chat=chat, timeline=events[:TIMELINE_MAX],
         label_ar=schemas.INTERNS_LABEL_AR,
+        tasks=tasks,  # P21.1: mentor requests by deadline outcome (counts only)
     )
 
 

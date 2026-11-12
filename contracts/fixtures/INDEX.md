@@ -83,7 +83,7 @@ row; `verify.compare_claim` label `differs`). Every other reply leaves the key o
 | `intern_create_request.json` | `POST /api/admin/interns` body (admin) | `InternCreate` |
 | `intern_patch_request.json` | `PATCH /api/admin/interns/{id}` body (admin) | `InternPatch` |
 | `intern.json` | `POST /api/admin/interns` (201), `PATCH /api/admin/interns/{id}` | `InternOut` |
-| `intern_detail.json` | `GET /api/admin/interns/{id}` (admin; Sara after ticks, chat, a scenario and quiz practice) | `InternDetail` |
+| `intern_detail.json` | `GET /api/admin/interns/{id}` (admin; Sara after ticks, chat, a scenario and quiz practice; P21.1: `tasks` counts her three requests) | `InternDetail` |
 | `admin_login_request.json` | `POST /api/admin/login` body | `AdminLogin` |
 | `admin_session.json` | `POST /api/admin/login`, `GET /api/admin/session` | `AdminSession` |
 | `health.json` | `GET /api/health` (offline, local store) | `Health` |
@@ -117,12 +117,12 @@ profile id, name or per-intern figure.
 
 | File | Endpoint | Model |
 |---|---|---|
-| `mentor_request_create_request.json` | `POST /api/admin/requests` body (a `read` request for the Sales track, linked to K05) | `MentorRequestCreate` |
+| `mentor_request_create_request.json` | `POST /api/admin/requests` body (a `read` request for the Sales track, linked to K05; P21.1: a `due_at` deadline with the browser's +03:00 offset) | `MentorRequestCreate` |
 | `mentor_requests_created.json` | `POST /api/admin/requests` (201; one row per active Sales intern) | `MentorRequestList` |
-| `mentor_requests.json` | `GET /api/requests?profile_id=` and `GET /api/admin/requests` (Sara: one per kind and status; P17: the linked activity has `title_en`) | `MentorRequestList` |
+| `mentor_requests.json` | `GET /api/requests?profile_id=` and `GET /api/admin/requests` (Sara: one per kind and status; P17: the linked activity has `title_en`; P21.1: `no_deadline`, `done_late` by 160 min, `upcoming`) | `MentorRequestList` |
 | `mentor_request_status_request.json` | `PATCH /api/requests/{id}` body | `MentorRequestStatusPatch` |
 | `mentor_request.json` | `PATCH /api/requests/{id}`, `PATCH /api/admin/requests/{id}` | `MentorRequest` |
-| `mentor_request_patch_request.json` | `PATCH /api/admin/requests/{id}` body | `MentorRequestPatch` |
+| `mentor_request_patch_request.json` | `PATCH /api/admin/requests/{id}` body (P21.1: a new `due_at`, which decides over the null `due_date`) | `MentorRequestPatch` |
 | `mentor_request_deleted.json` | `DELETE /api/admin/requests/{id}` | `MentorRequestDeleted` |
 
 Titles and notes are illustrative; `kb_row` is the live K05 row verbatim; ids and times are illustrative.

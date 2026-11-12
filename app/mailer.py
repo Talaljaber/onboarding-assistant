@@ -10,7 +10,8 @@ plain-text part, English under the Arabic) for: a new mentor request (to the int
 admin's to the intern, the intern's to ADMIN_EMAIL, with the comment's files attached), a request marked done
 (to ADMIN_EMAIL), a question sent to the mentor (to ADMIN_EMAIL), a question answered (to the intern, with the
 answer row verbatim and its K-id; P18.5: or the mentor's private reply, said to be personal and not part of the
-knowledge base) and the admin's test email (to ADMIN_EMAIL).
+knowledge base), the admin's test email (to ADMIN_EMAIL) and, P21.1, a deadline reminder (to the intern, sent by
+`app/reminders.py` shortly before a request's deadline, with the deadline in Amman time).
 What it must never do: log, print, store or return the SMTP password (or any SMTP reply text); raise to an API
 route; send while OFFLINE=1 or unconfigured; put a link (localhost included) in an email; reach the assistant
 (the agent, answer, LLM and prompt code never import this module).
@@ -29,6 +30,7 @@ from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 from typing import Any
 
+from app.deadlines import amman_text  # P21.1
 from app.logging_setup import log_event
 
 #: Seconds for each SMTP socket operation (connect, TLS, login, send).
@@ -206,8 +208,8 @@ class Mailer:
         thread = threading.Thread(target=self._run, args=(build,), name="mailer", daemon=True)
         with self._lock:
             self._threads = [t for t in self._threads if t.is_alive()]
+            thread.start()  # P21.1: started before it is listed, so `wait` (another thread) never joins it unstarted
             self._threads.append(thread)
-        thread.start()
         return thread
 
     def wait(self, timeout: float = 5.0) -> bool:
@@ -286,7 +288,10 @@ def request_created_mail(req: dict[str, Any], to_addr: str) -> Mail:
     title = _one_line(str(req.get("title") or ""), 80)
     ar = ["لديك طلب جديد من مشرفك."]
     en = ["You have a new request from your mentor."]
-    if req.get("due_date"):
+    if req.get("due_at"):  # P21.1: the deadline in Amman time
+        ar.append(f"الموعد النهائي: {amman_text(req['due_at'])} بتوقيت عمّان")
+        en.append(f"Deadline: {amman_text(req['due_at'])} (Amman time)")
+    elif req.get("due_date"):
         ar.append(f"الموعد المقترح: {req['due_date']}")
         en.append(f"Suggested date: {req['due_date']}")
     if req.get("kb_id"):
@@ -362,6 +367,27 @@ def question_answered_private_mail(question: str, answer_text: str, to_addr: str
     )
 
 
+def _minutes_ar(n: int) -> str:
+    if n == 1:
+        return "دقيقة واحدة"
+    if n == 2:
+        return "دقيقتين"
+    return f"{n} دقائق" if 3 <= n <= 10 else f"{n} دقيقة"
+
+
+def request_reminder_mail(req: dict[str, Any], minutes: int, to_addr: str) -> Mail:
+    """P21.1: "this request is due in N minutes", with the deadline in Amman time (no link, like every email)."""
+    title = _one_line(str(req.get("title") or ""), 80)
+    when = amman_text(req.get("due_at"))
+    mins_ar, mins_en = _minutes_ar(minutes), f"{minutes} minute{'' if minutes == 1 else 's'}"
+    return compose(
+        "request_reminder", to_addr, f"تذكير: موعد طلب «{title}» بعد {mins_ar}", f"Reminder: a request is due in {mins_en}",
+        [f"تذكير: موعد تسليم هذا الطلب بعد {mins_ar}.", f"الموعد النهائي: {when} بتوقيت عمّان."],
+        [f"Reminder: this request is due in {mins_en}.", f"Deadline: {when} (Amman time)."],
+        _request_quotes(req),
+    )
+
+
 def admin_test_mail(to_addr: str) -> Mail:
     return compose(
         "test", to_addr, "رسالة تجريبية من مساعد التهيئة", "Test email from the onboarding assistant",
@@ -432,6 +458,14 @@ def question_answered_private(mailer: Mailer | None, *, intern_id: str, question
     mailer.submit(lambda: [question_answered_private_mail(question, answer_text, mailer.intern_email(intern_id))])
 
 
+def request_reminder(mailer: Mailer | None, req: dict[str, Any], minutes: int) -> None:
+    """P21.1: a request's deadline is `minutes` away → that intern's email (the reminder was claimed first)."""
+    if mailer is None:
+        return
+    req = dict(req)
+    mailer.submit(lambda: [request_reminder_mail(req, minutes, mailer.intern_email(str(req.get("intern_id"))))])
+
+
 def send_test(mailer: Mailer) -> tuple[str, str | None]:
     """The admin's "send a test email to me" (ADMIN_EMAIL): ("queued", None) or ("skipped", reason). The result
     of a queued email appears in the mail log."""
@@ -456,5 +490,7 @@ __all__ = [
     "question_submitted",
     "request_created",
     "request_done",
+    "request_reminder",
+    "request_reminder_mail",
     "send_test",
 ]

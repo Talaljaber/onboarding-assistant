@@ -1,11 +1,14 @@
 // New / edit mentor request (P13.2, admin). Kind, title, note (text only), an optional K-row and an
-// optional activity of the intern's plan, an optional suggested date, and — for a new request — the
-// target: this intern or every active intern of their track. The server checks everything again.
+// optional activity of the intern's plan, an optional deadline (P21.1: a date and a time in the browser's local
+// time, sent as ISO 8601 with its offset; clearable), and — for a new request — the target: this intern or every
+// active intern of their track. The server checks everything again.
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { createRequests, getKb, getPlan, patchRequest } from "@/api/client";
 import type { MentorRequest, MentorRequestList, MentorRequestPatch, RequestKind, Role } from "@/api/types";
 import { REQUEST_KINDS, REQUEST_LIMITS } from "@/api/types";
 import { useLang, useT } from "@/i18n";
+import { deadlineProblem, localIso, localParts, sameInstant } from "@/lib/deadline";
+import { localDay } from "@/lib/format";
 import { rowStart, topicLabel } from "@/lib/topic";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
@@ -33,7 +36,8 @@ export function RequestDialog({ intern, editing, onClose, onSaved }: RequestDial
   const [note, setNote] = useState(editing?.note ?? "");
   const [kbId, setKbId] = useState(editing?.kb_id ?? "");
   const [activityId, setActivityId] = useState(editing?.activity_id ?? "");
-  const [due, setDue] = useState(editing?.due_date ?? "");
+  const [dueDay, setDueDay] = useState(() => localParts(editing?.due_at).date);
+  const [dueTime, setDueTime] = useState(() => localParts(editing?.due_at).time);
   const [target, setTarget] = useState<"intern" | "track">("intern");
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -44,6 +48,12 @@ export function RequestDialog({ intern, editing, onClose, onSaved }: RequestDial
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const titleBad = !titleOk(title);
   const noteBad = !noteOk(note);
+  // P21.1: a date without a time is incomplete; a new deadline must be in the future and within a year
+  const dueAt = dueDay ? localIso(dueDay, dueTime) : null;
+  const dueChanged = !sameInstant(dueAt, editing?.due_at ?? null);
+  const dueProblem: "time" | "past" | "far" | null =
+    dueDay && !dueAt ? "time" : dueChanged ? deadlineProblem(dueAt, Date.now(), !editing) : null;
+  const dueRef = useRef<HTMLInputElement>(null);
   const none: SelectOption = { value: "", label: t("mentorReq.noLink") };
 
   useEffect(() => {
@@ -69,8 +79,8 @@ export function RequestDialog({ intern, editing, onClose, onSaved }: RequestDial
   async function submit(e: FormEvent) {
     e.preventDefault();
     setTouched(true);
-    if (titleBad || noteBad) {
-      (titleBad ? titleRef : noteRef).current?.focus();
+    if (titleBad || noteBad || dueProblem) {
+      (titleBad ? titleRef : noteBad ? noteRef : dueRef).current?.focus();
       return;
     }
     setBusy(true);
@@ -81,7 +91,7 @@ export function RequestDialog({ intern, editing, onClose, onSaved }: RequestDial
       note: note.trim(),
       kb_id: kbId || null,
       activity_id: activityId || null,
-      due_date: due || null,
+      due_at: dueAt,
     };
     if (editing) {
       const patch: MentorRequestPatch = {};
@@ -90,7 +100,7 @@ export function RequestDialog({ intern, editing, onClose, onSaved }: RequestDial
       if (fields.note !== editing.note) patch.note = fields.note;
       if (fields.kb_id !== editing.kb_id) patch.kb_id = fields.kb_id;
       if (fields.activity_id !== editing.activity_id) patch.activity_id = fields.activity_id;
-      if (fields.due_date !== editing.due_date) patch.due_date = fields.due_date;
+      if (dueChanged) patch.due_at = fields.due_at;
       if (Object.keys(patch).length === 0) {
         setBusy(false);
         onClose();
@@ -178,16 +188,58 @@ export function RequestDialog({ intern, editing, onClose, onSaved }: RequestDial
             disabled={busy}
           />
         </div>
-        <TextField
-          label={t("mentorReq.dueDate")}
-          name="due_date"
-          type="date"
-          dir="ltr"
-          value={due}
-          onChange={(e) => setDue(e.target.value)}
-          disabled={busy}
-          className="sm:max-w-xs"
-        />
+        <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0" data-deadline-picker>
+          <legend className="mb-2 text-sm font-semibold text-fg-1">{t("deadline.label")}</legend>
+          <div className="flex flex-wrap items-end gap-3">
+            <TextField
+              ref={dueRef}
+              label={t("deadline.date")}
+              name="due_day"
+              type="date"
+              dir="ltr"
+              min={editing ? undefined : localDay()}
+              value={dueDay}
+              onChange={(e) => {
+                setDueDay(e.target.value);
+                if (e.target.value && !dueTime) setDueTime("23:59");
+              }}
+              aria-invalid={(touched && dueProblem !== null) || undefined}
+              disabled={busy}
+              className="min-w-0 flex-[1_1_10rem]"
+            />
+            <TextField
+              label={t("deadline.time")}
+              name="due_time"
+              type="time"
+              dir="ltr"
+              value={dueTime}
+              onChange={(e) => setDueTime(e.target.value)}
+              aria-invalid={(touched && dueProblem !== null) || undefined}
+              disabled={busy}
+              className="min-w-0 flex-[1_1_7rem]"
+            />
+            {(dueDay || dueTime) && (
+              <Button
+                variant="ghost"
+                icon="close"
+                onClick={() => {
+                  setDueDay("");
+                  setDueTime("");
+                }}
+                disabled={busy}
+                className="min-h-12"
+                data-testid="deadline-clear"
+              >
+                {t("deadline.clear")}
+              </Button>
+            )}
+          </div>
+          <p className={cn("m-0 text-sm", touched && dueProblem ? "font-medium text-danger" : "text-fg-3")} role={touched && dueProblem ? "alert" : undefined}>
+            {touched && dueProblem
+              ? t(dueProblem === "time" ? "deadline.errTime" : dueProblem === "past" ? "deadline.errPast" : "deadline.errFar")
+              : t("deadline.hint")}
+          </p>
+        </fieldset>
         {!editing && (
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
             <legend className="mb-2 text-sm font-semibold text-fg-1">{t("mentorReq.target")}</legend>

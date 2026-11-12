@@ -371,14 +371,16 @@ Body `InternPatch` `{name_ar?, name_en?, role?, active?, email?}`: absent = unch
 
 ### GET /api/admin/interns/{id} (admin)
 
-→ `InternDetail` `{intern: InternOut, last_active, progress, scenarios, quiz, chat, timeline, label_ar}`:
+→ `InternDetail` `{intern: InternOut, last_active, progress, scenarios, quiz, chat, timeline, label_ar, tasks}`:
 
 - `progress` `{role, percent, done, total, milestones: [{name, name_ar, done, total, activities: [{id, kind,
   title_ar, completed_at}]}]}` for the current track (`completed_at` `null` when not done);
 - `scenarios` `[{scenario_id, value, times, first_at, last_at}]` (practice only, never a score);
 - `quiz` `{answered, days: [{date, answered}]}` (questions answered per UTC day; never correctness);
 - `chat` `{questions, turns, cited: [{id, topic, count}]}` from turn logs (K-rows cited by question turns);
-- `timeline` `[{at, kind: activity|scenario|quiz|chat, role, ids}]`, newest first, at most 200 events.
+- `timeline` `[{at, kind: activity|scenario|quiz|chat, role, ids}]`, newest first, at most 200 events;
+- `tasks` (P21.1) `{total, done, done_on_time, done_late, overdue, open}`: the intern's mentor requests by
+  deadline outcome (counts only; see "Task deadlines and reminders"), `null` when the requests cannot be read now.
 
 404 unknown intern. `label_ar` = «متدربون للعرض بأسماء افتراضية — أعداد الإكمال والتدريب فقط، ليست تقييماً».
 
@@ -474,7 +476,7 @@ intern, no history. Replies and files live on the request's thread (§6h). A req
 the live KB) and one plan activity (`activity_id`, checked against the plan of the target intern's track), so
 the intern opens the row or the activity in one click. `title` (1–120 after cleaning) and `note` (≤ 1000,
 line breaks kept) are checked with the server's contact rule (the verifier's: no email, link or phone
-number; 400 with `field`). `due_date` is a real `YYYY-MM-DD` or null. `status` (`new` → `in_progress` →
+number; 400 with `field`). `due_date` is a real `YYYY-MM-DD` or null (P21.1: see `due_at` below). `status` (`new` → `in_progress` →
 `done`, any direction) is the intern's to-do marker, never a score; `status_changed_at` moves only when the
 status changes. Request text never reaches the assistant (chat, prompts, turn logs).
 
@@ -484,6 +486,8 @@ activity: {id, kind, title_ar, milestone}|null, comment_count}`. `kb_row` is the
 live KB (null when the id is no longer in the KB); `activity` is null when the id is not in the intern's current
 plan; `comment_count` (P15) is the number of comments on the request's thread (0 when the store has no comment
 tables yet).
+P21.1 adds `due_at`, `done_at`, `timing` and `late_by_minutes` to every `MentorRequest` (see "Task deadlines and
+reminders" below).
 `MentorRequestList` = `{requests: MentorRequest[] (newest first), counts: {new, in_progress, done},
 label_ar}`. Every endpoint answers 503 `requests_unavailable` when the store cannot serve the table.
 
@@ -505,14 +509,14 @@ list shows the counts per intern from it.
 
 ### POST /api/admin/requests (admin)
 
-Body `MentorRequestCreate` `{intern_id | track, kind, title, note?, kb_id?, activity_id?, due_date?}` with
+Body `MentorRequestCreate` `{intern_id | track, kind, title, note?, kb_id?, activity_id?, due_date?, due_at?}` with
 exactly one target: one intern (any status; 404 unknown) or every **active** intern of a track (one row each;
 400 `field: "track"` when the track has none) → 201 `MentorRequestList` of the rows created.
 
 ### PATCH /api/admin/requests/{id} (admin)
 
-Body `MentorRequestPatch` `{kind?, title?, note?, kb_id?, activity_id?, due_date?, status?}`: absent =
-unchanged; `note`, `kb_id`, `activity_id`, `due_date` null clears; `title`, `kind`, `status` cannot be null; at
+Body `MentorRequestPatch` `{kind?, title?, note?, kb_id?, activity_id?, due_date?, due_at?, status?}`: absent =
+unchanged; `note`, `kb_id`, `activity_id`, `due_date`, `due_at` null clears; `title`, `kind`, `status` cannot be null; at
 least one field → `MentorRequest`. 404 unknown request.
 
 ### DELETE /api/admin/requests/{id} (admin)
@@ -639,7 +643,8 @@ leaves the whole list Arabic, never half translated.
 The server emails through SMTP (`smtplib`; port 465 = implicit TLS, any other port = STARTTLS, default 587) when
 `SMTP_USER` and `SMTP_PASSWORD` are set and `OFFLINE` is off. Events: a new request → the intern; an admin comment
 → the intern and an intern comment → `ADMIN_EMAIL` (the comment's files attached); a request marked done →
-`ADMIN_EMAIL`; (P18.1, wired by the integrator) a question sent → `ADMIN_EMAIL`, a question answered → the intern.
+`ADMIN_EMAIL`; (P18.1, wired by the integrator) a question sent → `ADMIN_EMAIL`, a question answered → the intern;
+(P21.1) a request's deadline is near → the intern (`request_reminder`).
 Each email is sent in a background thread after the store write succeeded (no route waits on SMTP or fails
 because of it) and recorded in `mail_log`. Emails carry no links.
 
@@ -647,7 +652,8 @@ because of it) and recorded in `mail_log`. Emails carry no links.
 
 → `MailLogResponse` `{entries: [MailLogEntry], configured, admin_email_set}`; `MailLogEntry` = `{id, event, to_addr,
 subject, status, error, created_at}`, newest first, at most 50. `event` ∈ `request_created`, `admin_comment`,
-`intern_comment`, `request_done`, `question_submitted`, `question_answered`, `test`; `status` ∈ `sent`, `failed`,
+`intern_comment`, `request_done`, `question_submitted`, `question_answered`, `test`, `request_reminder` (P21.1,
+migration 0010); `status` ∈ `sent`, `failed`,
 `skipped`; `error` is a short code (`offline`, `not_configured`, `no_recipient`, `auth_failed`, `timeout`,
 `connect_failed`, `tls_failed`, `recipient_refused`, `sender_refused`, `smtp_error`, `error`) or `null`; `to_addr` is
 `""` when there was no address. `configured`: SMTP user and password set and not offline. Never a password, host,
@@ -715,6 +721,45 @@ reindex holds the KB lock (KB scope).
 ### POST /api/admin/questions/{id}/dismiss (admin)
 
 → `MentorQuestion` (dismissed). 400 `field: "status"` when not open; 404 unknown.
+
+## 6l. Task deadlines and reminders (P21.1)
+
+The admin can give a mentor request a deadline (a date and a time); the intern gets one reminder email shortly
+before it, and the admin sees whether each request was done on time. These are task facts, never a score.
+
+- **Input.** `MentorRequestCreate` and `MentorRequestPatch` take `due_at`: an ISO 8601 date-time **with an offset**
+  (`2026-11-20T18:00:00+03:00` or `...Z`; the web client sends the browser's local time with its offset). On create
+  it must be in the future (400 `field: "due_at"`); on create and edit at most 365 days ahead (400). An edit may
+  keep or set a past deadline (fixing a title on an overdue request still works).
+- **`due_date` compatibility (one rule).** When `due_at` is sent (on a patch: present), it decides and the stored
+  `due_date` becomes its Asia/Amman calendar day; a sent `due_date` is then ignored. When only `due_date` is sent,
+  `due_at` becomes **23:59 Asia/Amman** of that day (the same future / one-year checks apply, `field: "due_date"`).
+  `null` in the deciding field clears both. Responses always carry both: `due_date` = the Amman day of `due_at`.
+  Asia/Amman is UTC+03:00 (no daylight saving since 2022).
+- **Output.** `MentorRequest` adds `due_at` (UTC, `2026-11-20T15:00:00.000+00:00`, or `null`), `done_at` (when the
+  intern marked it done; `null` when not done, cleared when reopened), `timing` and `late_by_minutes`:
+
+  | `timing` | when | `late_by_minutes` |
+  |---|---|---|
+  | `no_deadline` | no `due_at` | `null` |
+  | `upcoming` | not done, more than 24 h before the deadline | `null` |
+  | `due_soon` | not done, at most 24 h before it | `null` |
+  | `overdue` | not done, the deadline has passed | whole minutes since the deadline |
+  | `done_on_time` | done at or before the deadline | `null` |
+  | `done_late` | done after the deadline | whole minutes late (at least 1) |
+
+  `timing` is computed by the server when it answers. A request done before migration 0010 uses its
+  `status_changed_at` as `done_at`.
+- **Admin intern detail.** `InternDetail.tasks` = `{total, done, done_on_time, done_late, overdue, open}`:
+  `total` = `done` + `open` + `overdue`; `done` = `done_on_time` + `done_late` + done requests without a deadline;
+  `open` = not done and not past its deadline; `overdue` = not done and past it.
+- **Reminder email.** Every 30 s the server looks for requests that are not done, have a deadline and no reminder
+  yet, and whose deadline is at most `REMINDER_MINUTES` (default 10) away; it claims the reminder in the store
+  first (`reminder_sent_at`, set only while still empty, so two servers or a restart never send twice), then emails
+  the intern (mail log event `request_reminder`; Arabic first, then English; the task title and the deadline in
+  Amman time; no link). Changing the deadline clears the claim. A reminder whose window passed while the server
+  was down is not sent late. Nothing runs (and nothing is logged) while `OFFLINE=1` or SMTP is not configured. A
+  deactivated intern is not reminded.
 
 ## 7. Fixed labels
 

@@ -248,7 +248,7 @@ describe("admin: requests on the intern page", () => {
       note: "",
       kb_id: "K05",
       activity_id: "SA-D30-quiz",
-      due_date: null,
+      due_at: null,
       track: "Sales",
     });
     expect(await screen.findByText("Request sent to 2 interns.")).toBeInTheDocument();

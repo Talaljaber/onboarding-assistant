@@ -307,7 +307,7 @@ export default function InternDetailScreen() {
                 </Section>
               </div>
 
-              <AdminRequestsSection intern={d.intern} />
+              <AdminRequestsSection intern={d.intern} tasks={d.tasks} onChanged={reload} />
 
               <Section title={t("uiIntern.secTimeline")} icon="clock">
                 {d.timeline.length === 0 ? (

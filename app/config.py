@@ -96,6 +96,8 @@ class Settings(BaseSettings):
     smtp_password: SecretStr | None = None
     mail_from: str | None = None
     admin_email: str | None = None
+    # P21.1: a request's deadline reminder goes to the intern this many minutes before the deadline.
+    reminder_minutes: int = Field(default=10, ge=1, le=120)
 
     @field_validator("llm_model")
     @classmethod

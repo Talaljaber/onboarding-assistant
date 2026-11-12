@@ -3,7 +3,7 @@
 // its reply thread with the intern (text and PDF / Word / image files).
 import { useCallback, useEffect, useState } from "react";
 import { deleteRequest, getAdminRequests } from "@/api/client";
-import type { MentorRequest, Role } from "@/api/types";
+import type { MentorRequest, Role, TaskSummary } from "@/api/types";
 import { useLang, useT } from "@/i18n";
 import { formatWhen } from "@/lib/intern";
 import { pluralForm } from "@/lib/plural";
@@ -14,11 +14,22 @@ import { Icon } from "../ui/Icon";
 import { Loadable } from "../ui/Loadable";
 import { surface } from "../ui/recipes";
 import { useToast } from "../ui/Toast";
+import { TaskSummaryLine } from "./Deadline";
 import { RequestCard } from "./RequestCard";
 import { RequestDialog } from "./RequestDialog";
 import { RequestThread } from "./RequestThread";
 
-export function AdminRequestsSection({ intern }: { intern: { id: string; role: Role } }) {
+export function AdminRequestsSection({
+  intern,
+  tasks,
+  onChanged,
+}: {
+  intern: { id: string; role: Role };
+  /** P21.1: the intern's task counts (from the intern detail); hidden when absent. */
+  tasks?: TaskSummary | null;
+  /** P21.1: called after a request is added, edited or deleted (the page re-reads the counts). */
+  onChanged?: () => void;
+}) {
   const t = useT();
   const { lang } = useLang();
   const toast = useToast();
@@ -51,6 +62,7 @@ export function AdminRequestsSection({ intern }: { intern: { id: string; role: R
     if (r.ok) {
       setItems((cur) => cur.filter((i) => i.id !== r.value.id));
       toast.show(t("mentorReq.deleted"), "ok");
+      onChanged?.();
     } else toast.show(t("mentorReq.failed"), "danger");
   }
 
@@ -68,6 +80,7 @@ export function AdminRequestsSection({ intern }: { intern: { id: string; role: R
         </Button>
       </div>
       <p className="m-0 text-xs text-fg-3">{t("mentorReq.secNote")}</p>
+      <TaskSummaryLine tasks={tasks} />
       <Loadable state={state} onRetry={reload} lines={3}>
         {items.length === 0 ? (
           <p className="m-0 text-sm text-fg-3">{t("mentorReq.none")}</p>
@@ -106,6 +119,7 @@ export function AdminRequestsSection({ intern }: { intern: { id: string; role: R
           onClose={() => setDialog(null)}
           onSaved={({ created, updated }) => {
             setDialog(null);
+            onChanged?.();
             if (updated) {
               setItems((cur) => cur.map((i) => (i.id === updated.id ? updated : i)));
               toast.show(t("mentorReq.saved"), "ok");

@@ -18,6 +18,7 @@ import re
 import time
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -779,7 +780,9 @@ def build_router() -> APIRouter:
             return row.topic if row is not None else None
 
         extra = _request_stamps(store, str(intern["id"])).get(str(intern["id"]), [])
-        return _json(interns_view.detail(intern, profiles, act, agent.features.plan, scenario_value, kb_topic, extra))
+        tasks = requests_view.task_summary(store.mentor_requests(intern_id=str(intern["id"])), datetime.now(UTC))  # P21.1
+        return _json(interns_view.detail(intern, profiles, act, agent.features.plan, scenario_value, kb_topic, extra,
+                                         tasks))
 
     # -------------------------------------------------------------------------- mentor requests (P13.2)
     @r.get("/requests")
@@ -823,6 +826,7 @@ def build_router() -> APIRouter:
                 raise ApiError("validation_error", 400, f"no active interns on the {body.track} track", "track")
         fields = body.model_dump(exclude={"intern_id", "track"})
         requests_view.check_text(fields)
+        requests_view.check_due(fields, datetime.now(UTC), creating=True)  # P21.1
         requests_view.check_links(fields, _kb_source(request), _agent(request).features.plan,
                                   {t["role"] for t in targets})
         created = _requests_or_503(store.mentor_requests_create([{**fields, "intern_id": t["id"]} for t in targets]))
@@ -839,6 +843,7 @@ def build_router() -> APIRouter:
         intern = store.get_intern(cur["intern_id"]) or {}
         role = intern.get("role")
         requests_view.check_text(changes)
+        requests_view.check_due(changes, datetime.now(UTC), creating=False)  # P21.1
         requests_view.check_links(changes, _kb_source(request), _agent(request).features.plan,
                                   [role] if role else [])
         rec = _requests_or_503(store.mentor_request_update(request_id, changes))

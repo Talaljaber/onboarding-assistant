@@ -790,6 +790,8 @@ export interface InternDetail {
   /** Newest first. */
   timeline: { at: string; kind: TimelineKind; role: Role; ids: string[] }[];
   label_ar: string;
+  /** P21.1: mentor requests by deadline outcome (counts only); null when the requests cannot be read now. */
+  tasks: TaskSummary | null;
 }
 
 // ---------------------------------------------------------------- health and errors
@@ -1315,6 +1317,14 @@ export interface MentorRequest {
   activity: LinkedActivity | null;
   /** P15: comments on the request's thread (both ways). */
   comment_count: number;
+  /** P21.1: the deadline (UTC ISO 8601) or null; `due_date` is its Asia/Amman day. */
+  due_at: string | null;
+  /** P21.1: when the intern marked it done (null when not done; cleared when reopened). */
+  done_at: string | null;
+  /** P21.1: computed by the server when it answers. */
+  timing: RequestTiming;
+  /** P21.1: whole minutes past the deadline for `overdue` and `done_late`, else null. */
+  late_by_minutes: number | null;
 }
 
 export interface RequestCounts {
@@ -1340,9 +1350,11 @@ export interface MentorRequestCreate {
   kb_id?: string | null;
   activity_id?: string | null;
   due_date?: string | null;
+  /** P21.1: ISO 8601 with an offset (the browser's local time); decides over `due_date`; must be in the future. */
+  due_at?: string | null;
 }
 
-/** `PATCH /api/admin/requests/{id}`: absent = unchanged; null clears note/kb_id/activity_id/due_date. */
+/** `PATCH /api/admin/requests/{id}`: absent = unchanged; null clears note/kb_id/activity_id/due_date/due_at. */
 export interface MentorRequestPatch {
   kind?: RequestKind;
   title?: string;
@@ -1351,6 +1363,8 @@ export interface MentorRequestPatch {
   activity_id?: string | null;
   due_date?: string | null;
   status?: RequestStatus;
+  /** P21.1: ISO 8601 with an offset; null clears the deadline. */
+  due_at?: string | null;
 }
 
 /** `PATCH /api/requests/{id}`: the intern moves their own request (any direction). */
@@ -1390,7 +1404,11 @@ export function isMentorRequest(x: unknown): x is MentorRequest {
     isStr(x.status_changed_at) &&
     (x.kb_row === null || isSource(x.kb_row)) &&
     (x.activity === null || isLinkedActivity(x.activity)) &&
-    isNum(x.comment_count)
+    isNum(x.comment_count) &&
+    isStrOrNull(x.due_at) &&
+    isStrOrNull(x.done_at) &&
+    isOneOf(REQUEST_TIMINGS, x.timing) &&
+    (x.late_by_minutes === null || isNum(x.late_by_minutes))
   );
 }
 
@@ -1408,6 +1426,22 @@ export function isMentorRequestList(x: unknown): x is MentorRequestList {
 
 export function isMentorRequestDeleted(x: unknown): x is MentorRequestDeleted {
   return isObj(x) && isStr(x.id) && x.deleted === true;
+}
+
+// ---------------------------------------------------------------- P21.1 task deadlines
+// A request's deadline outcome: task facts for the admin (and the later final report), never a score.
+
+export const REQUEST_TIMINGS = ["no_deadline", "upcoming", "due_soon", "overdue", "done_on_time", "done_late"] as const;
+export type RequestTiming = (typeof REQUEST_TIMINGS)[number];
+
+/** `InternDetail.tasks`: total = done + open + overdue; done = done_on_time + done_late + done without a deadline. */
+export interface TaskSummary {
+  total: number;
+  done: number;
+  done_on_time: number;
+  done_late: number;
+  overdue: number;
+  open: number;
 }
 
 // ---------------------------------------------------------------- KB impact (P14.1, admin only)
@@ -1588,6 +1622,7 @@ export const MAIL_EVENTS = [
   "question_submitted",
   "question_answered",
   "test",
+  "request_reminder", // P21.1: a deadline reminder to the intern
 ] as const;
 export type MailEvent = (typeof MAIL_EVENTS)[number];
 export const MAIL_STATUSES = ["sent", "failed", "skipped"] as const;
