@@ -45,7 +45,7 @@ export function SharedResultLine({ mine, className, final = false }: { mine: Che
       {complete ? (
         <>
           {t("quizSets.sharedResult")}{" "}
-          <bdi dir="ltr">
+          <bdi dir="ltr" className="whitespace-nowrap">
             {mine.first_attempt_right} / {mine.total}
           </bdi>
         </>

@@ -74,6 +74,8 @@ export function QuizRunner({ setId }: { setId: string }) {
   const [finishing, setFinishing] = useState(false);
   const [finishFailed, setFinishFailed] = useState(false);
   const [review, setReview] = useState<QuizRunReview | null>(null);
+  // the run was finished by the countdown (the server may still call it "finished" inside its grace period)
+  const [timedOut, setTimedOut] = useState(false);
   const reviewRef = useRef<QuizRunReview | null>(null);
   reviewRef.current = review;
   const reportHead = useRef<HTMLHeadingElement>(null);
@@ -109,8 +111,9 @@ export function QuizRunner({ setId }: { setId: string }) {
   );
 
   const finish = useCallback(
-    async (runId: string) => {
+    async (runId: string, byTimer = false) => {
       if (!profileId) return;
+      setTimedOut(byTimer);
       setFinishing(true);
       setFinishFailed(false);
       const r = await finishQuizRun(runId, profileId);
@@ -196,7 +199,7 @@ export function QuizRunner({ setId }: { setId: string }) {
   }, [role, profileId, official, setId, tick, reviewParam]);
 
   const onZero = useCallback(() => {
-    if (run && !finishing) void finish(run.id);
+    if (run && !finishing) void finish(run.id, true);
   }, [run, finishing, finish]);
   const secondsLeft = useCountdown(sync, onZero);
 
@@ -222,7 +225,7 @@ export function QuizRunner({ setId }: { setId: string }) {
       return;
     }
     const reason = reasonOf(r.error);
-    if (reason === "expired" || reason === "finished") return void finish(run.id);
+    if (reason === "expired" || reason === "finished") return void finish(run.id, reason === "expired");
     // answered elsewhere (another device): take the server's answers
     if (reason === "answered") return void start();
     setSaveFailed(true);
@@ -283,7 +286,7 @@ export function QuizRunner({ setId }: { setId: string }) {
         ) : (
           <Loadable state={loadState} onRetry={() => setTick((n) => n + 1)} lines={5}>
             {phase === "review" && review ? (
-              <RunReport ref={reportHead} review={review} official={official} checkpoint={checkpoint} kind={kind} mine={mine} onRetry={retry} />
+              <RunReport ref={reportHead} review={review} timeUp={review.status === "expired" || timedOut} official={official} checkpoint={checkpoint} kind={kind} mine={mine} onRetry={retry} />
             ) : phase === "gate" ? (
               <div data-checkpoint-gate data-run-gate className={cn(surface.card, "flex flex-col gap-4 p-4 sm:p-6")}>
                 {checkpoint && kind === "first" && (
@@ -292,7 +295,7 @@ export function QuizRunner({ setId }: { setId: string }) {
                   </Notice>
                 )}
                 {summary?.locked && (
-                  <Notice tone="neutral" icon="lock" title={t("quizRuns.lockedBadge")} data-lock-intro>
+                  <Notice tone="neutral" icon="lock" title={t("quizRuns.lockedBadge")}>
                     {t("quizRuns.lockIntro")}
                   </Notice>
                 )}

@@ -26,9 +26,11 @@ export function useLeaveGuard(active: boolean) {
       e.preventDefault();
       setTarget(href);
     };
+    // Capture listeners on window run before the router's (and before React re-renders between listeners), so the
+    // quiz URL is back before anything reads the new one. The back button fires popstate, then hashchange.
     const onHash = (e: Event) => {
       // `replace()` dispatches a plain Event: a redirect by the router, not the intern leaving
-      if (passing.current || !(e instanceof HashChangeEvent) || window.location.hash === here) return;
+      if (passing.current || !(e instanceof HashChangeEvent || e instanceof PopStateEvent) || window.location.hash === here) return;
       const to = window.location.hash || "#/";
       window.history.replaceState(null, "", here);
       setTarget(to);
@@ -39,11 +41,13 @@ export function useLeaveGuard(active: boolean) {
       e.returnValue = "";
     };
     document.addEventListener("click", onClick, true);
-    window.addEventListener("hashchange", onHash);
+    window.addEventListener("hashchange", onHash, true);
+    window.addEventListener("popstate", onHash, true);
     window.addEventListener("beforeunload", onUnload);
     return () => {
       document.removeEventListener("click", onClick, true);
-      window.removeEventListener("hashchange", onHash);
+      window.removeEventListener("hashchange", onHash, true);
+      window.removeEventListener("popstate", onHash, true);
       window.removeEventListener("beforeunload", onUnload);
     };
   }, [active]);

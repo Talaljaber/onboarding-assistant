@@ -144,9 +144,11 @@ export function RunView(p: RunViewProps) {
             />
           </div>
           {locked && (
-            <Notice tone="neutral" icon="lock" data-run-locked>
-              {t("quizRuns.lockedIn")}
-            </Notice>
+            <div data-run-locked>
+              <Notice tone="neutral" icon="lock">
+                {t("quizRuns.lockedIn")}
+              </Notice>
+            </div>
           )}
           {p.saveFailed && (
             <Notice tone="danger" role="alert">
@@ -169,12 +171,13 @@ export function RunView(p: RunViewProps) {
               </Button>
             ) : null}
             <span className={cn("flex gap-2", locked && !allAnswered ? "flex-1 justify-between sm:flex-none sm:justify-start" : "")}>
-              <Button variant="secondary" onClick={() => p.onIndex(index - 1)} disabled={index === 0} data-run-prev>
+              {/* phones: icons only (the names stay for screen readers), so the primary action keeps one line */}
+              <Button variant="secondary" className="max-sm:px-3" onClick={() => p.onIndex(index - 1)} disabled={index === 0} data-run-prev>
                 <Icon name="arrow-end" size={18} className="shrink-0 rotate-180" />
-                {t("quizRuns.prev")}
+                <span className="max-sm:sr-only">{t("quizRuns.prev")}</span>
               </Button>
-              <Button variant="secondary" onClick={() => p.onIndex(index + 1)} disabled={index >= total - 1} data-run-next>
-                {t("common.next")}
+              <Button variant="secondary" className="max-sm:px-3" onClick={() => p.onIndex(index + 1)} disabled={index >= total - 1} data-run-next>
+                <span className="max-sm:sr-only">{t("common.next")}</span>
                 <Icon name="arrow-end" size={18} className="shrink-0" />
               </Button>
             </span>

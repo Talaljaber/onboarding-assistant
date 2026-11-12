@@ -28,7 +28,7 @@ function Score({ label, right, total, big }: { label: string; right: number; tot
   return (
     <p className={cn("m-0 font-semibold text-fg-1", big ? "text-xl" : "text-base")} data-run-score>
       {label}{" "}
-      <bdi dir="ltr">
+      <bdi dir="ltr" className="whitespace-nowrap">
         {right} / {total}
       </bdi>
     </p>
@@ -123,14 +123,16 @@ export const RunReport = forwardRef<
     kind: RunKind;
     mine: CheckpointMyResult | null;
     onRetry: () => void;
+    /** the time limit ran out (the run expired, or the countdown finished it) */
+    timeUp?: boolean;
   }
->(function RunReport({ review, official, checkpoint, kind, mine, onRetry }, ref) {
+>(function RunReport({ review, official, checkpoint, kind, mine, onRetry, timeUp = review.status === "expired" }, ref) {
   const t = useT();
   const missed = review.total - review.right;
   const unanswered = review.total - review.answered;
   const label = checkpoint && kind === "first" ? t("quizSets.sharedResult") : checkpoint && kind === "practice" ? t("quizRuns.thisRun") : t("quizRuns.yourResult");
   return (
-    <div data-quiz="review" data-run-status={review.status} className={cn(surface.card, "da-rise-in flex min-w-0 flex-col gap-5 p-4 sm:p-8")}>
+    <div data-quiz="review" data-run-status={review.status} data-time-up={timeUp || undefined} className={cn(surface.card, "da-rise-in flex min-w-0 flex-col gap-5 p-4 sm:p-8")}>
       <div className="flex flex-col items-center gap-3 text-center">
         <span aria-hidden="true" className="grid size-16 place-items-center rounded-full bg-amber-soft text-amber-ink">
           <Icon name="graduation" size={32} strokeWidth={1.75} />
@@ -147,7 +149,7 @@ export const RunReport = forwardRef<
           </p>
         )}
       </div>
-      {review.status === "expired" && (
+      {timeUp && (
         <Notice tone="warn" icon="clock" role="status">
           {t("quizRuns.timeUp")}
         </Notice>
