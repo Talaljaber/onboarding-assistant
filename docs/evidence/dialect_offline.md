@@ -93,3 +93,7 @@ Same 31 questions through `POST /api/chat` with the pinned model (temporary stor
 **answers 25/26 on the right row, refusals 5/5.** The one miss is DL25 «الاهتمام بالزبون وخدمته من قيم الشركة؟»,
 which the router reads as a request to practise and starts a customer scenario instead of citing K08.
 Offline stays 19/26 (above): offline dialect questions more often get the cautious "closest information" reply.
+
+Re-run after the P16 routing fixes (Thu 12 Nov 2026): model mode still **25/26 answers, 5/5 refusals**. DL25
+«الاهتمام بالزبون وخدمته من قيم الشركة؟» no longer starts a practice scenario; it now answers with the five values
+(K05–K09, first cited K05), which the strict scorer still counts as a miss because it expects K08 first.
