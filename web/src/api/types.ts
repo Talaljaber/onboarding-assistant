@@ -1638,6 +1638,7 @@ export function isMailLogResponse(x: unknown): x is MailLogResponse {
 
 export function isMailTestResponse(x: unknown): x is MailTestResponse {
   return isObj(x) && (x.status === "queued" || x.status === "skipped") && isStrOrNull(x.error);
+}
 
 // ---------------------------------------------------------------- P18.1 questions inbox
 // A question the intern chooses to send to the mentor (Rumour Check or a chat refusal). The admin answers it once
