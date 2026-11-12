@@ -25,6 +25,8 @@ import WelcomeScreen from "@/components/welcome/WelcomeScreen";
 import QuestionsScreen from "@/components/questions/QuestionsScreen"; // P18.1
 import QuizSetEditor from "@/components/quizsets/QuizSetEditor"; // P20.2
 import QuizSetsScreen from "@/components/quizsets/QuizSetsScreen"; // P20.2
+import FinalReportScreen from "@/components/report/FinalReportScreen"; // P21.2
+import InternReportScreen from "@/components/report/InternReportScreen"; // P21.2
 import { replace, usePath } from "@/router";
 import { AppStateProvider, useAppState } from "@/state/useAppState";
 
@@ -55,6 +57,15 @@ export const ROUTES: readonly RouteDef[] = [
     needsRole: false,
     needsAdmin: true,
     match: /^\/admin\/interns\/[0-9a-f-]{36}$/,
+  },
+  // P21.2 the final report: the comparison of all interns and one intern's printable page
+  { path: "/admin/report", Screen: FinalReportScreen, needsRole: false, needsAdmin: true },
+  {
+    path: "/admin/interns/:id/report",
+    Screen: InternReportScreen,
+    needsRole: false,
+    needsAdmin: true,
+    match: /^\/admin\/interns\/[0-9a-f-]{36}\/report$/,
   },
   { path: "/admin/kb/import", Screen: ImportScreen, needsRole: false, needsAdmin: true },
   {

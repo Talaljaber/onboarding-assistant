@@ -21,6 +21,8 @@ import { surface } from "../ui/recipes";
 import { StatTile } from "../ui/StatTile";
 import { useToast } from "../ui/Toast";
 import { RequestsOverview } from "../requests/RequestsOverview";
+import { linkButton } from "../plan/shared"; // P21.2
+import { Icon } from "../ui/Icon"; // P21.2
 import { InternDialog } from "./InternDialog";
 import { KbCoverageCard } from "./KbCoverageCard";
 import { MailLogCard } from "./MailLogCard";
@@ -50,7 +52,7 @@ const num = (v: number | string) => (
 export const detailHref = (id: string) => `#/admin/interns/${id}`;
 
 /** P19.3: a name may wrap between words but never inside one ("Al-" / "Khatib" in a narrow table column). */
-function NoBreakWords({ text }: { text: string }) {
+export function NoBreakWords({ text }: { text: string }) {
   const words = text.split(" ");
   return (
     <>
@@ -204,9 +206,16 @@ export default function InternsScreen() {
           title={t("uiIntern.listTitle")}
           description={t("uiIntern.listIntro")}
           actions={
-            <Button variant="accent" icon="plus" onClick={() => setAdding(true)} data-testid="intern-add">
-              {t("uiIntern.add")}
-            </Button>
+            <>
+              {/* P21.2: the final report (comparison of all interns) */}
+              <a href="#/admin/report" className={linkButton("secondary")} data-testid="final-report">
+                <Icon name="chart" size={18} className="shrink-0" />
+                {t("finalReport.open")}
+              </a>
+              <Button variant="accent" icon="plus" onClick={() => setAdding(true)} data-testid="intern-add">
+                {t("uiIntern.add")}
+              </Button>
+            </>
           }
         />
         <Loadable state={state} onRetry={reload} lines={6}>

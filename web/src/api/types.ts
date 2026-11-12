@@ -795,6 +795,10 @@ export interface InternDetail {
   checkpoints?: DetailCheckpoint[];
   /** P21.1: mentor requests by deadline outcome (counts only); null when the requests cannot be read now. */
   tasks: TaskSummary | null;
+  /** P21.2 (printable report): the first recorded activity, else the day the intern was added. */
+  started_at?: string;
+  /** P21.2: questions the intern sent to the mentor (any status); null when they cannot be read now. */
+  questions_sent?: number | null;
 }
 
 // ---------------------------------------------------------------- health and errors
@@ -1243,7 +1247,9 @@ export function isInternDetail(x: unknown): x is InternDetail {
     isObj(x.chat) &&
     Array.isArray(x.timeline) &&
     isStr(x.label_ar) &&
-    (x.checkpoints === undefined || isArrayOf(x.checkpoints, isDetailCheckpoint))
+    (x.checkpoints === undefined || isArrayOf(x.checkpoints, isDetailCheckpoint)) &&
+    (x.started_at === undefined || isStr(x.started_at)) &&
+    (x.questions_sent === undefined || x.questions_sent === null || isNum(x.questions_sent))
   );
 }
 
@@ -1997,6 +2003,19 @@ export interface QuizSetSummary {
   official: boolean;
   /** "checkpoint": tell the intern before starting that the first answer to each question is shared. */
   mode: QuizMode;
+  /** P21.2: the signed-in intern's own shared result (checkpoint sets only; null otherwise or anonymous). */
+  my_result?: CheckpointMyResult | null;
+}
+
+/** P21.2: the intern's own checkpoint result, with the admin's rule (first answer per question). */
+export interface CheckpointMyResult {
+  answered: number;
+  first_attempt_right: number;
+  total: number;
+}
+
+function isCheckpointMyResult(x: unknown): x is CheckpointMyResult {
+  return isObj(x) && isNum(x.answered) && isNum(x.first_attempt_right) && isNum(x.total);
 }
 
 export interface QuizSetList {
@@ -2110,7 +2129,8 @@ function isQuizSetSummary(x: unknown): x is QuizSetSummary {
     isNum(x.opens_at_percent) &&
     isBool(x.open) &&
     isBool(x.official) &&
-    isOneOf(QUIZ_MODES, x.mode)
+    isOneOf(QUIZ_MODES, x.mode) &&
+    (x.my_result === undefined || x.my_result === null || isCheckpointMyResult(x.my_result))
   );
 }
 
@@ -2179,4 +2199,73 @@ function isDetailCheckpoint(x: unknown): x is DetailCheckpoint {
     isNum(x.total) &&
     isStrOrNull(x.finished_at)
   );
+}
+
+// ---------------------------------------------------------------- final report (P21.2, admin only)
+// The evidence per intern, side by side. No ranking, no composite score, no "best" label: the mentor decides.
+
+/** One active intern (counts, dates, task timings and checkpoint first answers only). */
+export interface FinalReportRow {
+  intern_id: string;
+  name_ar: string;
+  name_en: string | null;
+  track: Role;
+  /** the first recorded activity, else the day the intern was added */
+  started_at: string;
+  plan_percent: number;
+  activities_done: number;
+  activities_total: number;
+  /** null when the requests cannot be read now */
+  tasks: TaskSummary | null;
+  /** D-P20-checkpoint: checkpoint sets only, first answer per question */
+  checkpoints: DetailCheckpoint[];
+  scenarios_practised: number;
+  quiz_questions_answered: number;
+  /** null when the questions cannot be read now */
+  questions_sent_to_mentor: number | null;
+  last_active: string | null;
+}
+
+/** `GET /api/admin/report[?track=]`: every active intern, roster order (the admin sorts). */
+export interface FinalReport {
+  generated_at: string;
+  interns: FinalReportRow[];
+  /** «تجمع هذه الصفحة الأدلة لمساعدتك على المقارنة؛ القرار لك. …» */
+  label_ar: string;
+}
+
+function isTaskSummary(x: unknown): x is TaskSummary {
+  return (
+    isObj(x) &&
+    isNum(x.total) &&
+    isNum(x.done) &&
+    isNum(x.done_on_time) &&
+    isNum(x.done_late) &&
+    isNum(x.overdue) &&
+    isNum(x.open)
+  );
+}
+
+function isFinalReportRow(x: unknown): x is FinalReportRow {
+  return (
+    isObj(x) &&
+    isStr(x.intern_id) &&
+    isStr(x.name_ar) &&
+    isStrOrNull(x.name_en) &&
+    isOneOf(ROLES, x.track) &&
+    isStr(x.started_at) &&
+    isNum(x.plan_percent) &&
+    isNum(x.activities_done) &&
+    isNum(x.activities_total) &&
+    (x.tasks === null || isTaskSummary(x.tasks)) &&
+    isArrayOf(x.checkpoints, isDetailCheckpoint) &&
+    isNum(x.scenarios_practised) &&
+    isNum(x.quiz_questions_answered) &&
+    (x.questions_sent_to_mentor === null || isNum(x.questions_sent_to_mentor)) &&
+    isStrOrNull(x.last_active)
+  );
+}
+
+export function isFinalReport(x: unknown): x is FinalReport {
+  return isObj(x) && isStr(x.generated_at) && isArrayOf(x.interns, isFinalReportRow) && isStr(x.label_ar);
 }

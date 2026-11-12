@@ -855,7 +855,7 @@ they answered (empty list when none). These are the only admin shapes with a cor
 
 → `QuizSetList` `{sets: QuizSetSummary[]}`: the official quiz first (always open), then the published sets whose
 audience includes the signed-in intern (everyone, their track, or chosen), oldest first. `QuizSetSummary` = `{id,
-title_ar, title_en, item_count, opens_at_percent, open, official, mode}`; `open` = the intern's suggested-plan progress
+title_ar, title_en, item_count, opens_at_percent, open, official, mode, my_result}` (`my_result`: §6n); `open` = the intern's suggested-plan progress
 (`GET /api/progress`'s `percent`) ≥ `opens_at_percent`. Without `profile_id`, or with a profile that is not an
 active intern's, only the official quiz is listed. 400 malformed `profile_id`. Sets whose items all cite rows no
 longer in the KB are not listed; `item_count` counts the items the intern can answer.
@@ -917,6 +917,42 @@ before it, and the admin sees whether each request was done on time. These are t
   was down is not sent late. Nothing runs (and nothing is logged) while `OFFLINE=1` or SMTP is not configured. A
   deactivated intern is not reminded.
 
+## 6n. Final report (P21.2, admin only)
+
+The owner's question was how to compare about ten interns at the end of the internship. The report gathers the
+evidence side by side; **the system does not rank interns, compute an overall score or label anyone "best"**. The
+mentor reads, sorts if they want to, and decides.
+
+### GET /api/admin/report (admin; optional `?track=Sales|Delivery`)
+
+→ `FinalReport` `{generated_at, interns: FinalReportRow[], label_ar}`: every **active** intern (roster order; the
+admin's table sorts on the client), or only one track. A bad `track` is 400 `validation_error`.
+`label_ar` = «تجمع هذه الصفحة الأدلة لمساعدتك على المقارنة؛ القرار لك. لا يرتّب النظام المتدربين ولا يحسب درجة
+إجمالية.» (the UI shows it in the UI language). `FinalReportRow` = `{intern_id, name_ar, name_en, track, started_at,
+plan_percent, activities_done, activities_total, tasks, checkpoints, scenarios_practised, quiz_questions_answered,
+questions_sent_to_mentor, last_active}`:
+
+- `started_at`: the first recorded activity (plan tick, quiz answer, scenario, chat turn), else the day the intern
+  was added; `last_active` as on the interns list.
+- `plan_percent`, `activities_done` / `activities_total`: the current track's suggested plan (as the interns list).
+- `tasks`: the P21.1 `TaskSummary` (on time · late · overdue · open); `null` when the requests cannot be read now.
+- `checkpoints`: the same `DetailCheckpoint` entries as the intern detail (D-P20-checkpoint: checkpoint sets only,
+  the FIRST answer to each question; practice sets and the official quiz never appear).
+- `scenarios_practised` (distinct), `quiz_questions_answered` (every practice answer, as the interns list counts
+  them; never correctness), `questions_sent_to_mentor` (questions-inbox items they sent, any status; `null` when
+  the questions cannot be read now).
+
+The printable per-intern page reads `GET /api/admin/interns/{id}` (which now also carries `started_at` and
+`questions_sent`, same meanings) and `GET /api/admin/requests?intern_id=` (each task's title, `due_at`, `done_at`,
+`timing`, `late_by_minutes`).
+
+### The intern's own checkpoint result (`QuizSetSummary.my_result`)
+
+`GET /api/quiz-sets?profile_id=` adds `my_result: {answered, first_attempt_right, total} | null` to each set: for a
+**checkpoint** set and a signed-in intern it is their own shared result with the admin's rule (first answer per
+question; retries never change it; zeros before the first answer); `null` for practice sets, the official quiz and
+without an intern profile. One intern never sees another's result.
+
 ## 7. Fixed labels
 
 | constant | text |
@@ -931,6 +967,7 @@ before it, and the admin sees whether each request was done on time. These are t
 | rumour check `label_ar` | «هذا فحص للمعلومة، وليس حكماً على أحد» |
 | quiz signals `label_ar` (P20) | «إشارات المحتوى — ليست تقييماً للأداء» |
 | official practice set title (P20) | «الاختبار التدريبي الرسمي» / "Official practice quiz" |
+| final report `label_ar` (P21.2) | «تجمع هذه الصفحة الأدلة لمساعدتك على المقارنة؛ القرار لك. لا يرتّب النظام المتدربين ولا يحسب درجة إجمالية.» |
 
 The refusal, not-confirmed, partial, contact, employment and injection texts are the fixed server texts
 of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
@@ -972,6 +1009,7 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
   `quiz_signals.json`, `quiz_sets.json`, `quiz_set.json`, `quiz_check_set_request.json`, `quiz_check_set.json`,
   `question_create_quiz_request.json`, `error_400_quiz_grounding.json`, `error_400_quiz_locked.json`,
   `error_503_quiz_draft.json`; checkpoint quizzes: `checkpoint_results.json`, `error_400_quiz_mode.json`;
+- final report (P21.2): `final_report.json`;
 - request threads (P15): `request_thread.json`, `request_comment.json`, `request_comment_create_request.json`,
   `request_comment_admin_create_request.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,
@@ -980,5 +1018,5 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
 
 `tests/test_contract.py` checks that every fixture validates and is canonical, that every reply kind and
 refusal reason is covered, the request rules and limits, that no quiz GET carries the correct option, that
-the admin intern views have no correctness or score field (except the checkpoint counts, D-P20-checkpoint), and that `types.ts` names every enum value.
+the admin intern views have no correctness or score field (except the checkpoint counts, D-P20-checkpoint) and no ranking field (P21.2), and that `types.ts` names every enum value.
 W3-A's `tests/test_api.py` should validate real responses with the same models.

@@ -18,7 +18,7 @@ interface Item {
 }
 
 const ITEMS: Item[] = [
-  { href: "#/admin/interns", key: "uiIntern.navInterns", icon: "user", current: (p) => p.startsWith("/admin/interns") },
+  { href: "#/admin/interns", key: "uiIntern.navInterns", icon: "user", current: (p) => p.startsWith("/admin/interns") || p === "/admin/report" }, // P21.2: the report sits under Interns
   { href: "#/kb", key: "nav.kb", icon: "book", current: (p) => p === "/kb" || p.startsWith("/admin/kb/") },
   // P18.1 questions inbox
   { href: "#/admin/questions", key: "adminQuestions.nav", icon: "mail", current: (p) => p === "/admin/questions", count: true },

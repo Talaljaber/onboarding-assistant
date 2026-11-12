@@ -50,14 +50,15 @@ afterEach(() => {
 });
 
 describe("App routes", () => {
-  it("registers all 17 routes, with the knowledge editor, document import, interns, questions and quizzes screens admin only", () => {
+  it("registers all 19 routes, with the knowledge editor, document import, interns, report, questions and quizzes screens admin only", () => {
     expect(ROUTES.map((r) => r.path)).toEqual([
       "/", "/chat", "/scenarios", "/plan", "/quiz", "/progress", "/check", "/kb", "/admin/interns", "/admin/interns/:id",
+      "/admin/report", "/admin/interns/:id/report",
       "/admin/kb/import", "/admin/kb/import/:id", "/admin/questions", "/admin/quizzes", "/admin/quizzes/:id", "/admin", "/about",
     ]);
     expect(ROUTES.filter((r) => r.needsAdmin).map((r) => r.path)).toEqual([
-      "/kb", "/admin/interns", "/admin/interns/:id", "/admin/kb/import", "/admin/kb/import/:id", "/admin/questions",
-      "/admin/quizzes", "/admin/quizzes/:id",
+      "/kb", "/admin/interns", "/admin/interns/:id", "/admin/report", "/admin/interns/:id/report", "/admin/kb/import",
+      "/admin/kb/import/:id", "/admin/questions", "/admin/quizzes", "/admin/quizzes/:id",
     ]);
   });
 
@@ -125,6 +126,15 @@ describe("App routes", () => {
       window.location.hash = `#/admin/interns/${INTERN}`;
     });
     await waitFor(() => expect(screens()).toEqual(["admin-intern"]));
+    // P21.2: the final report and an intern's printable report, both under the Interns tab
+    act(() => {
+      window.location.hash = "#/admin/report";
+    });
+    await waitFor(() => expect(screens()).toEqual(["admin-report"]));
+    act(() => {
+      window.location.hash = `#/admin/interns/${INTERN}/report`;
+    });
+    await waitFor(() => expect(screens()).toEqual(["admin-intern-report"]));
   });
 
   it("the interns screens without the admin token go to the admin sign-in", async () => {
@@ -132,6 +142,16 @@ describe("App routes", () => {
     renderApp();
     await waitFor(() => expect(screens()).toEqual(["admin"]));
     expect(window.location.hash).toBe("#/admin");
+  });
+
+  it("the report screens without the admin token go to the admin sign-in", async () => {
+    for (const hash of ["#/admin/report", `#/admin/interns/${INTERN}/report`]) {
+      setHash(hash);
+      const { unmount } = renderApp();
+      await waitFor(() => expect(screens()).toEqual(["admin"]));
+      expect(window.location.hash).toBe("#/admin");
+      unmount();
+    }
   });
 
   it("#/about is open without a role", async () => {

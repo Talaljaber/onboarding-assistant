@@ -11,7 +11,7 @@ import { formatDay, formatWhen, internName, internNameLang } from "@/lib/intern"
 import { pluralForm } from "@/lib/plural";
 import { topicLabel } from "@/lib/topic";
 import { usePath } from "@/router";
-import { MILESTONE_TITLE } from "../plan/shared";
+import { linkButton, MILESTONE_TITLE } from "../plan/shared";
 import { ProgressRing } from "../progress/ProgressRing";
 import { AdminRequestsSection } from "../requests/AdminRequestsSection";
 import { Button } from "../ui/Button";
@@ -165,6 +165,11 @@ export default function InternDetailScreen() {
                 }
                 actions={
                   <>
+                    {/* P21.2: the printable intern report */}
+                    <a href={`#/admin/interns/${d.intern.id}/report`} className={linkButton("secondary")} data-testid="intern-report">
+                      <Icon name="file" size={18} className="shrink-0" />
+                      {t("finalReport.reportLink")}
+                    </a>
                     <Button variant="secondary" icon="edit" onClick={() => setEditing(true)} data-testid="intern-edit">
                       {t("uiIntern.edit")}
                     </Button>
