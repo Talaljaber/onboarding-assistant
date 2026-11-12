@@ -67,7 +67,7 @@ repository.
 | Header switch «بلا اتصال» | **nothing** to any AI service for that request | — |
 | Key present, mode «تلقائي» | see below | OpenRouter |
 | Supabase variables present | store records (section 4) | the project's Supabase database (Supabase-hosted project; region: to be confirmed) |
-| `SMTP_USER` and `SMTP_PASSWORD` set, not offline (P18.2) | notification emails: a new mentor request's title and note, request replies with their attachments, a "request done" notice, questions sent to the mentor and their answers (the K-row text) | the configured SMTP server (Gmail by default) and the addresses the admin entered: the intern's email, and `ADMIN_EMAIL` |
+| `SMTP_USER` and `SMTP_PASSWORD` set, not offline (P18.2) | notification emails: a new mentor request's title and note, request replies with their attachments, a "request done" notice, questions sent to the mentor and their answers (the K-row text, or the mentor's private reply) | the configured SMTP server (Gmail by default) and the addresses the admin entered: the intern's email, and `ADMIN_EMAIL` |
 
 With a key, per message, at most:
 - **tool choice:** the message, the previous message (only for short follow-ups), the six scenario
@@ -143,7 +143,7 @@ policies for anonymous or signed-in clients.
 | `mentor_request_comments`, `mentor_request_files` (P15) | replies on a mentor request, both ways: author (intern or admin), text, time; and per attached file its name, type (PDF, Word, PNG or JPEG), size, sha256 and storage key (migration `0005_request_comments.sql`) |
 | `interns.email`, `mail_log` (P18.2) | the intern's email address (optional, entered by the admin; shown in the admin views only); per email sent, failed or skipped: event, recipient address, subject, status, a short error code and time. **No email body, no password** (migration `0007_email.sql`) |
 | Storage bucket `mentor-files` (P15, **private**) | the bytes of files attached to those replies (at most 3 per reply, 5 MB each), at `requests/{request id}/{file id}` |
-| `mentor_questions` (P18.1) | a question the intern **chose** to send to the mentor (Rumour Check or a chat refusal): intern id, source (check or chat), the text exactly as sent (≤ 600), status (open, answered, dismissed), the answer's K id, times (migration `0006_questions.sql`) |
+| `mentor_questions` (P18.1) | a question the intern **chose** to send to the mentor (Rumour Check or a chat refusal): intern id, source (check or chat), the text exactly as sent (≤ 600), status (open, answered, dismissed), the answer's K id or (P18.5) the mentor's private reply text (≤ 600), times (migrations `0006_questions.sql`, `0008_private_answers.sql`) |
 
 The store code refuses any turn log with a message, answer, text, prompt or reply field.
 
@@ -157,8 +157,12 @@ reach the AI service, a prompt or a turn log.
 **Chat text is not stored, except a question you choose to send to your mentor** (P18.1). The send is offered
 after a refusal or an unconfirmed answer in chat and on a Rumour Check claim with no confirming row; a confirm
 sheet shows the exact text (editable) and nothing is stored before the intern presses Send. Guarded questions
-(employment, contact, injection) and text with a phone number, email or link are refused. The mentor's answer
-becomes a new knowledge-base row (status `added`), cited from then on like any added row.
+(employment, contact, injection) and text with a phone number, email or link are refused. The mentor chooses how
+to answer: either the answer becomes a new knowledge-base row (status `added`), cited from then on like any added
+row, or (P18.5) it is a **private reply to that intern only**, for a personal question. A private reply is stored on
+the question row (`answer_text`), shown only to that intern and the admin, and emailed to the intern; it is never
+added to the knowledge base or the search index and never reaches the AI service, a prompt or a turn log. It
+follows the same rule: no phone number, email or link.
 
 **Local fallback.** Without Supabase, or when it does not answer (2 s probe at start, 3 s per call),
 the server uses `data/live/local.sqlite` with the same tables (and `data/live/mentor_files/` for reply

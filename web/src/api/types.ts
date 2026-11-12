@@ -1642,13 +1642,17 @@ export function isMailTestResponse(x: unknown): x is MailTestResponse {
 
 // ---------------------------------------------------------------- P18.1 questions inbox
 // A question the intern chooses to send to the mentor (Rumour Check or a chat refusal). The admin answers it once
-// with a new K-row (status "added", the KB editor's add path) or dismisses it. No score anywhere.
+// with a new K-row (status "added", the KB editor's add path), with a private reply to that intern only (P18.5:
+// `answer_text`, never a K-row) or dismisses it. No score anywhere.
 
 export const QUESTION_SOURCES = ["check", "chat"] as const;
 export type QuestionSource = (typeof QUESTION_SOURCES)[number];
 export const QUESTION_STATUSES = ["open", "answered", "dismissed"] as const;
 export type QuestionStatus = (typeof QUESTION_STATUSES)[number];
 export const QUESTION_LIMITS = { textMax: 600 } as const;
+/** P18.5: "kb" = the answer becomes a K-row for everyone; "private" = a reply to this intern only. */
+export const QUESTION_SCOPES = ["kb", "private"] as const;
+export type QuestionScope = (typeof QUESTION_SCOPES)[number];
 
 /** `POST /api/questions`: only on the intern's explicit Send, with the text they saw and could edit. */
 export interface QuestionCreate {
@@ -1668,6 +1672,8 @@ export interface MentorQuestion {
   answered_at: string | null;
   /** The answer K-row verbatim from the live KB; null until answered (or when the row is gone). */
   answer_row: Source | null;
+  /** P18.5: the mentor's private reply to this intern (not a K-row; only this intern and the admin see it). */
+  answer_text: string | null;
 }
 
 export interface QuestionCounts {
@@ -1700,19 +1706,22 @@ export interface AdminQuestionList {
   counts: QuestionCounts;
 }
 
-/** `POST /api/admin/questions/{id}/answer`: the K-row the answer becomes (KB editor limits; page 1). */
+/** `POST /api/admin/questions/{id}/answer`. scope "kb" (default): the K-row the answer becomes (KB editor
+ *  limits; page 1; topic required). scope "private" (P18.5): a reply to this intern only (only answer_ar used). */
 export interface QuestionAnswer {
   answer_ar: string;
-  topic: string;
+  topic?: string | null;
   keyword_en?: string;
   source_document?: string | null;
+  scope?: QuestionScope;
 }
 
+/** A private reply (P18.5) adds no row: `row`, `version` and `reindex_ms` are null then. */
 export interface QuestionAnswered {
   question: MentorQuestion;
-  row: KbRow;
-  version: string;
-  reindex_ms: number;
+  row: KbRow | null;
+  version: string | null;
+  reindex_ms: number | null;
 }
 
 export function isMentorQuestion(x: unknown): x is MentorQuestion {
@@ -1726,7 +1735,8 @@ export function isMentorQuestion(x: unknown): x is MentorQuestion {
     isStrOrNull(x.answer_row_id) &&
     isStr(x.created_at) &&
     isStrOrNull(x.answered_at) &&
-    (x.answer_row === null || isSource(x.answer_row))
+    (x.answer_row === null || isSource(x.answer_row)) &&
+    isStrOrNull(x.answer_text)
   );
 }
 
@@ -1753,5 +1763,7 @@ export function isAdminQuestionList(x: unknown): x is AdminQuestionList {
 }
 
 export function isQuestionAnswered(x: unknown): x is QuestionAnswered {
-  return isObj(x) && isMentorQuestion(x.question) && isKbRow(x.row) && isStr(x.version) && isNum(x.reindex_ms);
+  if (!isObj(x) || !isMentorQuestion(x.question)) return false;
+  if (x.row === null) return x.version === null && x.reindex_ms === null && x.question.answer_text !== null;
+  return isKbRow(x.row) && isStr(x.version) && isNum(x.reindex_ms);
 }

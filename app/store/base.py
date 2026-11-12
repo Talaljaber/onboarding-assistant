@@ -883,12 +883,16 @@ def mail_row(r: dict[str, Any]) -> dict[str, Any]:
 
 # Questions inbox (P18.1) ------------------------------------------------------------------------------------
 # A question the intern chose to send to the mentor (Rumour Check or a chat refusal). The admin answers it with
-# a new K-row (`answer_row_id`) or dismisses it; both happen once, from `open`.
+# a new K-row (`answer_row_id`), with a private reply to that intern only (`answer_text`, P18.5) or dismisses it;
+# each happens once, from `open`.
 
-QUESTION_COLUMNS = ("id", "intern_id", "source", "text", "status", "answer_row_id", "created_at", "answered_at")
+QUESTION_COLUMNS = ("id", "intern_id", "source", "text", "status", "answer_row_id", "created_at", "answered_at",
+                    "answer_text")
 QUESTION_SOURCES = frozenset({"check", "chat"})
 QUESTION_STATUSES = frozenset({"open", "answered", "dismissed"})
 QUESTION_TEXT_MAX = 600
+#: P18.5: a private reply follows the KB answer limit (5..600 after cleaning, checked by the API).
+QUESTION_ANSWER_TEXT_MAX = 600
 
 
 def question_record(rec: object) -> dict[str, Any] | None:
@@ -903,22 +907,26 @@ def question_record(rec: object) -> dict[str, Any] | None:
         return None
     if not isinstance(text, str) or not 1 <= len(text.strip()) <= QUESTION_TEXT_MAX:
         return None
-    out["status"], out["answer_row_id"], out["answered_at"] = "open", None, None
+    out["status"], out["answer_row_id"], out["answered_at"], out["answer_text"] = "open", None, None, None
     out["created_at"] = out["created_at"] if isinstance(out["created_at"], str) and out["created_at"] else now_iso()
     return out
 
 
 def question_changes(changes: dict[str, Any], current_status: str | None) -> dict[str, Any] | None:
-    """`{status: answered, answer_row_id: K..}` or `{status: dismissed}` on an open question (answered_at set),
-    or None when anything is invalid, unknown or the question is not open."""
+    """`{status: answered, answer_row_id: K..}`, `{status: answered, answer_text: ...}` (P18.5, a private reply)
+    or `{status: dismissed}` on an open question (answered_at set), or None when anything is invalid, unknown or
+    the question is not open."""
     if current_status != "open":
         return None
-    status, row_id = changes.get("status"), changes.get("answer_row_id")
-    if set(changes) - {"status", "answer_row_id"}:
+    status, row_id, text = changes.get("status"), changes.get("answer_row_id"), changes.get("answer_text")
+    if set(changes) - {"status", "answer_row_id", "answer_text"}:
         return None
-    if status == "answered" and isinstance(row_id, str) and KB_ID_RE.match(row_id):
+    if status == "answered" and text is None and isinstance(row_id, str) and KB_ID_RE.match(row_id):
         return {"status": status, "answer_row_id": row_id, "answered_at": now_iso()}
-    if status == "dismissed" and row_id is None:
+    if (status == "answered" and row_id is None and isinstance(text, str)
+            and 1 <= len(text.strip()) <= QUESTION_ANSWER_TEXT_MAX):
+        return {"status": status, "answer_text": text, "answered_at": now_iso()}
+    if status == "dismissed" and row_id is None and text is None:
         return {"status": status, "answered_at": now_iso()}
     return None
 

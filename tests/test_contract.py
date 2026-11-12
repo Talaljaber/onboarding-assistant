@@ -121,6 +121,9 @@ FIXTURES: dict[str, type[BaseModel]] = {
     "question_answer_request.json": s.QuestionAnswer,
     "question_answered.json": s.QuestionAnswered,
     "question_dismissed.json": s.MentorQuestion,
+    # P18.5 private replies
+    "question_answer_private_request.json": s.QuestionAnswer,
+    "question_answered_private.json": s.QuestionAnswered,
 }
 
 # One response fixture per endpoint (the request fixtures are listed in FIXTURES above).
@@ -295,7 +298,7 @@ def test_official_sources_are_verbatim() -> None:
             rows.append(data["explanation"])
         if "rows" in data and isinstance(data["rows"], list):
             rows += data["rows"]
-        if "row" in data:
+        if data.get("row") is not None:  # P18.5: a private reply has no row
             rows.append(data["row"])
         for row in rows:
             if row["status"] != "official":
@@ -769,12 +772,43 @@ def test_questions_inbox_contract() -> None:
     for q in load("admin_questions.json")["questions"]:
         assert (q["suggestion"] is not None) == (q["status"] == "open")
     for q in load("questions.json")["questions"]:
-        assert (q["answer_row"] is not None) == (q["status"] == "answered")
+        assert (q["answer_row"] is not None or q["answer_text"] is not None) == (q["status"] == "answered")
     banned = re.compile(r"score|grade|rating|correct")
-    keys = set().union(*(all_keys(load(n)) for n in ("questions.json", "admin_questions.json", "question_answered.json")))
+    keys = set().union(*(all_keys(load(n)) for n in ("questions.json", "admin_questions.json", "question_answered.json",
+                                                      "question_answered_private.json")))
     assert not [k for k in keys if banned.search(k)]
     ts = TYPES_TS.read_text(encoding="utf-8")
     for value in (*s.QUESTION_SOURCES, *s.QUESTION_STATUSES):
         assert f'"{value}"' in ts, value
     for guard in ("isMentorQuestion", "isMentorQuestionList", "isAdminQuestionList", "isQuestionAnswered"):
         assert f"export function {guard}" in ts, guard
+
+
+def test_private_answer_contract() -> None:
+    """P18.5: a private reply is stored on the question (`answer_text`), never a K-row: the response has no row,
+    version or re-index time; an answered question has exactly one of a row id and a text; `scope` defaults to
+    `kb` (which still needs a topic)."""
+    private = load("question_answered_private.json")
+    q = private["question"]
+    assert q["status"] == "answered" and q["answer_text"] and q["answer_row_id"] is None and q["answer_row"] is None
+    assert private["row"] is None and private["version"] is None and private["reindex_ms"] is None
+    req = load("question_answer_private_request.json")
+    assert req["scope"] == "private" and req["answer_ar"] == q["answer_text"]
+    assert s.QuestionAnswer.model_validate({"answer_ar": req["answer_ar"], "scope": "private"}).topic is None
+    assert s.QuestionAnswer.model_validate({"answer_ar": req["answer_ar"], "topic": "Company"}).scope == "kb"
+    for bad in ({"scope": "kb"}, {"scope": "team"}, {"answer_ar": "قصير"}, {"answer_ar": "ا" * 601}):
+        with pytest.raises(ValidationError):
+            s.QuestionAnswer.model_validate({"answer_ar": req["answer_ar"], "scope": "private", **bad})
+    kb = load("question_answered.json")
+    for bad in ({**private, "version": "abc"}, {**kb, "row": None}, {**kb, "version": None},
+                {**private, "question": {**q, "answer_text": None}},
+                {**private, "question": {**q, "answer_row_id": "K19"}},
+                {**private, "question": {**q, "status": "dismissed"}}):
+        with pytest.raises(ValidationError):
+            s.QuestionAnswered.model_validate(bad)
+    assert [x["answer_text"] is not None for x in load("admin_questions.json")["questions"]].count(True) == 1
+    ts = TYPES_TS.read_text(encoding="utf-8")
+    for needle in ("answer_text: string | null", 'export const QUESTION_SCOPES = ["kb", "private"] as const',
+                   "scope?: QuestionScope", "row: KbRow | null"):
+        assert needle in ts, needle
+    assert "question_answered_private.json" in CONTRACT_MD.read_text(encoding="utf-8")

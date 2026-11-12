@@ -1658,8 +1658,11 @@ QUESTION_TEXT_MAX = 600
 QUESTION_ANSWER_DOCUMENT = "Mentor answer"
 QuestionSource = Literal["check", "chat"]
 QuestionStatus = Literal["open", "answered", "dismissed"]
+#: P18.5: `kb` = the answer becomes a K-row for everyone; `private` = a reply to this intern only (no K-row).
+QuestionScope = Literal["kb", "private"]
 QUESTION_SOURCES: tuple[str, ...] = get_args(QuestionSource)
 QUESTION_STATUSES: tuple[str, ...] = get_args(QuestionStatus)
+QUESTION_SCOPES: tuple[str, ...] = get_args(QuestionScope)
 
 
 class QuestionCreate(_Model):
@@ -1672,7 +1675,9 @@ class QuestionCreate(_Model):
 
 class MentorQuestion(_Model):
     """One question. `answer_row` is the answer K-row verbatim from the live KB (null until answered, or when the
-    row is no longer in the KB)."""
+    row is no longer in the KB). P18.5: `answer_text` is the mentor's private reply to this intern (not a K-row;
+    shown only to that intern and the admin); an answered question has exactly one of `answer_row_id` and
+    `answer_text`."""
 
     id: UuidStr
     intern_id: InternId
@@ -1683,6 +1688,15 @@ class MentorQuestion(_Model):
     created_at: str
     answered_at: str | None
     answer_row: Source | None
+    answer_text: str | None
+
+    @model_validator(mode="after")
+    def _one_answer(self) -> MentorQuestion:
+        if self.answer_text is not None and (self.status != "answered" or self.answer_row_id is not None):
+            raise ValueError("answer_text is only set on a question answered privately (no answer row)")
+        if self.status == "answered" and self.answer_row_id is None and self.answer_text is None:
+            raise ValueError("an answered question has an answer row id or an answer text")
+        return self
 
 
 class QuestionCounts(_Model):
@@ -1719,21 +1733,40 @@ class AdminQuestionList(_Model):
 
 
 class QuestionAnswer(_Model):
-    """`POST /api/admin/questions/{id}/answer`: the K-row the answer becomes (KB editor limits; page 1)."""
+    """`POST /api/admin/questions/{id}/answer`. `scope: "kb"` (default): the K-row the answer becomes (KB editor
+    limits; page 1; `topic` required). `scope: "private"` (P18.5): `answer_ar` is a reply to this intern only,
+    stored on the question (no K-row; `topic`, `keyword_en` and `source_document` are not used)."""
 
     answer_ar: KbAnswer
-    topic: KbTopic
+    topic: KbTopic | None = None
     keyword_en: KbKeyword = ""
     source_document: KbDocument | None = None
+    scope: QuestionScope = "kb"
+
+    @model_validator(mode="after")
+    def _topic_for_kb(self) -> QuestionAnswer:
+        if self.scope == "kb" and self.topic is None:
+            raise ValueError("topic is required to add the answer to the knowledge base")
+        return self
 
 
 class QuestionAnswered(_Model):
-    """The answered question and the K-row added (status `added`) through the KB editor's add path."""
+    """The answered question and the K-row added (status `added`) through the KB editor's add path. P18.5: a
+    private reply adds no row, so `row`, `version` and `reindex_ms` are null (the KB is unchanged)."""
 
     question: MentorQuestion
-    row: KbRow
-    version: str
-    reindex_ms: NonNeg
+    row: KbRow | None
+    version: str | None
+    reindex_ms: NonNeg | None
+
+    @model_validator(mode="after")
+    def _row_or_private(self) -> QuestionAnswered:
+        private = self.question.answer_text is not None
+        if {self.row is None, self.version is None, self.reindex_ms is None} != {private}:
+            raise ValueError("row, version and reindex_ms are null exactly when the answer is private")
+        if self.row is not None and self.question.answer_row_id != self.row.id:
+            raise ValueError("the question's answer_row_id is the added row")
+        return self
 
 
 __all__ = [
@@ -1884,6 +1917,7 @@ __all__ = [
     "MailTestResponse",
     # P18.1 questions inbox
     "QUESTION_ANSWER_DOCUMENT",
+    "QUESTION_SCOPES",
     "QUESTION_SOURCES",
     "QUESTION_STATUSES",
     "QUESTION_TEXT_MAX",
@@ -1895,5 +1929,6 @@ __all__ = [
     "QuestionAnswered",
     "QuestionCounts",
     "QuestionCreate",
+    "QuestionScope",
     "QuestionSuggestion",
 ]

@@ -1,6 +1,7 @@
 // `#/admin/questions` «أسئلة المتدربين» (P18.1): questions interns chose to send when the assistant had no
 // answer. Newest first: the intern, where it came from, when, and the text verbatim. «أجب» adds the answer to the
-// knowledge base as a new row (then the toast names its K-id); «أغلق دون جواب» closes it. No score anywhere.
+// knowledge base as a new row (then the toast names its K-id) or, for a personal question, replies to that intern
+// only (P18.5: shown here with a «ردّ خاص» tag); «أغلق دون جواب» closes it. No score anywhere.
 import { useCallback, useEffect, useState } from "react";
 import { dismissQuestion, getAdminQuestions } from "@/api/client";
 import type { AdminQuestion, AdminQuestionList, QuestionStatus } from "@/api/types";
@@ -59,9 +60,18 @@ function QuestionCard({
           <span aria-hidden="true">·</span>
           <span>{formatWhen(q.created_at, lang)}</span>
         </p>
-        <Badge tone={s.tone} size="sm">
-          {t(s.key)}
-        </Badge>
+        <span className="flex flex-wrap items-center gap-1.5">
+          {q.answer_text !== null && (
+            <span data-private-tag className="inline-flex">
+              <Badge tone="neutral" size="sm" icon="lock">
+                {t("adminQuestions.privateTag")}
+              </Badge>
+            </span>
+          )}
+          <Badge tone={s.tone} size="sm">
+            {t(s.key)}
+          </Badge>
+        </span>
       </div>
       <blockquote dir="auto" className="m-0 whitespace-pre-line border-s-4 border-s-line-strong ps-3 text-base leading-[1.8] text-fg-1">
         {q.text}
@@ -72,6 +82,14 @@ function QuestionCard({
           <ul className="m-0 list-none p-0">
             <SourceRow source={q.answer_row} />
           </ul>
+        </div>
+      )}
+      {q.status === "answered" && q.answer_text !== null && (
+        <div className="flex flex-col gap-1.5" data-private-reply>
+          <p className="m-0 text-xs font-semibold text-fg-2">{t("adminQuestions.privateWith")}</p>
+          <p dir="auto" className="m-0 whitespace-pre-line rounded-md bg-surface-1 px-3 py-2 text-base leading-[1.8] text-fg-1">
+            {q.answer_text}
+          </p>
         </div>
       )}
       {q.status === "open" && (
@@ -164,7 +182,7 @@ export default function QuestionsScreen() {
           onClose={() => setAnswering(null)}
           onAnswered={(out) => {
             setAnswering(null);
-            toast.show(t("adminQuestions.added", { id: out.row.id }), "ok");
+            toast.show(out.row ? t("adminQuestions.added", { id: out.row.id }) : t("adminQuestions.repliedPrivately"), "ok");
             reload();
           }}
         />

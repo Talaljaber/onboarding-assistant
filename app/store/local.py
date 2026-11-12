@@ -226,7 +226,8 @@ create table if not exists mentor_questions (
     status text not null default 'open' check (status in ('open', 'answered', 'dismissed')),
     answer_row_id text,
     created_at text not null,
-    answered_at text
+    answered_at text,
+    answer_text text
 );
 create index if not exists mentor_questions_intern_idx on mentor_questions (intern_id, created_at);
 create index if not exists mentor_questions_status_idx on mentor_questions (status);
@@ -244,6 +245,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
     # P18.2 (supabase/migrations/0007_email.sql): the admin-entered intern email.
     if "email" not in {r[1] for r in conn.execute("pragma table_info(interns)")}:
         conn.execute("alter table interns add column email text")
+    # P18.5 (supabase/migrations/0008_private_answers.sql): the mentor's private reply on a question.
+    if "answer_text" not in {r[1] for r in conn.execute("pragma table_info(mentor_questions)")}:
+        conn.execute("alter table mentor_questions add column answer_text text")
 
 
 def _jload(raw: Any) -> Any:

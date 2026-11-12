@@ -506,7 +506,8 @@ export const getAdminQuestions = (status?: QuestionStatus, signal?: AbortSignal)
     admin: true,
   });
 
-/** Adds the answer as a K-row (re-index included), then marks the question answered. */
+/** scope "kb" (default): adds the answer as a K-row (re-index included), then marks the question answered.
+ *  scope "private" (P18.5): stores a reply to this intern only (no K-row, KB unchanged). */
 export const answerQuestion = (id: string, body: QuestionAnswer, signal?: AbortSignal) =>
   request<QuestionAnswered>(`/api/admin/questions/${q(id)}/answer`, {
     method: "POST",

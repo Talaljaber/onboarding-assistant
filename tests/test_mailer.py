@@ -549,3 +549,48 @@ def test_question_routes_email_the_mentor_then_the_intern(env: Env) -> None:
     assert row_id in text and answer in text and question in text
     events = [x["event"] for x in store.mail_log() or []]
     assert events.count("question_submitted") == 1 and events.count("question_answered") == 1
+
+
+def test_private_reply_hook_says_it_is_personal(tmp_path: Path) -> None:
+    """P18.5: a private reply emails the intern the reply verbatim, says it is personal and not from the
+    knowledge base, and carries no K-id."""
+    store = LocalStore(tmp_path)
+    sara = store.create_intern("سارة الخطيب", "Sara Al-Khatib", "Sales")
+    assert store.set_intern_email(sara["id"], INTERN) is True
+    m = Mailer(configured(tmp_path), store)
+    reply = "نعم، بدّلت يومك الميداني إلى الأحد القادم."
+    mailer.question_answered_private(m, intern_id=sara["id"], question="هل يمكنني تبديل يومي الميداني؟",
+                                     answer_text=reply)
+    mailer.question_answered_private(None, intern_id=sara["id"], question="x", answer_text="y")  # a no-op
+    assert m.wait(5)
+    (conn,) = FakeSMTP.instances
+    msg = conn.messages[0]
+    assert msg["To"] == INTERN and "ردّ مشرفك على سؤالك" in msg["Subject"]
+    text = body_of(msg, "plain")
+    assert reply in text and "هل يمكنني تبديل يومي الميداني؟" in text
+    assert "ليس من قاعدة المعرفة" in text and "not part of the knowledge base" in text
+    assert "K1" not in text and "K2" not in text
+    assert [r["event"] for r in store.mail_log() or []] == ["question_answered"]
+    store.close()
+
+
+def test_private_reply_route_emails_the_intern(env: Env) -> None:
+    client, auth, store, m = env
+    sara = _interns(client)[0]
+    store.set_intern_email(sara.id, INTERN)
+    pid = InternSession.model_validate(client.post(f"/api/interns/{sara.id}/session").json()).profile_id
+    question = "هل يمكنني تبديل يوم التدريب الميداني هذا الأسبوع بسبب موعد طبي؟"
+    r = client.post("/api/questions", json={"profile_id": pid, "source": "chat", "text": question})
+    assert r.status_code == 201, r.text
+    reply = "نعم، بدّلت يومك الميداني إلى الأحد القادم وأبلغت فريق المبيعات."
+    r = client.post(f"/api/admin/questions/{r.json()['id']}/answer", headers=auth,
+                    json={"answer_ar": reply, "scope": "private"})
+    assert r.status_code == 200, r.text
+    assert r.json()["row"] is None
+    assert m.wait(5)
+    got = [c.messages[0] for c in FakeSMTP.instances if c.messages[0]["To"] == INTERN]
+    assert len(got) == 1
+    text = body_of(got[0], "plain")
+    assert reply in text and question in text and "ليس من قاعدة المعرفة" in text
+    events = [(x["event"], x["status"]) for x in store.mail_log() or []]
+    assert events.count(("question_answered", "sent")) == 1

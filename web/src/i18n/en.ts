@@ -1004,12 +1004,15 @@ export const en: Dict = {
     sourceChat: "From chat",
     answerAdded: "The answer was added to the knowledge base:",
     reask: "Ask again",
+    /** P18.5: a personal reply from the mentor (not a K-row). */
+    privateTitle: "A personal reply from your mentor",
+    privateLabel: "A personal reply from your mentor — not from the knowledge base",
   },
   /** P18.1: the admin's “Interns' questions” screen. */
   adminQuestions: {
     nav: "Interns' questions",
     openAria: "Open questions: {n}",
-    lead: "Questions interns sent when the assistant had no answer. Your answer is added to the knowledge base as a new row and cited from then on.",
+    lead: "Questions interns sent when the assistant had no answer. Add your answer to the knowledge base as a new row, cited from then on, or reply to the intern only when the question is personal.",
     filterOpen: "Open",
     filterAnswered: "Answered",
     filterDismissed: "Closed",
@@ -1021,7 +1024,7 @@ export const en: Dict = {
     dismiss: "Close without answer",
     from: "{name} · {source} · {when}",
     answeredWith: "Answered with row",
-    dialogTitle: "Answer and add to the knowledge base",
+    dialogTitle: "Answer the intern's question",
     questionLabel: "The question as the intern sent it",
     answerLabel: "Answer (added as you write it, as a new row)",
     answerRule: "{min}–{max} characters; no phone, email or link.",
@@ -1036,5 +1039,15 @@ export const en: Dict = {
     failed: "Could not save. Try again.",
     errContact: "Remove any phone number, email address or link.",
     notOpen: "This question was already answered or closed.",
+    /** P18.5: answer to the knowledge base, or reply to this intern only. */
+    scopeLabel: "How do you answer?",
+    scopeKb: "Add to the knowledge base",
+    scopePrivate: "Reply to this intern only",
+    privateHint: "Not added to the knowledge base; only this intern sees it",
+    answerLabelPrivate: "Your reply to the intern",
+    savePrivate: "Send the reply",
+    repliedPrivately: "Your reply was sent to this intern only.",
+    privateTag: "Private reply",
+    privateWith: "Private reply to the intern (not in the knowledge base)",
   },
 };
