@@ -161,6 +161,8 @@ FIXTURES: dict[str, type[BaseModel]] = {
     "quiz_run_review.json": s.QuizRunReview,
     "error_400_quiz_run_expired.json": s.ErrorBody,
     "error_400_quiz_use_run.json": s.ErrorBody,
+    "chat_quiz_lock.json": s.ChatResponse,
+    "error_400_quiz_open.json": s.ErrorBody,
 }
 
 # One response fixture per endpoint (the request fixtures are listed in FIXTURES above).
@@ -1143,3 +1145,28 @@ def test_quiz_run_contract() -> None:
         assert needle in ts, needle
     doc = CONTRACT_MD.read_text(encoding="utf-8")
     assert "6o. Quiz runs" in doc
+
+
+def test_quiz_lock_contract() -> None:
+    """P23 lock: a locked run (checkpoint or timed set) closes the chat to the fixed lock text with `quiz_lock`, and
+    the Rumour Check to 400 `reason:quiz_open`; the official quiz never locks; `quiz_lock` is left out when null."""
+    chat = load("chat_quiz_lock.json")
+    assert chat["reply"]["kind"] == "text" and chat["reply"]["text_ar"] == s.QUIZ_LOCK_TEXT_AR
+    assert chat["reply"]["text_en"] == s.QUIZ_LOCK_TEXT_EN and not chat["reply"]["sources"]
+    assert chat["trace"]["retrieval"] is None and chat["trace"]["agent"]["used"] is False
+    with pytest.raises(ValidationError):
+        s.ChatResponse.model_validate({**chat, "reply": load("chat_text.json")["reply"]})
+    assert "quiz_lock" not in s.ChatResponse.model_validate(load("chat_text.json")).model_dump(mode="json")
+    assert load("quiz_run.json")["locked"] is True
+    sets = load("quiz_sets.json")["sets"]
+    assert sets[0]["official"] and sets[0]["locked"] is False and sets[1]["locked"] is True
+    with pytest.raises(ValidationError):
+        s.QuizSetSummary.model_validate({**sets[0], "locked": True})
+    err = load("error_400_quiz_open.json")["error"]
+    assert (err["field"], err["message"]) == ("profile_id", "reason:quiz_open")
+    assert load("check_request.json")["profile_id"]
+    ts = TYPES_TS.read_text(encoding="utf-8")
+    for needle in ("quiz_lock?: QuizLock | null", "export function isQuizLock", "profile_id?: string | null",
+                   s.QUIZ_LOCK_TEXT_AR, s.QUIZ_LOCK_TEXT_EN, "locked?: boolean"):
+        assert needle in ts, needle
+    assert "reason:quiz_open" in CONTRACT_MD.read_text(encoding="utf-8")

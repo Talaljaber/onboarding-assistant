@@ -445,6 +445,8 @@ export interface ChatResponse {
   state: ClientState;
   mode: Mode;
   trace: Trace;
+  /** P23: present (and the reply is the fixed lock text) while the intern has an open locked quiz run. */
+  quiz_lock?: QuizLock | null;
 }
 
 // ---------------------------------------------------------------- scenarios
@@ -1041,7 +1043,8 @@ export function isChatResponse(x: unknown): x is ChatResponse {
     isObj(x.state) &&
     isStrOrNull(x.state.active_scenario) &&
     isOneOf(MODES, x.mode) &&
-    isTrace(x.trace)
+    isTrace(x.trace) &&
+    (x.quiz_lock === undefined || x.quiz_lock === null || isQuizLock(x.quiz_lock))
   );
 }
 
@@ -1488,6 +1491,8 @@ export const CHECK_LIMITS = { textMax: 600, claimsMax: 5 } as const;
 export interface CheckRequest {
   text: string;
   force_offline?: boolean;
+  /** P23: the signed-in intern's profile; 400 field "profile_id" `reason:quiz_open` during a locked quiz run. */
+  profile_id?: string | null;
 }
 
 export interface CheckNumbers {
@@ -2019,6 +2024,8 @@ export interface QuizSetSummary {
   open_run_remaining_seconds?: number | null;
   /** P23: the latest finished or expired run (its review: `getQuizRunReview`), else null. */
   last_review_run_id?: string | null;
+  /** P23 lock: a checkpoint or timed set (while its run is open the assistant is closed); never the official quiz. */
+  locked?: boolean;
 }
 
 /** P21.2: the intern's own checkpoint result, with the admin's rule (first answer per question). */
@@ -2157,7 +2164,8 @@ function isQuizSetSummary(x: unknown): x is QuizSetSummary {
     isNumOrNullOrAbsent(x.time_limit_minutes) &&
     isStrOrNullOrAbsent(x.open_run_id) &&
     isNumOrNullOrAbsent(x.open_run_remaining_seconds) &&
-    isStrOrNullOrAbsent(x.last_review_run_id)
+    isStrOrNullOrAbsent(x.last_review_run_id) &&
+    (x.locked === undefined || isBool(x.locked))
   );
 }
 
@@ -2307,8 +2315,9 @@ export type QuizRunStatus = (typeof QUIZ_RUN_STATUSES)[number];
 /** Run errors: 400 `validation_error`, `message: "reason:<code>"` (read it with `quizErrorReason`).
  *  expired / finished (field "status"): the run is closed, finish it to get the review; answered (field "item_id"):
  *  one answer per item per run; in_progress (field "status"): the review of an open run; use_run (field "id"):
- *  `POST /api/quiz/check` for an item of a timed or checkpoint set. */
-export const QUIZ_RUN_REASONS = ["expired", "finished", "answered", "in_progress", "use_run"] as const;
+ *  `POST /api/quiz/check` for an item of a timed or checkpoint set; quiz_open (field "profile_id"): `POST /api/check`
+ *  during a locked run. */
+export const QUIZ_RUN_REASONS = ["expired", "finished", "answered", "in_progress", "use_run", "quiz_open"] as const;
 export type QuizRunReason = (typeof QUIZ_RUN_REASONS)[number];
 /** The admin's time limit per set, in minutes (empty = no limit). */
 export const QUIZ_TIME_LIMIT = { min: 1, max: 120 } as const;
@@ -2332,6 +2341,8 @@ export interface QuizRun {
   answers: Record<string, QuizOptionKey>;
   mode: QuizMode;
   official: boolean;
+  /** P23 lock: a checkpoint or timed set; while it is open the chat and the Rumour Check are closed to the intern. */
+  locked?: boolean;
 }
 
 /** `POST /api/quiz-runs/{id}/answer` body (an item is answered once per run). */
@@ -2392,7 +2403,8 @@ export function isQuizRun(x: unknown): x is QuizRun {
     isObj(x.answers) &&
     Object.values(x.answers).every((v) => isOneOf(RUN_OPTION_KEYS, v)) &&
     isOneOf(QUIZ_MODES, x.mode) &&
-    isBool(x.official)
+    isBool(x.official) &&
+    (x.locked === undefined || isBool(x.locked))
   );
 }
 
@@ -2436,4 +2448,19 @@ export function isQuizRunReview(x: unknown): x is QuizRunReview {
     isOneOf(QUIZ_MODES, x.mode) &&
     isBool(x.official)
   );
+}
+
+/** P23 lock: the chat's reply while the intern has an open locked run names the run, to link back to it. */
+export interface QuizLock {
+  run_id: string;
+  set_id: string;
+  remaining_seconds: number | null;
+}
+
+/** The fixed lock text (the server sends it as the reply's `text_ar` / `text_en`). */
+export const QUIZ_LOCK_TEXT_AR = "لديك اختبار مفتوح. أنهِه أولاً، ثم اسألني ما تريد.";
+export const QUIZ_LOCK_TEXT_EN = "You have an open quiz. Finish it first, then ask me anything.";
+
+export function isQuizLock(x: unknown): x is QuizLock {
+  return isObj(x) && isStr(x.run_id) && isStr(x.set_id) && (x.remaining_seconds === null || isNum(x.remaining_seconds));
 }

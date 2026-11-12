@@ -262,8 +262,11 @@ rows keep the roster order and the admin sorts them. Names, times and counts are
 | `quiz_run_review.json` | `POST /api/quiz-runs/{id}/finish` and `GET /api/quiz-runs/{id}/review?profile_id=` (expired at the deadline: M001 right, M002 wrong, M003 unanswered = not right; each item cites its official row verbatim) | `QuizRunReview` |
 | `error_400_quiz_run_expired.json` | 400 `validation_error`, `field: "status"`, `message: "reason:expired"` (an answer after the deadline + 2 s) | `ErrorBody` |
 | `error_400_quiz_use_run.json` | 400 `validation_error`, `field: "id"`, `message: "reason:use_run"` (`POST /api/quiz/check` for an item of a timed or checkpoint set) | `ErrorBody` |
+| `chat_quiz_lock.json` | `POST /api/chat` while the intern has an open locked run: the fixed lock text, no retrieval, no model, and `quiz_lock` naming the run | `ChatResponse` |
+| `error_400_quiz_open.json` | 400 `validation_error`, `field: "profile_id"`, `message: "reason:quiz_open"` (`POST /api/check` during a locked run) | `ErrorBody` |
 
 `admin_quiz_sets.json`, `admin_quiz_set*.json` and `quiz_set_*_request.json` carry `time_limit_minutes` (10 for the
 Sales checkpoint set, null for the draft); `quiz_sets.json` carries `time_limit_minutes`, `open_run_id`,
-`open_run_remaining_seconds` and `last_review_run_id` (the official quiz has a review to show). Ids and times are
+`open_run_remaining_seconds`, `last_review_run_id` (the official quiz has a review to show) and `locked` (the
+checkpoint set; never the official quiz); `quiz_run.json` is `locked`; `check_request.json` carries `profile_id`. Ids and times are
 illustrative. The review is the intern's own result; no admin fixture carries a run.

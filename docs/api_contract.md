@@ -982,6 +982,14 @@ official quiz or a set) by one profile, stored on the server (`quiz_runs`, migra
   rule applies (the earliest answer per item over all their answers). The admin's results, the intern detail, the
   final report and the intern's own `my_result` all follow this rule. The admin never receives a run, a run id or a
   review.
+- **Lock (owner request).** A run is `locked` when its set is a checkpoint or has a time limit (never the official
+  quiz or an untimed practice set; `QuizRun.locked`, `QuizSetSummary.locked`). While the intern (any of their
+  profiles) has an open, not expired locked run, `POST /api/chat` answers only the fixed reply (kind `text`,
+  `text_ar` «لديك اختبار مفتوح. أنهِه أولاً، ثم اسألني ما تريد.», `text_en` "You have an open quiz. Finish it first,
+  then ask me anything.") with `quiz_lock: {run_id, set_id, remaining_seconds}` (`chat_quiz_lock.json`), before any
+  guard, retrieval, model call or turn log; `POST /api/check` (which now takes an optional `profile_id`) is 400
+  `field: "profile_id"`, `reason:quiz_open` (`error_400_quiz_open.json`). An expired run no longer locks (expiry is
+  lazy); finishing unlocks at once. `quiz_lock` is left out of the chat JSON when there is no lock.
 - **The plan.** Finishing a run of the official quiz ticks the suggested plan's quiz activity for that profile on
   the server (as the client did).
 - **Old clients.** `POST /api/quiz/check` keeps working for the official quiz and untimed practice sets (its answers
@@ -998,6 +1006,7 @@ Errors keep the frozen enum: 400 `validation_error` with `message` `reason:<Quiz
 | `reason:answered` | `item_id` | this item already has an answer in this run |
 | `reason:in_progress` | `status` | the review of a run that is still open |
 | `reason:use_run` | `id` | `POST /api/quiz/check` for an item of a timed or checkpoint set |
+| `reason:quiz_open` | `profile_id` | `POST /api/check` while the intern has an open locked run |
 
 Every run route answers 503 `requests_unavailable` when the store cannot serve the run tables (Supabase before
 migration 0011).
@@ -1098,7 +1107,7 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
 - final report (P21.2): `final_report.json`;
 - quiz runs (P23): `quiz_run_start_request.json`, `quiz_run.json`, `quiz_run_answer_request.json`,
   `quiz_run_answered.json`, `quiz_run_finish_request.json`, `quiz_run_review.json`,
-  `error_400_quiz_run_expired.json`, `error_400_quiz_use_run.json`;
+  `error_400_quiz_run_expired.json`, `error_400_quiz_use_run.json`, `chat_quiz_lock.json`, `error_400_quiz_open.json`;
 - request threads (P15): `request_thread.json`, `request_comment.json`, `request_comment_create_request.json`,
   `request_comment_admin_create_request.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,

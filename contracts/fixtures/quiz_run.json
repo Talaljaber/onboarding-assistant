@@ -47,5 +47,6 @@
     "M001": "A"
   },
   "mode": "checkpoint",
-  "official": false
+  "official": false,
+  "locked": true
 }

@@ -1,0 +1,59 @@
+{
+  "reply": {
+    "kind": "text",
+    "text_ar": "لديك اختبار مفتوح. أنهِه أولاً، ثم اسألني ما تريد.",
+    "text_en": "You have an open quiz. Finish it first, then ask me anything.",
+    "status": null,
+    "band": null,
+    "sources": [],
+    "scenario": null,
+    "feedback": null,
+    "proposal": null,
+    "progress": null,
+    "plan": null,
+    "quiz": null,
+    "reason": null,
+    "label_ar": null
+  },
+  "state": {
+    "active_scenario": null
+  },
+  "mode": "offline",
+  "trace": {
+    "request_id": "2c3d4e5f6099",
+    "mode": "offline",
+    "model": null,
+    "guards": {
+      "employment": null,
+      "contact": null
+    },
+    "router": {
+      "tool": "refuse",
+      "confidence": 1.0,
+      "reason": "quiz_open"
+    },
+    "agent": {
+      "used": false,
+      "tool": null,
+      "args": null,
+      "latency_ms": null,
+      "cached": false,
+      "fallback_reason": null
+    },
+    "retrieval": null,
+    "answer": null,
+    "feedback": null,
+    "injection_suspected": false,
+    "panel": null,
+    "steps": [
+      "quiz_lock",
+      "render"
+    ],
+    "latency_ms": 2
+  },
+  "quiz_lock": {
+    "run_id": "0000c002-4d3a-4e8b-9c71-2a5d0e7f3b14",
+    "set_id": "0000a001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+    "remaining_seconds": 412
+  }
+}
