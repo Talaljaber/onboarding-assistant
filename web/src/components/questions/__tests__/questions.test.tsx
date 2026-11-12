@@ -190,6 +190,10 @@ describe("questions inbox", () => {
     });
     expect(cards[0]).toHaveTextContent("سارة الخطيب");
     expect(cards[0]).toHaveTextContent(adminQuestions.questions[0]!.text);
+    // P19.3: on a phone the four filters sit in a 2 x 2 grid (none hidden past the edge of the pill row)
+    const filters = screen.getByRole("tablist", { name: ar("adminQuestions.filterLabel") });
+    expect(within(filters).getAllByRole("tab")).toHaveLength(4);
+    expect(filters).toHaveClass("max-sm:grid", "max-sm:grid-cols-2");
     await userEvent.click(within(cards[0]!).getByRole("button", { name: ar("adminQuestions.answer") }));
     const dialog = await screen.findByRole("dialog", { name: ar("adminQuestions.dialogTitle") });
     // the default is «أضفه إلى قاعدة المعرفة»

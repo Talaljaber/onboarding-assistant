@@ -50,6 +50,9 @@ const ERROR_KEY: Record<string, DictKey> = {
 /** How long after "queued" the log is read again (a Gmail send takes a second or two). */
 const REFRESH_AFTER_MS = 3000;
 
+/** P19.3: a phone shows the newest few emails first (50 cards made the screen very long); "Show all" opens the rest. */
+const PHONE_PREVIEW = 5;
+
 function useReason() {
   const t = useT();
   return (code: string | null) => (code ? t(ERROR_KEY[code] ?? "mail.errError") : "");
@@ -71,12 +74,22 @@ function StatusCell({ e }: { e: MailLogEntry }) {
 
 function ToCell({ e }: { e: MailLogEntry }) {
   const t = useT();
-  return e.to_addr ? (
-    <bdi dir="ltr" className="font-id break-all">
-      {e.to_addr}
+  if (!e.to_addr) return <span className="text-fg-3">{t("mail.noAddress")}</span>;
+  // P19.3: break after the "@" (not after every letter, which made a tall sliver column in the table);
+  // a very long part still wraps instead of widening the page.
+  const at = e.to_addr.lastIndexOf("@");
+  return (
+    <bdi dir="ltr" className="font-id break-words">
+      {at > 0 ? (
+        <>
+          {e.to_addr.slice(0, at + 1)}
+          <wbr />
+          {e.to_addr.slice(at + 1)}
+        </>
+      ) : (
+        e.to_addr
+      )}
     </bdi>
-  ) : (
-    <span className="text-fg-3">{t("mail.noAddress")}</span>
   );
 }
 
@@ -130,6 +143,7 @@ export function MailLogCard() {
   const [data, setData] = useState<MailLogResponse | null>(null);
   const [tick, setTick] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const timer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -195,7 +209,14 @@ export function MailLogCard() {
               {rows.length === 0 ? (
                 <p className="m-0 text-base text-fg-2">{t("mail.empty")}</p>
               ) : phone ? (
-                <EntryCards rows={rows} />
+                <>
+                  <EntryCards rows={showAll ? rows : rows.slice(0, PHONE_PREVIEW)} />
+                  {!showAll && rows.length > PHONE_PREVIEW && (
+                    <Button variant="secondary" icon="chevron-down" onClick={() => setShowAll(true)} data-testid="mail-show-all">
+                      {t("mail.showAll", { n: rows.length })}
+                    </Button>
+                  )}
+                </>
               ) : (
                 <EntryTable rows={rows} />
               )}

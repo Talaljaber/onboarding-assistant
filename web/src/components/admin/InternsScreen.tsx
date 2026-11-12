@@ -2,7 +2,7 @@
 // the current track, activities x/total, scenarios practised, quiz questions answered, questions asked,
 // last active and status. Counts and dates only: no correctness, no scores. "Add intern" opens the form;
 // a row opens the intern's detail page.
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { getAdminInterns } from "@/api/client";
 import type { AdminInternsResponse, InternSummary } from "@/api/types";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -35,7 +35,7 @@ export function StatusBadge({ row }: { row: Pick<InternSummary, "active" | "last
   const t = useT();
   const s = STATUS[internStatus(row)];
   return (
-    <Badge tone={s.tone} size="sm">
+    <Badge tone={s.tone} size="sm" className="whitespace-nowrap">
       {t(s.key)}
     </Badge>
   );
@@ -49,17 +49,37 @@ const num = (v: number | string) => (
 
 export const detailHref = (id: string) => `#/admin/interns/${id}`;
 
-/** Phone layout: one card per intern. */
+/** P19.3: a name may wrap between words but never inside one ("Al-" / "Khatib" in a narrow table column). */
+function NoBreakWords({ text }: { text: string }) {
+  const words = text.split(" ");
+  return (
+    <>
+      {words.map((w, i) => (
+        <Fragment key={i}>
+          {i > 0 && " "}
+          <span className="whitespace-nowrap">{w}</span>
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
+/** Phone and tablet layout (below 1024 px, P19.3): one card per intern, two columns from `sm` up. */
 function InternCards({ rows }: { rows: InternSummary[] }) {
   const t = useT();
   const { lang } = useLang();
   if (rows.length === 0) return <p className={`${surface.panel} px-4 py-8 text-center text-fg-2`}>{t("uiIntern.empty")}</p>;
   return (
-    <ul aria-label={t("uiIntern.listTitle")} className="m-0 flex list-none flex-col gap-3 p-0" data-intern-cards>
+    <ul aria-label={t("uiIntern.listTitle")} className="m-0 grid list-none grid-cols-[minmax(0,1fr)] gap-3 p-0 sm:grid-cols-2" data-intern-cards>
       {rows.map((r) => (
         <li key={r.id} data-intern-row={r.name_en ?? r.name_ar} className={`${surface.card} flex flex-col gap-3 p-4`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <a href={detailHref(r.id)} lang={internNameLang(r, lang)} className="text-base font-bold text-fg-1 underline-offset-4 hover:underline">
+            {/* P19.3: a 44 px tap target (the negative margin keeps the card's spacing) */}
+            <a
+              href={detailHref(r.id)}
+              lang={internNameLang(r, lang)}
+              className="-my-2.5 inline-flex min-h-11 items-center text-base font-bold text-fg-1 underline-offset-4 hover:underline"
+            >
               {internName(r, lang)}
             </a>
             <StatusBadge row={r} />
@@ -92,7 +112,8 @@ export default function InternsScreen() {
   const t = useT();
   const { lang } = useLang();
   const toast = useToast();
-  const phone = useMediaQuery("(max-width: 767px)");
+  // P19.3: the nine-column table needs a laptop width; below 1024 px it squeezed names word by word.
+  const phone = useMediaQuery("(max-width: 1023px)");
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [data, setData] = useState<AdminInternsResponse | null>(null);
   const [tick, setTick] = useState(0);
@@ -124,14 +145,23 @@ export default function InternsScreen() {
       id: "name",
       header: t("uiIntern.colName"),
       cell: (r) => (
-        <a href={detailHref(r.id)} lang={internNameLang(r, lang)} className="font-semibold text-fg-1 underline-offset-4 hover:text-accent hover:underline">
-          {internName(r, lang)}
+        <a
+          href={detailHref(r.id)}
+          lang={internNameLang(r, lang)}
+          className="font-semibold text-fg-1 underline-offset-4 hover:text-accent hover:underline"
+        >
+          <NoBreakWords text={internName(r, lang)} />
         </a>
       ),
       sortValue: (r) => internName(r, lang),
       primary: true,
     },
-    { id: "track", header: t("uiIntern.colTrack"), cell: roleName, sortValue: (r) => r.role },
+    {
+      id: "track",
+      header: t("uiIntern.colTrack"),
+      cell: (r) => <NoBreakWords text={roleName(r)} />,
+      sortValue: (r) => r.role,
+    },
     {
       id: "progress",
       header: t("uiIntern.colProgress"),

@@ -954,6 +954,7 @@ export const ar = {
     notConfigured: "البريد غير مُعدّ: أضف SMTP_USER وSMTP_PASSWORD في ملف ⁦.env⁩ (كلمة مرور تطبيق من Gmail) ثم أعد تشغيل الخادم.",
     noAdminEmail: "لم يُضبط ADMIN_EMAIL: لن تصلك ردود المتدربين ولا الرسالة التجريبية.",
     empty: "لا رسائل بعد.",
+    showAll: "اعرض كل الرسائل ({n})",
     colTime: "الوقت",
     colEvent: "الحدث",
     colTo: "إلى",

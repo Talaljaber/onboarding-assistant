@@ -58,6 +58,8 @@ describe("KB coverage card", () => {
     const never = document.querySelector<HTMLElement>("[data-coverage-never]")!;
     expect(within(never).getAllByRole("listitem")).toHaveLength(coverage.never_cited.length);
     expect(within(never).getByRole("link", { name: "Open K13 in the editor" })).toHaveAttribute("href", "#/kb?row=K13");
+    // P19.3: a K-id link is a 44 x 44 tap target on a phone
+    expect(within(never).getByRole("link", { name: "Open K13 in the editor" })).toHaveClass("min-h-11", "min-w-11");
     expect(screen.getByText(`Rows never cited yet (${coverage.never_cited.length})`)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open the knowledge base" })).toHaveAttribute("href", "#/kb");
 
