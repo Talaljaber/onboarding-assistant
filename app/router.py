@@ -67,6 +67,20 @@ NEW_TOPIC = re.compile(
     r"|^(?:i have |i've got )?(?:another|a new|a different|one more) (?:question|topic)$"
     r"|^new (?:question|topic)$|^change (?:the )?(?:topic|subject)$"
 )
+#: A whole message that only announces a question («عندي سؤال», "can I ask you something?"): the reply invites it
+#: (small-talk intent `ask_invite`) instead of searching the KB for it, refusing it or offering to send it on.
+ASK_INVITE = re.compile(
+    r"^(?:(?:يا )?(?:مرحبا|اهلا|هلا|لو سمحت|سلام) )?(?:انا )?"
+    r"(?:(?:عندي|عندى|معي|في|بدي|ابي|ابغي|حابب|حابه|اريد|ممكن|بقدر|مسموح|اسمحلي|اسمح لي|لو سمحت) )*"
+    r"(?:اسال|اسالك|اسالكم|سوال|سوالي|استفسار|استفسر)"
+    r"(?: (?:سوال|استفسار|صغير|بسيط|سريع|واحد|لو سمحت|اذا بتسمح|اذا سمحت|عن شي|شغله|شي))*$"
+    r"|^(?:(?:hi|hello|hey) )?(?:i have|i've got|ive got|i got|got|i've|have) (?:a |one )?(?:quick |small |little |short )?"
+    r"(?:question|query)(?: for you)?(?: please)?$"
+    r"|^(?:(?:hi|hello|hey) )?(?:can|could|may) i ask(?: you)?(?: (?:something|a question|a quick question))?"
+    r"(?: please)?$"
+    r"|^(?:i want|i'd like|i would like|i need) to ask(?: you)?(?: (?:something|a question))?$"
+    r"|^(?:a )?(?:quick |small )?question$"
+)
 COMPLETION = re.compile(
     _W + r"و?(?:اكملت|كملت|خلصت|انهيت|انتهيت|انجزت|اتممت|خلصنا|completed|finished|done|complete)" + _E
 )
@@ -158,7 +172,7 @@ _ST_INTENTS: tuple[tuple[str, str], ...] = (
 _ST_RX: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
     (name, re.compile(_W + r"(?:" + rx + r")" + _E)) for name, rx in _ST_INTENTS
 )
-SMALL_TALK_INTENTS: tuple[str, ...] = (*(name for name, _ in _ST_INTENTS), "unclear")
+SMALL_TALK_INTENTS: tuple[str, ...] = (*(name for name, _ in _ST_INTENTS), "unclear", "ask_invite")
 #: Words that may sit next to a small-talk cue without making it a question («شكراً كتير على المساعدة»).
 _ST_FILLER = re.compile(
     _W + r"(?:يا|و|كتير|كثير|جدا|جزيلا|حبيبي|اخي|اخوي|صديقي|عزيزي|انت|انتي|الك|لك|عليك|اليوم|كمان|مره ثانيه|ع|علي|عال"
@@ -250,6 +264,11 @@ def detect_quiz_request(text_norm: str) -> bool:
     return bool(QUIZ_WORD.search(text_norm) and REQUEST_VERB.search(text_norm))
 
 
+def is_ask_invite(text_norm: str) -> bool:
+    """The whole (normalised) message only announces a question («مرحبا، عندي سؤال», "can I ask?")."""
+    return ASK_INVITE.match(" ".join(re.sub(r"[^\w\s']", " ", text_norm).split())) is not None
+
+
 def detect_small_talk_intent(text_norm: str) -> str | None:
     """The small-talk intent of a (normalised) message, or None for anything else (P12.2).
 
@@ -261,6 +280,8 @@ def detect_small_talk_intent(text_norm: str) -> str | None:
     """
     if not _LETTER_OR_DIGIT.search(text_norm):
         return "ack" if any(ch in _ACK_EMOJI for ch in text_norm) else "unclear"
+    if is_ask_invite(text_norm):
+        return "ask_invite"
     words = text_norm.split()
     if len(words) > _SMALL_TALK_MAX_WORDS or _ST_TOPIC.search(text_norm):
         return None
@@ -384,7 +405,7 @@ def route(
 
     track = practice_track(t, state.role)
     if state.active_scenario:
-        if NEW_TOPIC.match(t.strip()):
+        if NEW_TOPIC.match(t.strip()) or is_ask_invite(t):
             return Route("end_scenario", {"next": "question"}, DEFAULT_CONFIDENCE, "new question phrase")
         if END_PRACTICE.search(t):
             return Route("end_scenario", {}, DEFAULT_CONFIDENCE, "end practice phrase")
@@ -456,6 +477,7 @@ def route(
 
 
 __all__ = [
+    "ASK_INVITE",
     "END_PRACTICE",
     "Route",
     "SMALL_TALK_INTENTS",
@@ -472,6 +494,7 @@ __all__ = [
     "detect_role",
     "detect_small_talk",
     "detect_small_talk_intent",
+    "is_ask_invite",
     "has_situation_cue",
     "practice_track",
     "route",

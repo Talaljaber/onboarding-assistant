@@ -381,3 +381,43 @@ def test_small_talk_verifier_allows_ordinals_and_rejects_latin_in_arabic() -> No
     assert verify_small_talk({"text_ar": "أهلاً! أول شي اسألني عن الشركة.", "text_en": "Hi! Ask me first."}).ok
     assert verify_small_talk({"text_ar": "بكل سرور بhelpك", "text_en": "Happy to help."}).reason == "wrong_language"
     assert verify_small_talk({"text_ar": "عندنا 5 قيم", "text_en": "We have five values."}).reason == "foreign_number"
+
+
+# ------------------------------------------------------------------ "I have a question" (owner screenshot, P18)
+
+ASK_INVITES = ["i have a question", "I have a question?", "I've got a quick question", "can I ask you something?",
+               "Could I ask a question please", "quick question!", "I want to ask something", "hi, can I ask?",
+               "عندي سؤال", "عندي سؤال صغير", "ممكن أسألك سؤال؟", "بدي أسأل", "بدي اسألك شغلة", "عندي استفسار.",
+               "مرحبا، عندي سؤال", "لو سمحت ممكن أسأل؟"]
+
+
+@pytest.mark.parametrize("text", ASK_INVITES)
+def test_announcing_a_question_invites_it(text: str) -> None:
+    assert intent(text) == "ask_invite"
+    assert route(text).tool == "greet"
+
+
+@pytest.mark.parametrize("text", ["I have a question about leave", "عندي سؤال عن الإجازات", "can I ask about the values?",
+                                  "مرحبا بدي اسأل عن الدوام", "i have a question: how many showrooms", "سؤال عن الفروع"])
+def test_a_question_with_a_topic_is_still_a_knowledge_question(text: str) -> None:
+    assert intent(text) is None and route(text).tool == "answer_from_rows"
+
+
+def test_announcing_a_question_during_practice_leaves_it() -> None:
+    from app.router import TurnState
+
+    for text in ("i have a question", "عندي سؤال"):
+        r = route(text, state=TurnState(active_scenario="S01"))
+        assert r.tool == "end_scenario" and r.args == {"next": "question"}
+
+
+def test_ask_invite_is_a_pool_reply_never_a_refusal_nor_a_model_call(agent: Agent, fake: Any) -> None:
+    from app.answer import REFUSAL_AR
+
+    client = fake(st())
+    r = ask(agent, "i have a question", lang="en", last_user_message="hello mate")
+    assert r.reply.kind == "text" and r.reply.reason is None and not r.reply.sources
+    assert r.reply.text_en in {e for _, e in POOL["ask_invite"]} and REFUSAL_AR not in r.reply.text_ar
+    assert "small_talk:ask_invite" in r.trace.steps and "pool" in r.trace.steps and not client.calls
+    a = ask(agent, "عندي سؤال")
+    assert a.reply.text_ar in {x for x, _ in POOL["ask_invite"]} and a.reply.text_en is None

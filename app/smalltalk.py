@@ -86,6 +86,12 @@ POOL: dict[str, tuple[tuple[str, str], ...]] = {
         ("ممتاز. أنا جاهز متى ما احتجتني.", "Perfect. I'm ready whenever you are."),
         ("تمام، تفضّل بسؤالك الجاي إذا في.", "Got it! Feel free to ask your next question."),
     ),
+    "ask_invite": (
+        ("أكيد، تفضّل اسأل سؤالك.", "Sure, go ahead and ask."),
+        ("تفضّل، شو سؤالك؟", "Of course, what's your question?"),
+        ("تفضّل، اكتب سؤالك وبدوّر لك على الجواب في قاعدة المعرفة.",
+         "Go ahead, type your question and I'll look for the answer in the knowledge base."),
+    ),
     "unclear": (
         ("ما فهمت قصدك تماماً 🙂 ممكن توضّح أكثر؟ مثلاً اسأل عن قيم الشركة أو اكتب «تدريب».",
          "I didn't quite catch that 🙂 Could you say a bit more? For example, ask about the company's values or type "
@@ -98,7 +104,9 @@ POOL: dict[str, tuple[tuple[str, str], ...]] = {
          "\"When was the company founded?\""),
     ),
 }
-INTENTS: tuple[str, ...] = ("greeting", "how_are_you", "thanks", "goodbye", "identity", "ack", "unclear")
+INTENTS: tuple[str, ...] = ("greeting", "how_are_you", "thanks", "goodbye", "identity", "ack", "unclear", "ask_invite")
+#: Intents answered from the fixed pool only (no model call): the reply has one job and needs no style.
+POOL_ONLY: frozenset[str] = frozenset({"ask_invite"})
 STEP_LLM = "llm"
 STEP_CACHED = "cache:small_talk"
 STEP_POOL = "pool"
@@ -163,7 +171,7 @@ def small_talk(
     mode: str | None = None
     texts: dict[str, str] | None = None
     chat = getattr(llm, "chat", None) if llm is not None else None
-    if chat is not None:
+    if chat is not None and intent not in POOL_ONLY:
         info: dict[str, Any] = {}
         style = SMALL_TALK_STYLES[seed % len(SMALL_TALK_STYLES)]
         texts, why = llm_small_talk(message, intent, style, first, chat, max(0.0, min(SMALL_TALK_MAX_S, deadline_s)),
