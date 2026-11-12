@@ -1,0 +1,11 @@
+{
+  "question_ar": "كم معرضاً تمتلك المجموعة؟",
+  "options": {
+    "A": "17 معرضاً",
+    "B": "12 معرضاً",
+    "C": "25 معرضاً"
+  },
+  "correct_option": "A",
+  "source_knowledge_id": "K02",
+  "origin": "manual"
+}

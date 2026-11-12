@@ -124,6 +124,29 @@ FIXTURES: dict[str, type[BaseModel]] = {
     # P18.5 private replies
     "question_answer_private_request.json": s.QuestionAnswer,
     "question_answered_private.json": s.QuestionAnswered,
+    # P20 practice quizzes
+    "admin_quiz_sets.json": s.AdminQuizSetList,
+    "quiz_set_create_request.json": s.QuizSetCreate,
+    "admin_quiz_set.json": s.AdminQuizSet,
+    "quiz_set_patch_request.json": s.QuizSetPatch,
+    "admin_quiz_set_detail.json": s.AdminQuizSetDetail,
+    "quiz_item_create_request.json": s.QuizItemIn,
+    "admin_quiz_item.json": s.AdminQuizItem,
+    "quiz_item_patch_request.json": s.QuizItemPatch,
+    "quiz_item_order_request.json": s.QuizItemOrder,
+    "quiz_draft_request.json": s.QuizDraftRequest,
+    "quiz_draft.json": s.QuizDraft,
+    "quiz_import_request.json": s.QuizImportRequest,
+    "quiz_import_result.json": s.QuizImportResult,
+    "quiz_signals.json": s.QuizSignals,
+    "quiz_sets.json": s.QuizSetList,
+    "quiz_set.json": s.QuizResponse,
+    "quiz_check_set_request.json": s.QuizCheckRequest,
+    "quiz_check_set.json": s.QuizCheckResponse,
+    "question_create_quiz_request.json": s.QuestionCreate,
+    "error_400_quiz_grounding.json": s.ErrorBody,
+    "error_400_quiz_locked.json": s.ErrorBody,
+    "error_503_quiz_draft.json": s.ErrorBody,
 }
 
 # One response fixture per endpoint (the request fixtures are listed in FIXTURES above).
@@ -179,6 +202,19 @@ ENDPOINT_FIXTURES = {
     "GET /api/admin/questions": "admin_questions.json",
     "POST /api/admin/questions/{id}/answer": "question_answered.json",
     "POST /api/admin/questions/{id}/dismiss": "question_dismissed.json",
+    # P20 practice quizzes (the three DELETE routes answer 204 with no body: documented in api_contract.md §6l)
+    "GET /api/admin/quiz-sets": "admin_quiz_sets.json",
+    "POST /api/admin/quiz-sets": "admin_quiz_set.json",
+    "PATCH /api/admin/quiz-sets/{id}": "admin_quiz_set.json",
+    "GET /api/admin/quiz-sets/{id}": "admin_quiz_set_detail.json",
+    "POST /api/admin/quiz-sets/{id}/items": "admin_quiz_item.json",
+    "PATCH /api/admin/quiz-sets/{id}/items/{item_id}": "admin_quiz_item.json",
+    "POST /api/admin/quiz-sets/{id}/items/order": "admin_quiz_set_detail.json",
+    "POST /api/admin/quiz-sets/draft": "quiz_draft.json",
+    "POST /api/admin/quiz-sets/{id}/import": "quiz_import_result.json",
+    "GET /api/admin/quiz-sets/{id}/signals": "quiz_signals.json",
+    "GET /api/quiz-sets": "quiz_sets.json",
+    "GET /api/quiz-sets/{id}": "quiz_set.json",
 }
 
 REQUEST_MODELS: dict[type[BaseModel], str] = {
@@ -203,6 +239,13 @@ REQUEST_MODELS: dict[type[BaseModel], str] = {
     s.AdminCommentCreate: "request_comment_admin_create_request.json",
     s.QuestionCreate: "question_create_request.json",  # P18.1
     s.QuestionAnswer: "question_answer_request.json",  # P18.1
+    s.QuizSetCreate: "quiz_set_create_request.json",  # P20
+    s.QuizSetPatch: "quiz_set_patch_request.json",  # P20
+    s.QuizItemIn: "quiz_item_create_request.json",  # P20
+    s.QuizItemPatch: "quiz_item_patch_request.json",  # P20
+    s.QuizItemOrder: "quiz_item_order_request.json",  # P20
+    s.QuizDraftRequest: "quiz_draft_request.json",  # P20
+    s.QuizImportRequest: "quiz_import_request.json",  # P20
 }
 
 
@@ -329,6 +372,18 @@ def test_admin_intern_views_have_no_correctness_or_score() -> None:
     keys = all_keys(load("admin_interns.json")) | all_keys(load("intern_detail.json"))
     keys |= {f for m in models for f in m.model_fields}
     assert not [k for k in keys if banned.search(k)]
+    # P20: the admin's practice-quiz shapes. `AdminQuizItem.correct_option` is the item's own answer (metadata the
+    # admin wrote), not anyone's result; signals are anonymous cohort shares, never per intern.
+    quiz_models = (s.AdminQuizSet, s.AdminOfficialQuiz, s.AdminQuizSetList, s.AdminQuizSetDetail, s.QuizImportResult,
+                   s.QuizImportRejected, s.QuizSignal, s.QuizSignals)
+    quiz_keys = {f for m in quiz_models for f in m.model_fields}
+    quiz_keys |= {f for f in s.AdminQuizItem.model_fields if f != "correct_option"}
+    for name in ("admin_quiz_sets.json", "admin_quiz_set.json", "quiz_signals.json"):
+        quiz_keys |= all_keys(load(name))
+    for name in ("admin_quiz_set_detail.json", "admin_quiz_item.json", "quiz_import_result.json"):
+        quiz_keys |= all_keys(load(name)) - {"correct_option"}
+    assert not [k for k in quiz_keys if banned.search(k)]
+    assert not [k for k in quiz_keys if re.search(r"profile|name|intern_id$", k)]
     assert load("admin_interns.json")["label_ar"] == s.INTERNS_LABEL_AR
     assert load("intern_detail.json")["label_ar"] == s.INTERNS_LABEL_AR
 
@@ -812,3 +867,71 @@ def test_private_answer_contract() -> None:
                    "scope?: QuestionScope", "row: KbRow | null"):
         assert needle in ts, needle
     assert "question_answered_private.json" in CONTRACT_MD.read_text(encoding="utf-8")
+
+
+def test_practice_quiz_contract() -> None:
+    """P20: admin-written practice sets. The intern's view never carries the correct option; a set item id is
+    M + 3 digits; the audience shape is exact; signals are anonymous and null under 3 interns; a draft is only
+    returned after the server's checks; grounding failures keep the frozen error enum (`reason:<code>`)."""
+    assert re.match(s.QUIZ_ID_RE, "M001") and re.match(s.QUIZ_ID_RE, "Q05")
+    for bad in ("M01", "M0001", "Q1", "K01"):
+        assert not re.match(s.QUIZ_ID_RE, bad), bad
+    assert not any("correct" in k for k in all_keys(load("quiz_set.json")) | all_keys(load("quiz_sets.json")))
+    with pytest.raises(ValidationError):
+        s.QuizResponse.model_validate({**load("quiz_set.json"), "items": [
+            {**load("quiz_set.json")["items"][0], "correct_option": "A"}]})
+    sets = load("quiz_sets.json")["sets"]
+    assert sets[0]["id"] == s.OFFICIAL_QUIZ_SET_ID and sets[0]["official"] and sets[0]["open"]
+    assert all(not x["official"] for x in sets[1:])
+    with pytest.raises(ValidationError):
+        s.QuizSetSummary.model_validate({**sets[0], "open": False})
+    req = load("quiz_set_create_request.json")
+    for bad in ({"audience": "track", "track": None}, {"audience": "interns", "intern_ids": []},
+                {"title_ar": ""}, {"title_ar": "ع" * 81}, {"opens_at_percent": 101}, {"audience": "team"}):
+        with pytest.raises(ValidationError):
+            s.QuizSetCreate.model_validate({**req, **bad})
+    assert s.QuizSetCreate.model_validate({"title_ar": "س", "audience": "all", "title_en": " "}).title_en is None
+    one = load("admin_quiz_set.json")
+    for bad in ({"audience": "all"}, {"audience": "interns"}, {"track": None}):
+        with pytest.raises(ValidationError):
+            s.AdminQuizSet.model_validate({**one, **bad})
+    with pytest.raises(ValidationError):
+        s.QuizSetPatch.model_validate({})
+    with pytest.raises(ValidationError):
+        s.QuizSetPatch.model_validate({"status": None})
+    item = load("quiz_item_create_request.json")
+    for bad in ({"options": {"A": "x", "B": "y"}}, {"correct_option": "D"}, {"source_knowledge_id": "Q01"}):
+        with pytest.raises(ValidationError):
+            s.QuizItemIn.model_validate({**item, **bad})
+    with pytest.raises(ValidationError):
+        s.QuizItemPatch.model_validate({"options": None})
+    assert load("quiz_draft.json")["checks_passed"] is True
+    with pytest.raises(ValidationError):
+        s.QuizDraft.model_validate({**load("quiz_draft.json"), "checks_passed": False})
+    signals = load("quiz_signals.json")
+    assert signals["label_ar"] == s.QUIZ_SIGNALS_LABEL_AR and signals["min_interns"] == s.QUIZ_SIGNAL_MIN_INTERNS
+    for sig in signals["items"]:
+        assert (sig["retry_share"] is None) == (sig["interns_tried"] < s.QUIZ_SIGNAL_MIN_INTERNS)
+    with pytest.raises(ValidationError):
+        s.QuizSignal.model_validate({**signals["items"][2], "retry_share": 0.5})
+    with pytest.raises(ValidationError):
+        s.QuizSignal.model_validate({**signals["items"][0], "retry_share": None})
+    detail = load("admin_quiz_set_detail.json")
+    assert detail["set"]["item_count"] == len(detail["items"])
+    assert [i["position"] for i in detail["items"]] == list(range(len(detail["items"])))
+    assert load("quiz_item_order_request.json")["ids"] == [i["id"] for i in detail["items"]]
+    for name in ("error_400_quiz_grounding.json", "error_400_quiz_locked.json", "error_503_quiz_draft.json"):
+        err = load(name)["error"]
+        assert err["code"] in s.ERROR_CODES and err["message"].startswith("reason:"), name
+    assert load("error_400_quiz_grounding.json")["error"]["message"].split(":")[1] in s.QUIZ_REASONS
+    assert load("question_create_quiz_request.json")["source"] == "quiz" and "quiz" in s.QUESTION_SOURCES
+    ts = TYPES_TS.read_text(encoding="utf-8")
+    for value in (*s.QUIZ_REASONS, *s.QUIZ_AUDIENCES, *s.QUIZ_ORIGINS, *s.QUIZ_SET_STATUSES):
+        assert f'"{value}"' in ts, value
+    for guard in ("isAdminQuizSetList", "isAdminQuizSet", "isAdminQuizSetDetail", "isAdminQuizItem", "isQuizDraft",
+                  "isQuizImportResult", "isQuizSignals", "isQuizSetList"):
+        assert f"export function {guard}" in ts, guard
+    doc = CONTRACT_MD.read_text(encoding="utf-8")
+    assert "6l. Practice quizzes" in doc
+    for route in ("DELETE /api/admin/quiz-sets/{id}", "DELETE /api/admin/quiz-sets/{id}/items/{item_id}"):
+        assert route in doc, route

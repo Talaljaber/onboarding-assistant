@@ -198,3 +198,33 @@ The intern is the seeded fictional demo persona. Ids only, from turn logs: no ch
 
 Question and answer texts, ids, times and the version are illustrative; K19 is an `added` row (not official). The
 private reply is illustrative and is never a K-row.
+
+## Practice quizzes (P20)
+
+| File | Endpoint | Model |
+|---|---|---|
+| `admin_quiz_sets.json` | `GET /api/admin/quiz-sets` (a draft set for two chosen interns, a published Sales set opening at 30 %, and the built-in official quiz) | `AdminQuizSetList` |
+| `quiz_set_create_request.json` | `POST /api/admin/quiz-sets` body (a Sales track set opening at 30 %) | `QuizSetCreate` |
+| `admin_quiz_set.json` | `POST /api/admin/quiz-sets` (201, draft, no items) and `PATCH /api/admin/quiz-sets/{id}` | `AdminQuizSet` |
+| `quiz_set_patch_request.json` | `PATCH /api/admin/quiz-sets/{id}` body (publish) | `QuizSetPatch` |
+| `admin_quiz_set_detail.json` | `GET /api/admin/quiz-sets/{id}` and `POST /api/admin/quiz-sets/{id}/items/order` (three items: manual, model, csv; each with its live row verbatim) | `AdminQuizSetDetail` |
+| `quiz_item_create_request.json` | `POST /api/admin/quiz-sets/{id}/items` body | `QuizItemIn` |
+| `admin_quiz_item.json` | `POST /api/admin/quiz-sets/{id}/items` (201) and `PATCH /api/admin/quiz-sets/{id}/items/{item_id}` | `AdminQuizItem` |
+| `quiz_item_patch_request.json` | `PATCH /api/admin/quiz-sets/{id}/items/{item_id}` body | `QuizItemPatch` |
+| `quiz_item_order_request.json` | `POST /api/admin/quiz-sets/{id}/items/order` body | `QuizItemOrder` |
+| `quiz_draft_request.json` | `POST /api/admin/quiz-sets/draft` body | `QuizDraftRequest` |
+| `quiz_draft.json` | `POST /api/admin/quiz-sets/draft` (a verified draft from K16; not stored) | `QuizDraft` |
+| `quiz_import_request.json` | `POST /api/admin/quiz-sets/{id}/import` body (a 4-line CSV as base64) | `QuizImportRequest` |
+| `quiz_import_result.json` | `POST /api/admin/quiz-sets/{id}/import` (line 2 added; 3: a number not in K14; 4: unknown row; 5: correct option D) | `QuizImportResult` |
+| `quiz_signals.json` | `GET /api/admin/quiz-sets/{id}/signals` (also `official`; the third question has fewer than 3 interns: null) | `QuizSignals` |
+| `quiz_sets.json` | `GET /api/quiz-sets?profile_id=` (the official quiz, then a Sales set still locked at 30 %) | `QuizSetList` |
+| `quiz_set.json` | `GET /api/quiz-sets/{id}?profile_id=` (items without the correct option) | `QuizResponse` |
+| `quiz_check_set_request.json` | `POST /api/quiz/check` body for a set item (`M` id) | `QuizCheckRequest` |
+| `quiz_check_set.json` | `POST /api/quiz/check` for a set item (the explanation is the cited row) | `QuizCheckResponse` |
+| `question_create_quiz_request.json` | `POST /api/questions` body with `source: "quiz"` (the question and its K-id, pre-filled, editable) | `QuestionCreate` |
+| `error_400_quiz_grounding.json` | 400 `validation_error`, `field: "options.A"`, `message: "reason:number_not_in_row:30"` | `ErrorBody` |
+| `error_400_quiz_locked.json` | 400 `validation_error`, `field: "progress"`, `message: "reason:locked:30"` (a set not open yet) | `ErrorBody` |
+| `error_503_quiz_draft.json` | 503 `imports_unavailable`, `message: "reason:llm_unavailable"` (model draft without AI mode) | `ErrorBody` |
+
+The two `DELETE` routes (set, item) answer 204 with no body. Set titles, question texts, ids, counts and times
+are illustrative; the cited rows are official rows verbatim. No fixture carries a per-intern result.

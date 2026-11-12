@@ -1,0 +1,22 @@
+{
+  "id": "M001",
+  "position": 0,
+  "question_ar": "كم معرضاً تمتلك المجموعة؟",
+  "options": {
+    "A": "17 معرضاً",
+    "B": "12 معرضاً",
+    "C": "25 معرضاً"
+  },
+  "correct_option": "A",
+  "source_knowledge_id": "K02",
+  "origin": "manual",
+  "row": {
+    "id": "K02",
+    "topic": "Company",
+    "answer_ar": "تمتلك المجموعة 17 معرضاً في عمان والسلط وإربد والزرقاء والعقبة.",
+    "source_document": "Company Profile 2026",
+    "source_page": 4,
+    "edited": false,
+    "status": "official"
+  }
+}

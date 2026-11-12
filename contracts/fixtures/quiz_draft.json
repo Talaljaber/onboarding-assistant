@@ -1,0 +1,12 @@
+{
+  "question_ar": "عبر أي نظام يُقدَّم طلب الإجازة؟",
+  "options": {
+    "A": "رسالة إلى الزملاء",
+    "B": "نظام الموارد البشرية",
+    "C": "لوحة الإعلانات في المعرض"
+  },
+  "correct_option": "B",
+  "source_knowledge_id": "K16",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "checks_passed": true
+}

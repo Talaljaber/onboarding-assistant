@@ -1645,7 +1645,8 @@ export function isMailTestResponse(x: unknown): x is MailTestResponse {
 // with a new K-row (status "added", the KB editor's add path), with a private reply to that intern only (P18.5:
 // `answer_text`, never a K-row) or dismisses it. No score anywhere.
 
-export const QUESTION_SOURCES = ["check", "chat"] as const;
+/** P20: "quiz" = «اسأل مشرفي عن هذا» after a wrong practice-quiz answer (text pre-filled, editable). */
+export const QUESTION_SOURCES = ["check", "chat", "quiz"] as const;
 export type QuestionSource = (typeof QUESTION_SOURCES)[number];
 export const QUESTION_STATUSES = ["open", "answered", "dismissed"] as const;
 export type QuestionStatus = (typeof QUESTION_STATUSES)[number];
@@ -1766,4 +1767,302 @@ export function isQuestionAnswered(x: unknown): x is QuestionAnswered {
   if (!isObj(x) || !isMentorQuestion(x.question)) return false;
   if (x.row === null) return x.version === null && x.reindex_ms === null && x.question.answer_text !== null;
   return isKbRow(x.row) && isStr(x.version) && isNum(x.reindex_ms);
+}
+
+// ---------------------------------------------------------------- P20 practice quizzes
+// Sets written by the admin from K-rows (typed, a model draft the admin approved, or a CSV line), each checked by
+// the server's grounding rules. The intern sees the official quiz plus the published sets for them (opening at a
+// suggested-plan progress level) and never gets the correct option before answering. The admin sees practice
+// counts and anonymous content signals (at least 3 interns), never an intern's result.
+
+export const QUIZ_SET_STATUSES = ["draft", "published"] as const;
+export type QuizSetStatus = (typeof QUIZ_SET_STATUSES)[number];
+export const QUIZ_AUDIENCES = ["all", "track", "interns"] as const;
+export type QuizAudience = (typeof QUIZ_AUDIENCES)[number];
+export const QUIZ_ORIGINS = ["manual", "model", "csv"] as const;
+export type QuizOrigin = (typeof QUIZ_ORIGINS)[number];
+/** Grounding failures (`check_item`) and CSV line reasons. Errors carry them as `message: "reason:<code>"`
+ *  (`reason:number_not_in_row:<n>` names the number); see `quizErrorReason`. */
+export const QUIZ_REASONS = [
+  "unknown_row",
+  "length",
+  "duplicate_options",
+  "contact",
+  "number_not_in_row",
+  "answer_not_in_row",
+  "ambiguous",
+  "invalid",
+  "set_full",
+] as const;
+export type QuizReason = (typeof QUIZ_REASONS)[number];
+export const OFFICIAL_QUIZ_SET_ID = "official";
+export const QUIZ_LIMITS = {
+  titleMax: 80,
+  questionMin: 5,
+  questionMax: 300,
+  optionMax: 120,
+  itemsMax: 20,
+  importFileMaxBytes: 200 * 1024,
+  signalMinInterns: 3,
+} as const;
+/** The CSV header the import needs (an `id` column is ignored); also the downloadable template's header. */
+export const QUIZ_IMPORT_COLUMNS = [
+  "question_ar",
+  "option_a",
+  "option_b",
+  "option_c",
+  "correct_option",
+  "source_knowledge_id",
+] as const;
+
+/** One admin set. `track` is set exactly for audience "track"; `intern_ids` is non-empty exactly for "interns".
+ *  `interns_practised` counts interns who answered at least one question (never who got what right). */
+export interface AdminQuizSet {
+  id: string;
+  title_ar: string;
+  title_en: string | null;
+  audience: QuizAudience;
+  track: Role | null;
+  intern_ids: string[];
+  opens_at_percent: number;
+  status: QuizSetStatus;
+  item_count: number;
+  interns_practised: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** The built-in official sample quiz (read-only, always open, everyone). */
+export interface AdminOfficialQuiz {
+  id: "official";
+  title_ar: string;
+  title_en: string;
+  item_count: number;
+  interns_practised: number;
+}
+
+/** `GET /api/admin/quiz-sets`: newest first, plus the official quiz. */
+export interface AdminQuizSetList {
+  sets: AdminQuizSet[];
+  official: AdminOfficialQuiz;
+}
+
+/** `POST /api/admin/quiz-sets` → 201 AdminQuizSet (draft). */
+export interface QuizSetCreate {
+  title_ar: string;
+  title_en?: string | null;
+  audience: QuizAudience;
+  track?: Role | null;
+  intern_ids?: string[];
+  opens_at_percent?: number;
+}
+
+/** `PATCH /api/admin/quiz-sets/{id}`: any field (at least one); publishing an empty set is 400 field "status". */
+export interface QuizSetPatch {
+  title_ar?: string;
+  title_en?: string | null;
+  audience?: QuizAudience;
+  track?: Role | null;
+  intern_ids?: string[];
+  opens_at_percent?: number;
+  status?: QuizSetStatus;
+}
+
+/** A stored question (admin only): `correct_option` is the item's own answer key; `row` is the cited row
+ *  verbatim from the live KB (null when the row is no longer in the KB). */
+export interface AdminQuizItem {
+  id: string;
+  position: number;
+  question_ar: string;
+  options: Record<QuizOptionKey, string>;
+  correct_option: QuizOptionKey;
+  source_knowledge_id: string;
+  origin: QuizOrigin;
+  row: Source | null;
+}
+
+export interface AdminQuizSetDetail {
+  set: AdminQuizSet;
+  items: AdminQuizItem[];
+}
+
+/** `POST /api/admin/quiz-sets/{id}/items`; a grounding failure is 400 with `field` and `reason:<code>`. */
+export interface QuizItemIn {
+  question_ar: string;
+  options: Record<QuizOptionKey, string>;
+  correct_option: QuizOptionKey;
+  source_knowledge_id: string;
+  origin?: QuizOrigin;
+}
+
+export type QuizItemPatch = Partial<QuizItemIn>;
+
+/** A model draft that passed the server's checks; never stored until the admin saves it as an item. */
+export interface QuizDraft {
+  question_ar: string;
+  options: Record<QuizOptionKey, string>;
+  correct_option: QuizOptionKey;
+  source_knowledge_id: string;
+  model: string;
+  checks_passed: true;
+}
+
+export interface QuizImportRequest {
+  filename: string;
+  content_b64: string;
+}
+
+/** `line`: the file line number (the header is line 1). */
+export interface QuizImportRejected {
+  line: number;
+  reason: QuizReason;
+}
+
+export interface QuizImportResult {
+  added: AdminQuizItem[];
+  rejected: QuizImportRejected[];
+}
+
+/** Anonymous content signal: `retry_share` = share of interns whose first answer was wrong; null under 3 interns. */
+export interface QuizSignal {
+  item_id: string;
+  question_ar: string;
+  source_knowledge_id: string;
+  interns_tried: number;
+  retry_share: number | null;
+}
+
+export interface QuizSignals {
+  set_id: string;
+  items: QuizSignal[];
+  min_interns: 3;
+  label_ar: string;
+}
+
+/** One set on the intern's Quiz screen (the official quiz first, always open). */
+export interface QuizSetSummary {
+  id: string;
+  title_ar: string;
+  title_en: string | null;
+  item_count: number;
+  opens_at_percent: number;
+  open: boolean;
+  official: boolean;
+}
+
+export interface QuizSetList {
+  sets: QuizSetSummary[];
+}
+
+/** The reason code (and the detail: the number for number_not_in_row, the percent for locked) of a practice-quiz
+ *  error message, else null. Besides QUIZ_REASONS: `locked` (400 field "progress"), and `llm_unavailable` /
+ *  `draft_failed` (503 on the model draft). */
+export function quizErrorReason(message: string): { reason: string; detail: string | null } | null {
+  const m = /^reason:([a-z_]+)(?::(.+))?$/.exec(message);
+  return m ? { reason: m[1] ?? "", detail: m[2] ?? null } : null;
+}
+
+function isOptions(x: unknown): x is Record<QuizOptionKey, string> {
+  return isObj(x) && isStr(x.A) && isStr(x.B) && isStr(x.C);
+}
+
+export function isAdminQuizSet(x: unknown): x is AdminQuizSet {
+  return (
+    isObj(x) &&
+    isStr(x.id) &&
+    isStr(x.title_ar) &&
+    isStrOrNull(x.title_en) &&
+    isOneOf(QUIZ_AUDIENCES, x.audience) &&
+    (x.track === null || isOneOf(ROLES, x.track)) &&
+    isArrayOf(x.intern_ids, isStr) &&
+    isNum(x.opens_at_percent) &&
+    isOneOf(QUIZ_SET_STATUSES, x.status) &&
+    isNum(x.item_count) &&
+    isNum(x.interns_practised) &&
+    isStr(x.created_at) &&
+    isStr(x.updated_at)
+  );
+}
+
+export function isAdminQuizSetList(x: unknown): x is AdminQuizSetList {
+  if (!isObj(x) || !isArrayOf(x.sets, isAdminQuizSet)) return false;
+  const o = x.official;
+  return (
+    isObj(o) &&
+    o.id === OFFICIAL_QUIZ_SET_ID &&
+    isStr(o.title_ar) &&
+    isStr(o.title_en) &&
+    isNum(o.item_count) &&
+    isNum(o.interns_practised)
+  );
+}
+
+export function isAdminQuizItem(x: unknown): x is AdminQuizItem {
+  return (
+    isObj(x) &&
+    isStr(x.id) &&
+    isNum(x.position) &&
+    isStr(x.question_ar) &&
+    isOptions(x.options) &&
+    isOneOf(["A", "B", "C"] as const, x.correct_option) &&
+    isStr(x.source_knowledge_id) &&
+    isOneOf(QUIZ_ORIGINS, x.origin) &&
+    (x.row === null || isSource(x.row))
+  );
+}
+
+export function isAdminQuizSetDetail(x: unknown): x is AdminQuizSetDetail {
+  return isObj(x) && isAdminQuizSet(x.set) && isArrayOf(x.items, isAdminQuizItem);
+}
+
+export function isQuizDraft(x: unknown): x is QuizDraft {
+  return (
+    isObj(x) &&
+    isStr(x.question_ar) &&
+    isOptions(x.options) &&
+    isOneOf(["A", "B", "C"] as const, x.correct_option) &&
+    isStr(x.source_knowledge_id) &&
+    isStr(x.model) &&
+    x.checks_passed === true
+  );
+}
+
+function isQuizImportRejected(x: unknown): x is QuizImportRejected {
+  return isObj(x) && isNum(x.line) && isOneOf(QUIZ_REASONS, x.reason);
+}
+
+export function isQuizImportResult(x: unknown): x is QuizImportResult {
+  return isObj(x) && isArrayOf(x.added, isAdminQuizItem) && isArrayOf(x.rejected, isQuizImportRejected);
+}
+
+function isQuizSignal(x: unknown): x is QuizSignal {
+  return (
+    isObj(x) &&
+    isStr(x.item_id) &&
+    isStr(x.question_ar) &&
+    isStr(x.source_knowledge_id) &&
+    isNum(x.interns_tried) &&
+    (x.retry_share === null || isNum(x.retry_share))
+  );
+}
+
+export function isQuizSignals(x: unknown): x is QuizSignals {
+  return isObj(x) && isStr(x.set_id) && isArrayOf(x.items, isQuizSignal) && isNum(x.min_interns) && isStr(x.label_ar);
+}
+
+function isQuizSetSummary(x: unknown): x is QuizSetSummary {
+  return (
+    isObj(x) &&
+    isStr(x.id) &&
+    isStr(x.title_ar) &&
+    isStrOrNull(x.title_en) &&
+    isNum(x.item_count) &&
+    isNum(x.opens_at_percent) &&
+    isBool(x.open) &&
+    isBool(x.official)
+  );
+}
+
+export function isQuizSetList(x: unknown): x is QuizSetList {
+  return isObj(x) && isArrayOf(x.sets, isQuizSetSummary);
 }

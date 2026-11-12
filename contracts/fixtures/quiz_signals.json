@@ -1,0 +1,28 @@
+{
+  "set_id": "0000a001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+  "min_interns": 3,
+  "label_ar": "إشارات المحتوى — ليست تقييماً للأداء",
+  "items": [
+    {
+      "item_id": "M001",
+      "question_ar": "كم معرضاً تمتلك المجموعة؟",
+      "source_knowledge_id": "K02",
+      "interns_tried": 4,
+      "retry_share": 0.5
+    },
+    {
+      "item_id": "M002",
+      "question_ar": "عبر أي نظام يُقدَّم طلب الإجازة؟",
+      "source_knowledge_id": "K16",
+      "interns_tried": 3,
+      "retry_share": 0.0
+    },
+    {
+      "item_id": "M003",
+      "question_ar": "ما الذي يجب المحافظة عليه بخصوص معلومات الشركة؟",
+      "source_knowledge_id": "K17",
+      "interns_tried": 2,
+      "retry_share": null
+    }
+  ]
+}

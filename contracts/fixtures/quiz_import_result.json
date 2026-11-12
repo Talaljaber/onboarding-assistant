@@ -1,0 +1,40 @@
+{
+  "added": [
+    {
+      "id": "M003",
+      "position": 2,
+      "question_ar": "ما الذي يجب المحافظة عليه بخصوص معلومات الشركة؟",
+      "options": {
+        "A": "نشرها على وسائل التواصل",
+        "B": "سريتها وعدم إفشائها دون تصريح",
+        "C": "مشاركتها مع العملاء"
+      },
+      "correct_option": "B",
+      "source_knowledge_id": "K17",
+      "origin": "csv",
+      "row": {
+        "id": "K17",
+        "topic": "Policy",
+        "answer_ar": "يجب المحافظة على سرية معلومات الشركة وعدم إفشائها دون تصريح.",
+        "source_document": "General Policies",
+        "source_page": 1,
+        "edited": false,
+        "status": "official"
+      }
+    }
+  ],
+  "rejected": [
+    {
+      "line": 3,
+      "reason": "number_not_in_row"
+    },
+    {
+      "line": 4,
+      "reason": "unknown_row"
+    },
+    {
+      "line": 5,
+      "reason": "invalid"
+    }
+  ]
+}

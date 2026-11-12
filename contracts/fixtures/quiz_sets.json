@@ -1,0 +1,22 @@
+{
+  "sets": [
+    {
+      "id": "official",
+      "title_ar": "الاختبار التدريبي الرسمي",
+      "title_en": "Official practice quiz",
+      "item_count": 5,
+      "opens_at_percent": 0,
+      "open": true,
+      "official": true
+    },
+    {
+      "id": "0000a001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+      "title_ar": "أساسيات المعارض والسياسات",
+      "title_en": "Showrooms and policies basics",
+      "item_count": 3,
+      "opens_at_percent": 30,
+      "open": false,
+      "official": false
+    }
+  ]
+}

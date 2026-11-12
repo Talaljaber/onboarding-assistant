@@ -173,7 +173,8 @@ KB_ID_RE = r"^K\d{2,3}$"
 SCENARIO_ID_RE = r"^S0[1-6]$"
 OPTION_ID_RE = r"^S0[1-6]-O[1-3]$"
 ACTIVITY_ID_RE = r"^[A-Z]{1,2}-[A-Za-z0-9-]{1,32}$"
-QUIZ_ID_RE = r"^Q\d{2}$"
+#: P20: an official item (Q01–Q05) or an admin-written practice-quiz item (M001…).
+QUIZ_ID_RE = r"^(Q\d{2}|M\d{3})$"
 OOS_ID_RE = r"^OOS\d{2,3}$"
 REF_ID_RE = r"^(K\d{2,3}|S0[1-6]|Q\d{2})$"
 PROFILE_ID_RE = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
@@ -1656,7 +1657,8 @@ class MailTestResponse(_Model):
 QUESTION_TEXT_MAX = 600
 #: The K-row document when the admin leaves it empty (page 1).
 QUESTION_ANSWER_DOCUMENT = "Mentor answer"
-QuestionSource = Literal["check", "chat"]
+#: P20: "quiz" = «اسأل مشرفي عن هذا» after a wrong practice-quiz answer (text pre-filled by the client, editable).
+QuestionSource = Literal["check", "chat", "quiz"]
 QuestionStatus = Literal["open", "answered", "dismissed"]
 #: P18.5: `kb` = the answer becomes a K-row for everyone; `private` = a reply to this intern only (no K-row).
 QuestionScope = Literal["kb", "private"]
@@ -1767,6 +1769,338 @@ class QuestionAnswered(_Model):
         if self.row is not None and self.question.answer_row_id != self.row.id:
             raise ValueError("the question's answer_row_id is the added row")
         return self
+
+
+# --------------------------------------------------------------------------------------
+# Practice quizzes (P20): sets written by the admin from K-rows; the intern practises; the admin sees content
+# signals across interns (anonymous, >= 3 interns), never a per-intern result
+# --------------------------------------------------------------------------------------
+
+QuizSetStatus = Literal["draft", "published"]
+#: Who sees a published set: everyone, one track, or chosen interns.
+QuizAudience = Literal["all", "track", "interns"]
+#: How an item was written: typed by the admin, a model draft the admin approved, or a CSV line.
+QuizOrigin = Literal["manual", "model", "csv"]
+#: Grounding failures of `app.quiz_sets.check_item` (also the CSV import's per-line reasons). `invalid` = a field
+#: is missing or malformed (a CSV line, or a correct option outside A/B/C); `set_full` = the set already has
+#: QUIZ_SET_ITEMS_MAX items. Sent in error messages as `reason:<code>` (number_not_in_row: `reason:<code>:<n>`).
+QuizReason = Literal["unknown_row", "length", "duplicate_options", "contact", "number_not_in_row",
+                     "answer_not_in_row", "ambiguous", "invalid", "set_full"]
+QUIZ_SET_STATUSES: tuple[str, ...] = get_args(QuizSetStatus)
+QUIZ_AUDIENCES: tuple[str, ...] = get_args(QuizAudience)
+QUIZ_ORIGINS: tuple[str, ...] = get_args(QuizOrigin)
+QUIZ_REASONS: tuple[str, ...] = get_args(QuizReason)
+
+QUIZ_ITEM_ID_RE = r"^M\d{3}$"
+#: The built-in official sample quiz (Q01–Q05) is the set "official": always open, never edited.
+OFFICIAL_QUIZ_SET_ID = "official"
+QUIZ_SET_ID_RE = r"^(official|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$"
+OFFICIAL_QUIZ_TITLE_AR = "الاختبار التدريبي الرسمي"
+OFFICIAL_QUIZ_TITLE_EN = "Official practice quiz"
+QUIZ_SET_TITLE_MAX = 80
+QUIZ_QUESTION_MIN = 5
+QUIZ_QUESTION_MAX = 300
+QUIZ_OPTION_MAX = 120
+QUIZ_SET_ITEMS_MAX = 20
+QUIZ_SET_INTERNS_MAX = 200
+#: The CSV upload: decoded file at most 200 KB; the JSON body (base64) may reach 300 KB on that route only.
+QUIZ_IMPORT_FILE_MAX_BYTES = 200 * 1024
+QUIZ_IMPORT_BODY_MAX_BYTES = 300 * 1024
+QUIZ_IMPORT_COLUMNS: tuple[str, ...] = ("question_ar", "option_a", "option_b", "option_c", "correct_option",
+                                        "source_knowledge_id")
+#: A content signal is shown only when at least this many interns tried the question.
+QUIZ_SIGNAL_MIN_INTERNS = 3
+QUIZ_SIGNALS_LABEL_AR = "إشارات المحتوى — ليست تقييماً للأداء"
+
+QuizItemId = Annotated[str, Field(pattern=QUIZ_ITEM_ID_RE)]
+QuizSetId = Annotated[str, Field(pattern=QUIZ_SET_ID_RE)]
+QuizSetTitle = Annotated[Line, Field(min_length=1, max_length=QUIZ_SET_TITLE_MAX)]
+QuizSetTitleEn = Annotated[Line, Field(max_length=QUIZ_SET_TITLE_MAX)]
+#: Loose bounds only: `check_item` applies the real limits and answers with a reason code.
+QuizQuestionIn = Annotated[Line, Field(max_length=1000)]
+QuizOptionIn = Annotated[Line, Field(max_length=500)]
+
+
+def _three_keys(v: dict[str, str] | None) -> dict[str, str] | None:
+    if v is not None and set(v) != {"A", "B", "C"}:
+        raise ValueError("options must have exactly the keys A, B, C")
+    return v
+
+
+def _audience_ok(audience: str | None, track: str | None, intern_ids: list[str] | None) -> None:
+    if audience == "track" and track is None:
+        raise ValueError("track is required when the audience is a track")
+    if audience == "interns" and not intern_ids:
+        raise ValueError("choose at least one intern when the audience is chosen interns")
+
+
+class AdminQuizSet(_Model):
+    """One practice set in the admin list. `interns_practised`: active interns who answered at least one of its
+    questions (a count; never who got what right). `track` is set exactly for audience "track", `intern_ids`
+    is non-empty exactly for audience "interns"."""
+
+    id: UuidStr
+    title_ar: str
+    title_en: str | None
+    audience: QuizAudience
+    track: Role | None
+    intern_ids: list[InternId]
+    opens_at_percent: Percent
+    status: QuizSetStatus
+    item_count: NonNeg
+    interns_practised: NonNeg
+    created_at: str
+    updated_at: str
+
+    @model_validator(mode="after")
+    def _audience_shape(self) -> AdminQuizSet:
+        if (self.track is not None) != (self.audience == "track"):
+            raise ValueError("track is set exactly for audience track")
+        if bool(self.intern_ids) != (self.audience == "interns"):
+            raise ValueError("intern_ids is non-empty exactly for audience interns")
+        return self
+
+
+class AdminOfficialQuiz(_Model):
+    """The built-in official sample quiz as the admin list shows it (read-only, always open, everyone)."""
+
+    id: Literal["official"]
+    title_ar: str
+    title_en: str
+    item_count: NonNeg
+    interns_practised: NonNeg
+
+
+class AdminQuizSetList(_Model):
+    """`GET /api/admin/quiz-sets`: the admin's sets (newest first) and the built-in official quiz."""
+
+    sets: list[AdminQuizSet]
+    official: AdminOfficialQuiz
+
+
+class QuizSetCreate(_Model):
+    """`POST /api/admin/quiz-sets` → a draft set. `track` is required for audience "track", `intern_ids`
+    (active interns) for audience "interns"; the other one is ignored. An empty `title_en` is null."""
+
+    title_ar: QuizSetTitle
+    title_en: QuizSetTitleEn | None = None
+    audience: QuizAudience
+    track: Role | None = None
+    intern_ids: Annotated[list[InternId], Field(max_length=QUIZ_SET_INTERNS_MAX)] = Field(default_factory=list)
+    opens_at_percent: Percent = 0
+
+    @field_validator("title_en")
+    @classmethod
+    def _blank_en(cls, v: str | None) -> str | None:
+        return v or None
+
+    @model_validator(mode="after")
+    def _audience(self) -> QuizSetCreate:
+        _audience_ok(self.audience, self.track, self.intern_ids)
+        return self
+
+
+class QuizSetPatch(_Model):
+    """`PATCH /api/admin/quiz-sets/{id}`: any of the create fields and `status` (absent = unchanged; `title_en:
+    null` or "" clears it). The audience rule is checked on the merged set; publishing a set with no items is
+    400 `field: "status"`. At least one field."""
+
+    title_ar: QuizSetTitle | None = None
+    title_en: QuizSetTitleEn | None = None
+    audience: QuizAudience | None = None
+    track: Role | None = None
+    intern_ids: Annotated[list[InternId], Field(max_length=QUIZ_SET_INTERNS_MAX)] | None = None
+    opens_at_percent: Percent | None = None
+    status: QuizSetStatus | None = None
+
+    @field_validator("title_en")
+    @classmethod
+    def _blank_en(cls, v: str | None) -> str | None:
+        return v or None
+
+    @model_validator(mode="after")
+    def _some_change(self) -> QuizSetPatch:
+        if not self.model_fields_set:
+            raise ValueError("send at least one field")
+        for key in ("title_ar", "audience", "intern_ids", "opens_at_percent", "status"):
+            if key in self.model_fields_set and getattr(self, key) is None:
+                raise ValueError(f"{key} cannot be null")
+        return self
+
+    def changes(self) -> dict[str, Any]:
+        return {k: getattr(self, k) for k in self.model_fields_set}
+
+
+class AdminQuizItem(_Model):
+    """One stored question with its answer (admin only: `correct_option` is item metadata, not anyone's result)
+    and the cited row verbatim from the live KB (`row` null when that row is no longer in the KB)."""
+
+    id: QuizItemId
+    position: NonNeg
+    question_ar: str
+    options: dict[QuizOptionKey, str]
+    correct_option: QuizOptionKey
+    source_knowledge_id: KbId
+    origin: QuizOrigin
+    row: Source | None
+
+    @field_validator("options")
+    @classmethod
+    def _three(cls, v: dict[str, str]) -> dict[str, str]:
+        return _three_keys(v) or v
+
+
+class AdminQuizSetDetail(_Model):
+    """`GET /api/admin/quiz-sets/{id}` (also the reorder response): the set and its items in order."""
+
+    set: AdminQuizSet
+    items: list[AdminQuizItem]
+
+
+class QuizItemIn(_Model):
+    """`POST /api/admin/quiz-sets/{id}/items`. Checked by the server's grounding rules (`check_item`): a failure
+    is 400 `validation_error` with the failing `field` and `message` `reason:<QuizReason>`."""
+
+    question_ar: QuizQuestionIn
+    options: dict[QuizOptionKey, QuizOptionIn]
+    correct_option: QuizOptionKey
+    source_knowledge_id: KbId
+    origin: QuizOrigin = "manual"
+
+    @field_validator("options")
+    @classmethod
+    def _three(cls, v: dict[str, str]) -> dict[str, str]:
+        return _three_keys(v) or v
+
+
+class QuizItemPatch(_Model):
+    """`PATCH /api/admin/quiz-sets/{id}/items/{item_id}`: any of the item fields (`options` as a whole); the
+    merged item is checked again. At least one field, none null."""
+
+    question_ar: QuizQuestionIn | None = None
+    options: dict[QuizOptionKey, QuizOptionIn] | None = None
+    correct_option: QuizOptionKey | None = None
+    source_knowledge_id: KbId | None = None
+    origin: QuizOrigin | None = None
+
+    @field_validator("options")
+    @classmethod
+    def _three(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        return _three_keys(v)
+
+    @model_validator(mode="after")
+    def _some_change(self) -> QuizItemPatch:
+        if not self.model_fields_set:
+            raise ValueError("send at least one field")
+        for key in self.model_fields_set:
+            if getattr(self, key) is None:
+                raise ValueError(f"{key} cannot be null")
+        return self
+
+    def changes(self) -> dict[str, Any]:
+        return {k: getattr(self, k) for k in self.model_fields_set}
+
+
+class QuizItemOrder(_Model):
+    """`POST /api/admin/quiz-sets/{id}/items/order`: every item id of the set, in the new order."""
+
+    ids: Annotated[list[QuizItemId], Field(min_length=1, max_length=QUIZ_SET_ITEMS_MAX)]
+
+
+class QuizDraftRequest(_Model):
+    """`POST /api/admin/quiz-sets/draft`: the K-row the model drafts one question from."""
+
+    source_knowledge_id: KbId
+
+
+class QuizDraft(_Model):
+    """A model draft that passed the server's checks. Never stored: the admin edits it and saves it as an item
+    (origin "model")."""
+
+    question_ar: str
+    options: dict[QuizOptionKey, str]
+    correct_option: QuizOptionKey
+    source_knowledge_id: KbId
+    model: str
+    checks_passed: Literal[True]
+
+    @field_validator("options")
+    @classmethod
+    def _three(cls, v: dict[str, str]) -> dict[str, str]:
+        return _three_keys(v) or v
+
+
+class QuizImportRequest(_Model):
+    """`POST /api/admin/quiz-sets/{id}/import`: a UTF-8 CSV (≤ 200 KB) as base64, header with QUIZ_IMPORT_COLUMNS
+    (an `id` column is ignored)."""
+
+    filename: Annotated[Line, Field(min_length=1, max_length=IMPORT_FILENAME_MAX)]
+    content_b64: Annotated[str, Field(min_length=1, max_length=QUIZ_IMPORT_BODY_MAX_BYTES)]
+
+
+class QuizImportRejected(_Model):
+    """One CSV line that was not added (`line`: the file line number; the header is line 1)."""
+
+    line: Annotated[int, Field(ge=2)]
+    reason: QuizReason
+
+
+class QuizImportResult(_Model):
+    added: list[AdminQuizItem]
+    rejected: list[QuizImportRejected]
+
+
+class QuizSignal(_Model):
+    """One question across the cohort: active interns who tried it and the share of them whose FIRST answer was
+    wrong (null when fewer than QUIZ_SIGNAL_MIN_INTERNS tried it). No names, no profile ids."""
+
+    item_id: QuizId
+    question_ar: str
+    source_knowledge_id: KbId
+    interns_tried: NonNeg
+    retry_share: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)] | None
+
+    @model_validator(mode="after")
+    def _threshold(self) -> QuizSignal:
+        if (self.retry_share is None) != (self.interns_tried < QUIZ_SIGNAL_MIN_INTERNS):
+            raise ValueError(f"retry_share is null exactly when fewer than {QUIZ_SIGNAL_MIN_INTERNS} interns tried")
+        return self
+
+
+class QuizSignals(_Model):
+    """`GET /api/admin/quiz-sets/{id}/signals` (also `official`): content signals, not a performance evaluation."""
+
+    set_id: QuizSetId
+    items: list[QuizSignal]
+    min_interns: Literal[3]
+    label_ar: str
+
+
+class QuizSetSummary(_Model):
+    """One set on the intern's Quiz screen. `open`: the intern's suggested-plan progress reached
+    `opens_at_percent` (the official quiz is always open)."""
+
+    id: QuizSetId
+    title_ar: str
+    title_en: str | None
+    item_count: NonNeg
+    opens_at_percent: Percent
+    open: bool
+    official: bool
+
+    @model_validator(mode="after")
+    def _official(self) -> QuizSetSummary:
+        if self.official != (self.id == OFFICIAL_QUIZ_SET_ID):
+            raise ValueError("official is true exactly for the set 'official'")
+        if self.official and not self.open:
+            raise ValueError("the official quiz is always open")
+        return self
+
+
+class QuizSetList(_Model):
+    """`GET /api/quiz-sets?profile_id=`: the official quiz first, then the published sets for this intern."""
+
+    sets: list[QuizSetSummary]
 
 
 __all__ = [
@@ -1931,4 +2265,48 @@ __all__ = [
     "QuestionCreate",
     "QuestionScope",
     "QuestionSuggestion",
+    # P20 practice quizzes
+    "OFFICIAL_QUIZ_SET_ID",
+    "OFFICIAL_QUIZ_TITLE_AR",
+    "OFFICIAL_QUIZ_TITLE_EN",
+    "QUIZ_AUDIENCES",
+    "QUIZ_IMPORT_BODY_MAX_BYTES",
+    "QUIZ_IMPORT_COLUMNS",
+    "QUIZ_IMPORT_FILE_MAX_BYTES",
+    "QUIZ_ITEM_ID_RE",
+    "QUIZ_OPTION_MAX",
+    "QUIZ_ORIGINS",
+    "QUIZ_QUESTION_MAX",
+    "QUIZ_QUESTION_MIN",
+    "QUIZ_REASONS",
+    "QUIZ_SET_ID_RE",
+    "QUIZ_SET_INTERNS_MAX",
+    "QUIZ_SET_ITEMS_MAX",
+    "QUIZ_SET_STATUSES",
+    "QUIZ_SET_TITLE_MAX",
+    "QUIZ_SIGNALS_LABEL_AR",
+    "QUIZ_SIGNAL_MIN_INTERNS",
+    "AdminOfficialQuiz",
+    "AdminQuizItem",
+    "AdminQuizSet",
+    "AdminQuizSetDetail",
+    "AdminQuizSetList",
+    "QuizAudience",
+    "QuizDraft",
+    "QuizDraftRequest",
+    "QuizImportRejected",
+    "QuizImportRequest",
+    "QuizImportResult",
+    "QuizItemIn",
+    "QuizItemOrder",
+    "QuizItemPatch",
+    "QuizOrigin",
+    "QuizReason",
+    "QuizSetCreate",
+    "QuizSetList",
+    "QuizSetPatch",
+    "QuizSetStatus",
+    "QuizSetSummary",
+    "QuizSignal",
+    "QuizSignals",
 ]

@@ -519,3 +519,125 @@ export const answerQuestion = (id: string, body: QuestionAnswer, signal?: AbortS
 
 export const dismissQuestion = (id: string, signal?: AbortSignal) =>
   request<MentorQuestion>(`/api/admin/questions/${q(id)}/dismiss`, { method: "POST", guard: isMentorQuestion, signal, admin: true });
+
+// ---------------------------------------------------------------- practice quizzes (P20)
+
+import {
+  isAdminQuizItem,
+  isAdminQuizSet,
+  isAdminQuizSetDetail,
+  isAdminQuizSetList,
+  isQuizDraft,
+  isQuizImportResult,
+  isQuizSetList,
+  isQuizSignals,
+  type AdminQuizItem,
+  type AdminQuizSet,
+  type AdminQuizSetDetail,
+  type AdminQuizSetList,
+  type QuizDraft,
+  type QuizImportRequest,
+  type QuizImportResult,
+  type QuizItemIn,
+  type QuizItemPatch,
+  type QuizSetCreate,
+  type QuizSetList,
+  type QuizSetPatch,
+  type QuizSignals,
+} from "./types";
+
+/** A model draft waits for the pinned model and, when the first draft fails the checks, one escalation call. */
+export const QUIZ_DRAFT_TIMEOUT_MS = 45000;
+
+/** The signed-in intern's sets: the official quiz first, then published sets for them (`open` or locked).
+ *  Without a profile id (anonymous) only the official quiz is listed. */
+export const getQuizSets = (profileId: string | null, signal?: AbortSignal) =>
+  request<QuizSetList>(`/api/quiz-sets${profileId ? `?profile_id=${q(profileId)}` : ""}`, { guard: isQuizSetList, signal });
+
+/** One set's items (never the correct option). 404 when not visible to this intern; 400 field "progress"
+ *  (`reason:locked:<percent>`) when it has not opened yet. */
+export const getQuizSet = (setId: string, profileId: string | null, signal?: AbortSignal) =>
+  request<QuizResponse>(`/api/quiz-sets/${q(setId)}${profileId ? `?profile_id=${q(profileId)}` : ""}`, {
+    guard: isQuizResponse,
+    signal,
+  });
+
+export const getAdminQuizSets = (signal?: AbortSignal) =>
+  request<AdminQuizSetList>("/api/admin/quiz-sets", { guard: isAdminQuizSetList, signal, admin: true });
+
+export const createQuizSet = (body: QuizSetCreate, signal?: AbortSignal) =>
+  request<AdminQuizSet>("/api/admin/quiz-sets", { method: "POST", body, guard: isAdminQuizSet, signal, admin: true });
+
+export const patchQuizSet = (setId: string, body: QuizSetPatch, signal?: AbortSignal) =>
+  request<AdminQuizSet>(`/api/admin/quiz-sets/${q(setId)}`, {
+    method: "PATCH",
+    body,
+    guard: isAdminQuizSet,
+    signal,
+    admin: true,
+  });
+
+/** 204 (no body): resolves to `null`. */
+export const deleteQuizSet = (setId: string, signal?: AbortSignal) =>
+  request<null>(`/api/admin/quiz-sets/${q(setId)}`, { method: "DELETE", signal, admin: true });
+
+export const getAdminQuizSet = (setId: string, signal?: AbortSignal) =>
+  request<AdminQuizSetDetail>(`/api/admin/quiz-sets/${q(setId)}`, { guard: isAdminQuizSetDetail, signal, admin: true });
+
+/** 400 `validation_error` with `field` and `message: "reason:<code>"` when the grounding checks fail. */
+export const addQuizItem = (setId: string, body: QuizItemIn, signal?: AbortSignal) =>
+  request<AdminQuizItem>(`/api/admin/quiz-sets/${q(setId)}/items`, {
+    method: "POST",
+    body,
+    guard: isAdminQuizItem,
+    signal,
+    admin: true,
+  });
+
+export const patchQuizItem = (setId: string, itemId: string, body: QuizItemPatch, signal?: AbortSignal) =>
+  request<AdminQuizItem>(`/api/admin/quiz-sets/${q(setId)}/items/${q(itemId)}`, {
+    method: "PATCH",
+    body,
+    guard: isAdminQuizItem,
+    signal,
+    admin: true,
+  });
+
+/** 204 (no body): resolves to `null`. */
+export const deleteQuizItem = (setId: string, itemId: string, signal?: AbortSignal) =>
+  request<null>(`/api/admin/quiz-sets/${q(setId)}/items/${q(itemId)}`, { method: "DELETE", signal, admin: true });
+
+/** Every item id of the set in the new order. */
+export const orderQuizItems = (setId: string, ids: string[], signal?: AbortSignal) =>
+  request<AdminQuizSetDetail>(`/api/admin/quiz-sets/${q(setId)}/items/order`, {
+    method: "POST",
+    body: { ids },
+    guard: isAdminQuizSetDetail,
+    signal,
+    admin: true,
+  });
+
+/** A verified model draft from one K-row (not stored). 503 `imports_unavailable` with `reason:llm_unavailable`
+ *  (offline, no key, budget) or `reason:draft_failed` (no draft passed the checks). */
+export const draftQuizItem = (sourceKnowledgeId: string, signal?: AbortSignal) =>
+  request<QuizDraft>("/api/admin/quiz-sets/draft", {
+    method: "POST",
+    body: { source_knowledge_id: sourceKnowledgeId },
+    guard: isQuizDraft,
+    signal,
+    admin: true,
+    timeoutMs: QUIZ_DRAFT_TIMEOUT_MS,
+  });
+
+export const importQuizItems = (setId: string, body: QuizImportRequest, signal?: AbortSignal) =>
+  request<QuizImportResult>(`/api/admin/quiz-sets/${q(setId)}/import`, {
+    method: "POST",
+    body,
+    guard: isQuizImportResult,
+    signal,
+    admin: true,
+  });
+
+/** Anonymous content signals per question (`setId` may be "official"). */
+export const getQuizSignals = (setId: string, signal?: AbortSignal) =>
+  request<QuizSignals>(`/api/admin/quiz-sets/${q(setId)}/signals`, { guard: isQuizSignals, signal, admin: true });
