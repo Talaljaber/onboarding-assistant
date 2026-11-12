@@ -30,7 +30,11 @@ export function CheckpointsCard({ items }: { items: DetailCheckpoint[] }) {
             return (
               <li key={c.set_id} data-checkpoint-row={c.set_id} className="flex min-w-0 flex-col gap-0.5 px-3 py-2.5">
                 <p className="m-0 flex min-w-0 flex-wrap items-baseline justify-between gap-x-3">
-                  <a href={setHref(c.set_id)} className="min-w-0 text-start text-sm font-semibold text-accent hover:underline">
+                  {/* P22.2: a 44 px tap target on phones without growing the row (negative block margins) */}
+                  <a
+                    href={setHref(c.set_id)}
+                    className="min-w-0 text-start text-sm font-semibold text-accent hover:underline max-sm:-my-3 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
+                  >
                     <ContentText ar={c.title_ar} en={c.title_en} />
                   </a>
                   <span className={cn("text-base", v.started ? "font-bold text-fg-1" : "text-sm text-fg-3")} data-checkpoint-result>

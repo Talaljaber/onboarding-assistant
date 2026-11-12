@@ -150,6 +150,8 @@ describe("the intern's printable report", () => {
     expect(document.querySelector("[data-report-checkpoints]")).toHaveTextContent("2 / 3");
     const counts = document.querySelector("[data-report-counts]")!;
     expect(within(counts as HTMLElement).getByText("أسئلة أرسلها لمشرفه").nextSibling).toHaveTextContent("1");
+    // P22.2: each LTR number sits under its label in RTL (start-aligned), not at the far edge
+    for (const dd of counts.querySelectorAll("dd")) expect(dd).toHaveClass("self-start");
     expect(screen.getByRole("heading", { name: "ملاحظات المشرف" })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/الأفضل|درجة المتدرب|Rank/);
     await userEvent.click(screen.getByRole("button", { name: "طباعة" }));

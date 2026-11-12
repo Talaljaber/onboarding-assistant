@@ -187,7 +187,7 @@ export default function FinalReportScreen() {
       header: t("finalReport.colPlan"),
       cell: (r) => (
         <span className="flex flex-col">
-          <span className="font-id font-semibold" dir="ltr">
+          <span className="self-start font-id font-semibold" dir="ltr">
             {pct(r.plan_percent)}%
           </span>
           <span className="text-xs whitespace-nowrap text-fg-2">
