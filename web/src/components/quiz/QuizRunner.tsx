@@ -50,6 +50,24 @@ function myResultOf(x: QuizSetSummary | null | undefined): { answered: number; f
     : null;
 }
 
+/** This browser remembers that the intern answered a checkpoint set, so a later visit is not taken for the first
+ *  attempt (the list entry does not carry the intern's own shared result). Storage may be blocked: then unknown. */
+const answeredKey = (profileId: string | null, setId: string) => `dada.v1.checkpoint.${profileId ?? "anon"}.${setId}`;
+function answeredBefore(profileId: string | null, setId: string): boolean {
+  try {
+    return window.localStorage.getItem(answeredKey(profileId, setId)) === "1";
+  } catch {
+    return false;
+  }
+}
+function markAnswered(profileId: string | null, setId: string): void {
+  try {
+    window.localStorage.setItem(answeredKey(profileId, setId), "1");
+  } catch {
+    // in-memory only
+  }
+}
+
 export function missedFirst<T extends { id: string }>(items: T[], missed: readonly { id: string }[]): T[] {
   const ids = new Set(missed.map((m) => m.id));
   return [...items.filter((i) => ids.has(i.id)), ...items.filter((i) => !ids.has(i.id))];
@@ -104,7 +122,8 @@ export function QuizRunner({ setId }: { setId: string }) {
         const found = r.ok ? (r.value.sets.find((s) => s.id === setId) ?? null) : null;
         if (!ctl.signal.aborted) {
           setSummary(found);
-          setPrior(myResultOf(found)?.answered ?? 0);
+          // answers given before this visit: the server's count when it sends one, else this browser's memory
+          setPrior(myResultOf(found)?.answered ?? (answeredBefore(profileId, setId) ? 1 : 0));
         }
       });
       void Promise.all([getQuizSet(setId, profileId, ctl.signal), entry]).then(([r]) => {
@@ -162,9 +181,10 @@ export function QuizRunner({ setId }: { setId: string }) {
       return;
     }
     setResult(r.value);
+    if (checkpoint) markAnswered(profileId, setId);
     if (r.value.correct) setCorrect((n) => n + 1);
     else setWrong((w) => [...w, item]);
-  }, [item, picked, profileId]);
+  }, [item, picked, profileId, checkpoint, setId]);
 
   const finish = useCallback(() => {
     // The browser's own practice record and the plan's quiz activity belong to the official quiz.

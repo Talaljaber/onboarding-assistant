@@ -20,6 +20,7 @@ const openSet = (mode: "practice" | "checkpoint") => ({ sets: [quizSets.sets[0],
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  localStorage.clear();
   resetMyQuestions();
   window.location.hash = "";
 });
@@ -143,6 +144,18 @@ describe("taking an assigned set", () => {
     await answerAll(3);
     expect(await screen.findByText("3 من 3 صحيحة (تدريب)")).toBeInTheDocument();
     expect(screen.getByText("هذه المحاولة للتدرّب: النتيجة المُشارَكة هي إجاباتك الأولى.")).toBeInTheDocument();
+  });
+
+  it("a checkpoint answered in an earlier visit is not taken for the first attempt: no shared number is claimed", async () => {
+    localStorage.setItem(`dada.v1.checkpoint.${PID}.${SET.id}`, "1");
+    stubApi({ "/api/quiz-sets": sets(openSet("checkpoint")), "/api/quiz/check": () => json(quizCheckSet) });
+    renderScreen(<QuizRunner setId={SET.id} />, { data: { profile_id: PID } });
+    await userEvent.click(await screen.findByRole("button", { name: "ابدأ" }));
+    await answerAll(3);
+    expect(await screen.findByText("3 من 3 صحيحة (تدريب)")).toBeInTheDocument();
+    expect(screen.getByText("هذه المحاولة للتدرّب: النتيجة المُشارَكة هي إجاباتك الأولى.")).toBeInTheDocument();
+    expect(document.querySelector("[data-shared-result]")).toBeNull();
+    localStorage.removeItem(`dada.v1.checkpoint.${PID}.${SET.id}`);
   });
 
   it("after a wrong answer «اسأل مشرفي عن هذا» opens the sheet with the question and its K-id, sent as source quiz", async () => {
