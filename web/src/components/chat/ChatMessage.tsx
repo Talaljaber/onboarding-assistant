@@ -48,7 +48,11 @@ export function ChatMessage(p: ChatMessageProps) {
   const t = useT();
   const { lang } = useLang();
   const kind = cardKind(item);
-  const r = item.reply;
+  // P14.1: a saved answer whose cited row changed turns amber with the word diff (below). P17: its old
+  // premise line («…the source says 17») would contradict the notice, so a recalled answer drops it.
+  const live = p.liveKb ?? null;
+  const recall = RECALL_KINDS.has(kind) ? recallOf(item.reply.sources, live) : [];
+  const r = recall.length > 0 && item.reply.premise ? { ...item.reply, premise: undefined } : item.reply;
 
   let card;
   switch (kind) {
@@ -130,8 +134,6 @@ export function ChatMessage(p: ChatMessageProps) {
 
   // P14.1: a saved answer whose cited row changed turns amber with the word diff; a non-guard refusal gets
   // the "sources were added, ask again" hint once the KB holds added rows it did not have.
-  const live = p.liveKb ?? null;
-  const recall = RECALL_KINDS.has(kind) ? recallOf(r.sources, live) : [];
   const reask = { canReask: Boolean(p.canReask && p.onReask), busy: p.busy, onReask: () => p.onReask?.() };
   if (recall.length > 0) {
     card = (

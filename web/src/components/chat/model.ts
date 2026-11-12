@@ -147,12 +147,15 @@ export function activeScenario(items: readonly ChatItem[]): string | null {
 }
 
 /** Arabic name of the value linked to the active scenario (data string), if a card of it is in the thread. */
-export function activeValue(items: readonly ChatItem[], id: string): string | null {
+export function activeValue(items: readonly ChatItem[], id: string): { ar: string; en: string } | null {
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i]!;
     if (it.type !== "reply") continue;
-    if (it.reply.scenario?.id === id) return it.reply.scenario.value_ar;
-    if (it.reply.feedback?.scenario_id === id) return it.reply.feedback.value_ar;
+    // P17 (QA #9): the official English name too, for the English UI's practice bar
+    const sc = it.reply.scenario;
+    if (sc?.id === id) return { ar: sc.value_ar, en: sc.company_value };
+    const fb = it.reply.feedback;
+    if (fb?.scenario_id === id) return { ar: fb.value_ar, en: fb.value };
   }
   return null;
 }

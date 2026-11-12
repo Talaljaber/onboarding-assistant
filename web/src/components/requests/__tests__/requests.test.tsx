@@ -137,7 +137,9 @@ describe("intern: From your mentor", () => {
     expect(section.querySelector('[data-request-row="K05"]')!.textContent).toContain(read.kb_row!.answer_ar);
     const act = section.querySelector("[data-request-activity]") as HTMLAnchorElement;
     expect(act.getAttribute("href")).toBe("#/plan");
-    expect(act.textContent).toContain(listFx.requests[0]!.activity!.title_ar);
+    // P17 (QA #9): the English UI shows the authored English title
+    expect(act.textContent).toContain(listFx.requests[0]!.activity!.title_en);
+    expect(act.textContent).not.toContain(listFx.requests[0]!.activity!.title_ar);
     expect(section.textContent).not.toMatch(/score|grade|correct/i);
   });
 

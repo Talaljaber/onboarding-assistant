@@ -394,6 +394,17 @@ def _progress_of(request: Request, store: Any, profile_id: str, prof: dict[str, 
 
 
 # ------------------------------------------------------------------ mentor requests (P13.2) helpers
+def _request_stamps(store: Any, intern_id: str | None = None) -> dict[str, list[str]]:
+    """P17 (QA #8): the interns' mentor-request replies and status changes, for "last active" (none when the
+    requests table cannot be used now: the rest of the admin view still works)."""
+    reqs = store.mentor_requests(intern_id=intern_id) if intern_id else store.mentor_requests()
+    if not reqs:
+        return {}
+    counts = store.request_comment_counts([str(r["id"]) for r in reqs]) or {}
+    rows = [{**r, "comment_count": counts.get(str(r["id"]), 0)} for r in reqs]
+    return interns_view.request_stamps(rows, store.request_comments)
+
+
 def _requests_or_503(value: Any) -> Any:
     if value is None:
         raise ApiError("requests_unavailable", 503, "mentor requests are not available on this store now")
@@ -682,11 +693,12 @@ def build_router() -> APIRouter:
         rows = store.list_interns() or []
         profiles = store.intern_profiles()
         act = store.activity([str(p["id"]) for p in profiles])
+        stamps = _request_stamps(store)
         out = []
         for i in rows:
             mine = [p for p in profiles if str(p.get("intern_id")) == i["id"]]
             ids = {str(p["id"]) for p in mine}
-            out.append(interns_view.summary_row(i, mine, _group(act, ids), plan))
+            out.append(interns_view.summary_row(i, mine, _group(act, ids), plan, stamps.get(str(i["id"]), [])))
         return _json(AdminInternsResponse(interns=out, label_ar=INTERNS_LABEL_AR))
 
     @r.post("/admin/interns", status_code=201, dependencies=ADMIN_ONLY)
@@ -723,7 +735,8 @@ def build_router() -> APIRouter:
             row = agent.kb.get(kid)
             return row.topic if row is not None else None
 
-        return _json(interns_view.detail(intern, profiles, act, agent.features.plan, scenario_value, kb_topic))
+        extra = _request_stamps(store, str(intern["id"])).get(str(intern["id"]), [])
+        return _json(interns_view.detail(intern, profiles, act, agent.features.plan, scenario_value, kb_topic, extra))
 
     # -------------------------------------------------------------------------- mentor requests (P13.2)
     @r.get("/requests")

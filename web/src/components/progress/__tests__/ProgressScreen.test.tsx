@@ -41,6 +41,9 @@ describe("ProgressScreen", () => {
     const dialog = await screen.findByRole("dialog");
     // It names everything the reset deletes, not only the activity progress.
     expect(dialog).toHaveTextContent("تقدم مسار المبيعات والمواقف التي تدربت عليها ومحاولات الاختبار التدريبي");
+    // P17 (QA medium #3): the wording is true — the server's ticks go too, so the mentor sees 0%
+    expect(dialog).toHaveTextContent("فيرى مشرفك تقدمك 0%");
+    expect(dialog.textContent).not.toContain("فقط");
     await userEvent.click(screen.getByRole("button", { name: "إلغاء" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("img", { name: /نسبة الإنجاز 25/ })).toBeInTheDocument();
@@ -49,6 +52,8 @@ describe("ProgressScreen", () => {
     await userEvent.click(confirm);
     await waitFor(() => expect(screen.getByRole("img", { name: "نسبة الإنجاز 0 بالمئة" })).toBeInTheDocument());
     expect(screen.getByText("لم تُجرَ محاولة بعد")).toBeInTheDocument();
+    expect(await screen.findByText("أُعيد ضبط التقدم إلى 0% — هنا وعند مشرفك.")).toBeInTheDocument();
+    expect(screen.queryByText(/من هذا المتصفح فقط/)).toBeNull();
   });
 
   it("lists a scenario whose plan activity was ticked as practised, like the scenarios screen", async () => {

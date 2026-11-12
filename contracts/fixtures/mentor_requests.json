@@ -18,7 +18,8 @@
         "id": "SA-D30-quiz",
         "kind": "quiz",
         "title_ar": "اختبار قصير",
-        "milestone": "Day 30"
+        "milestone": "Day 30",
+        "title_en": "Short quiz"
       },
       "comment_count": 0
     },

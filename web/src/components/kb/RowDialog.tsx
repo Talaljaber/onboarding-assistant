@@ -5,6 +5,8 @@ import { getKbImpact } from "@/api/client";
 import type { InternPublic, KbNewRow, KbPatch, KbRow } from "@/api/types";
 import { useLang, useT } from "@/i18n";
 import { internName } from "@/lib/intern";
+import { pluralForm } from "@/lib/plural";
+import { topicLabel } from "@/lib/topic";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { Notice } from "../ui/Notice";
@@ -91,15 +93,24 @@ function ImpactLine({ id }: { id: string }) {
   return (
     <div data-kb-impact>
       <Notice tone="suggest" icon="info">
-        <p className="font-semibold">{t("recall.impact", { n: interns.length, names })}</p>
+        {/* P17 (QA #7): Arabic number agreement («لمتدرب واحد», «لمتدربَين», «لـ 3 متدربين») */}
+        <p className="font-semibold">{t(`p17.impact${pluralForm(interns.length, lang)}`, { n: interns.length, names })}</p>
         <p className="mt-1 text-fg-2">{t("recall.impactNote")}</p>
       </Notice>
     </div>
   );
 }
 
+/** P17 (QA #7): numbers in the keyword that the row text does not hold («17 showrooms» after 17 became 18). */
+export function staleKeywordNumbers(keyword: string, answer: string): string[] {
+  const nums = (s: string) => (s.replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x0660)).match(/\d+(?:[.,]\d+)?/g) ?? []);
+  const inText = new Set(nums(answer));
+  return [...new Set(nums(keyword))].filter((n) => !inText.has(n));
+}
+
 export function RowDialog({ row, nextId, topics, onClose, onSubmit }: RowDialogProps) {
   const t = useT();
+  const { lang } = useLang();
   const [d, setD] = useState<Draft>(() => draftOf(row, topics));
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState<string | null>(null);
@@ -116,7 +127,11 @@ export function RowDialog({ row, nextId, topics, onClose, onSubmit }: RowDialogP
   const focusOn = (target: keyof Draft | "save") => setFocusSeq((cur) => ({ n: (cur?.n ?? 0) + 1, target }));
   const answerLen = d.answer.trim().length;
   const set = (k: keyof Draft) => (v: string) => setD((cur) => ({ ...cur, [k]: v }));
-  const options = (topics.includes(d.topic) || d.topic === "" ? topics : [d.topic, ...topics]).map((x) => ({ value: x, label: x }));
+  const options = (topics.includes(d.topic) || d.topic === "" ? topics : [d.topic, ...topics]).map((x) => ({
+    value: x,
+    label: topicLabel(x, lang), // P17 (QA #7): the Arabic topic names in the Arabic UI; the value stays the key
+  }));
+  const stale = staleKeywordNumbers(d.keyword, d.answer);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -228,7 +243,10 @@ export function RowDialog({ row, nextId, topics, onClose, onSubmit }: RowDialogP
             maxLength={KB_LIMITS.keyword.max}
             onChange={(e) => set("keyword")(e.target.value)}
             aria-invalid={errors.keyword ? true : undefined}
-            description={errors.keyword}
+            description={
+              errors.keyword ??
+              (stale.length > 0 ? <span data-keyword-stale>{t("p17.keywordStale", { n: stale.join(", ") })}</span> : undefined)
+            }
           />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_8rem]">

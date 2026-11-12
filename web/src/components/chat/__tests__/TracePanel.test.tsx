@@ -127,3 +127,14 @@ describe("TracePanel English translation line (P11.1)", () => {
     expect(el.querySelector("[data-translation]")).toHaveTextContent("foreign_number");
   });
 });
+
+describe("TracePanel retrieval topics (P17, QA #10)", () => {
+  it("shows the Arabic topic names in the Arabic UI and the English ones in the English UI", () => {
+    const topics = (base.retrieval?.hits ?? []).map((h) => h.topic);
+    expect(topics).toContain("Policy");
+    const ar = show(null, "ar");
+    const cells = [...ar.querySelectorAll("tbody td")].map((td) => td.textContent?.trim());
+    expect(cells).toContain("السياسات");
+    expect(cells).not.toContain("Policy");
+  });
+});

@@ -33,6 +33,17 @@ describe("AboutScreen", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("says what is stored where, truthfully (P17, QA #5)", () => {
+    stubApi();
+    renderScreen(<AboutScreen />, { role: null });
+    const text = document.querySelector("[data-screen=about]")!.textContent ?? "";
+    expect(text).toContain("تقدمك وعلامات الاختبار والتدريب تُحفظ على الخادم ليراها مشرفك");
+    expect(text).toContain("ردود طلبات المشرف ومرفقاتها تُحفظ على الخادم");
+    expect(text).toContain("نص المحادثة لا يُحفظ على الخادم");
+    expect(text).toContain("استيراد المعرفة يحفظ المقاطع المعتمدة فقط");
+    expect(text).not.toContain("والتقدم ونتائج الاختبار والتدريب تُحفظ في المتصفح");
+  });
+
   it("offers a retry when the server status cannot load", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("offline"))));
     renderScreen(<AboutScreen />, { role: null });

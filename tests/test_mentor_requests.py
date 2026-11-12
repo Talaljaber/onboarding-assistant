@@ -264,3 +264,30 @@ def test_unavailable_store_answers_503(env: Env, monkeypatch: pytest.MonkeyPatch
     err(client.get(f"/api/requests?profile_id={pid}"), 503, "requests_unavailable")
     err(client.post("/api/admin/requests", json={"intern_id": sara.id, "kind": "do", "title": "t"}, headers=auth),
         503, "requests_unavailable")
+
+
+def test_last_active_counts_request_replies_and_status_changes(env: Env) -> None:
+    """P17 (QA #8): the admin's "last active" includes the intern's replies on a request and status changes;
+    the admin's own reply does not count, and a request nobody touched yet does not either."""
+    client, auth, _ = env
+    sara = roster(client)[0]
+    pid = session(client, sara.id)
+    req = create(client, auth, {"intern_id": sara.id, "kind": "read", "title": "اقرأ القيم"}).requests[0]
+
+    def last() -> tuple[str | None, str | None]:
+        d = client.get(f"/api/admin/interns/{sara.id}", headers=auth).json()["last_active"]
+        row = next(i for i in client.get("/api/admin/interns", headers=auth).json()["interns"] if i["id"] == sara.id)
+        return d, row["last_active"]
+
+    assert last() == (None, None)
+    client.post(f"/api/admin/requests/{req.id}/comments", json={"body": "ابدأ بالقيم", "files": []}, headers=auth)
+    assert last() == (None, None)
+    r = client.post(f"/api/requests/{req.id}/comments", json={"profile_id": pid, "body": "قرأتها", "files": []})
+    assert r.status_code == 201, r.text
+    replied = last()
+    assert replied[0] is not None and replied[0] == replied[1]
+    moved = MentorRequest.model_validate(
+        client.patch(f"/api/requests/{req.id}", json={"profile_id": pid, "status": "done"}).json())
+    after = last()
+    assert after[0] == after[1] and after[0] is not None and after[0] >= replied[0]
+    assert after[0][:19] == moved.status_changed_at[:19]

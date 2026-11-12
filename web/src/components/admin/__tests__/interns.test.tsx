@@ -137,8 +137,11 @@ describe("admin intern detail", () => {
 
   it("names activities in the timeline and shows the newest 15 with «show more» (P16.4)", async () => {
     const act = detailFx.timeline.find((e) => e.kind === "activity")!;
-    const acts: { id: string; title_ar: string }[] = detailFx.progress.milestones.flatMap((m) => [...m.activities]);
-    const title = acts.find((a) => a.id === act.ids[0])!.title_ar;
+    const acts: { id: string; title_ar: string; title_en?: string | null }[] = detailFx.progress.milestones.flatMap((m) => [...m.activities]);
+    const named = acts.find((a) => a.id === act.ids[0])!;
+    // P17 (QA #9): the English UI names the activity in English, never the Arabic title
+    const title = named.title_en!;
+    expect(title).toBeTruthy();
     const many = { ...detailFx, timeline: Array.from({ length: 20 }, () => act) };
     backend({ [`GET /api/admin/interns/${detailFx.intern.id}`]: () => json(many) });
     mount(<InternDetailScreen />);
@@ -146,6 +149,7 @@ describe("admin intern detail", () => {
     const items = () => document.querySelectorAll("[data-detail-timeline] > li");
     expect(items()).toHaveLength(15);
     expect(items()[0]!.textContent).toContain(title);
+    expect(items()[0]!.textContent).not.toContain(named.title_ar);
     expect(items()[0]!.textContent).toContain(act.ids[0]!);
     await userEvent.click(screen.getByRole("button", { name: "Show more (5)" }));
     expect(items()).toHaveLength(20);

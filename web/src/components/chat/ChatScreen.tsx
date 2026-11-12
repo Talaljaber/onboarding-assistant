@@ -6,7 +6,7 @@
 // Rumour Check chip first.
 import { useEffect, useRef, useState } from "react";
 import { currentPath, navigate, replace } from "@/router";
-import { useT } from "@/i18n";
+import { useLang, useT } from "@/i18n";
 import { FirstDayCard } from "@/components/welcome/FirstDayCard";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { LIMITS } from "@/api/types";
@@ -52,6 +52,7 @@ const ANSWER_KINDS = new Set(["answer", "partial", "unconfirmed", "refusal", "em
 function ChatInner() {
   const app = useAppState();
   const t = useT();
+  const { lang } = useLang();
   const chat = useChat();
   const { items, busy, active } = chat;
   const wide = useMediaQuery("(min-width: 1024px)");
@@ -177,6 +178,7 @@ function ChatInner() {
         i.type === "reply" && (i.reply.kind === "scenario_start" || i.reply.kind === "scenario_feedback"),
     )?.id;
   const value = active ? activeValue(items, active) : null;
+  const valueText = value ? (lang === "en" ? value.en : value.ar) : "";
   const customerIds = customerTurnIds(items);
 
   const userTurns = items.filter((i) => i.type === "user").length;
@@ -199,11 +201,12 @@ function ChatInner() {
       )}
     >
       <div className="flex min-w-0 flex-1 flex-col pt-3 sm:pt-6">
-        <div className="mb-2 flex items-center justify-between gap-3 sm:mb-4">
+        {/* P17 (QA medium #1): wraps rather than overflow at 360 px (English "New conversation" is long). */}
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 sm:mb-4">
           <h1 className="text-xl font-bold leading-snug text-fg-1 sm:text-2xl">{t("chat.title")}</h1>
           {/* Only offered once there is something to clear (a disabled ghost button read as broken). */}
           {items.length > 0 && (
-            <div className="-me-3 flex shrink-0 items-center">
+            <div className="-me-3 ms-auto flex shrink-0 items-center">
               <Button
                 variant="ghost"
                 icon="calendar"
@@ -221,26 +224,6 @@ function ChatInner() {
           )}
         </div>
 
-        {recalled.length > 0 && (
-          <div
-            data-recall-banner
-            role="status"
-            className={cn(surface.amber, "mb-3 flex min-h-11 items-center gap-2 ps-3 pe-1")}
-          >
-            <Icon name="alert" size={16} className="shrink-0 text-amber-ink" />
-            <p className="min-w-0 flex-1 text-sm font-semibold text-fg-1">
-              {t("chatUx.recallBanner", { n: recalled.length })}
-            </p>
-            <button
-              type="button"
-              onClick={showFirstRecalled}
-              className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-3 text-sm font-semibold text-accent transition-colors duration-(--da-motion-fast) hover:bg-surface-0"
-            >
-              {t("chatUx.recallShow")}
-            </button>
-          </div>
-        )}
-        <MentorRequestsPanel />
         {((items.length === 0 && !active) || (items.length > 0 && firstDayOpen)) && (
           <div className="mb-4">
             <FirstDayCard key={items.length === 0 ? "home" : "link"} defaultOpen={items.length > 0} />
@@ -323,12 +306,36 @@ function ChatInner() {
             "lg:-mx-8 lg:px-8",
           )}
         >
+          {/* P17 (QA B1): the recall banner and the mentor bar sit in the dock, so a long chat that opens at its
+              newest message shows them without scrolling (they used to sit above the thread, off-screen). */}
+          <div data-chat-strip className="mb-2 flex flex-wrap gap-2 empty:hidden">
+            {recalled.length > 0 && (
+              <div
+                data-recall-banner
+                role="status"
+                className={cn(surface.amber, "flex min-h-11 min-w-0 flex-[1_1_14rem] items-center gap-2 ps-3 pe-1")}
+              >
+                <Icon name="alert" size={16} className="shrink-0 text-amber-ink" />
+                <p className="min-w-0 flex-1 text-sm font-semibold text-fg-1">
+                  {t("chatUx.recallBanner", { n: recalled.length })}
+                </p>
+                <button
+                  type="button"
+                  onClick={showFirstRecalled}
+                  className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-3 text-sm font-semibold text-accent transition-colors duration-(--da-motion-fast) hover:bg-surface-0"
+                >
+                  {t("chatUx.recallShow")}
+                </button>
+              </div>
+            )}
+            <MentorRequestsPanel docked />
+          </div>
           {active && (
             <div data-practice-banner className={`${surface.soft} da-rise-in mb-2 flex min-h-11 items-center gap-2 ps-3 pe-1`}>
               <Icon name="flask" size={16} className="shrink-0 text-accent" />
               <p className="min-w-0 flex-1 truncate text-sm font-semibold text-fg-1">
                 <span className="sr-only">{t("scenario.title")}: </span>
-                {t("scenario.banner", { id: active, value: value ?? "" })}
+                {t("scenario.banner", { id: active, value: valueText })}
               </p>
               <button
                 type="button"

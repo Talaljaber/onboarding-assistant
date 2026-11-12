@@ -1279,6 +1279,8 @@ export interface LinkedActivity {
   kind: ActivityKind;
   title_ar: string;
   milestone: MilestoneKey;
+  /** P17: the authored English title (English UI only); null or absent when there is none. */
+  title_en?: string | null;
 }
 
 export interface MentorRequest {
@@ -1351,7 +1353,13 @@ export interface MentorRequestDeleted {
 }
 
 function isLinkedActivity(x: unknown): x is LinkedActivity {
-  return isObj(x) && isStr(x.id) && isStr(x.title_ar) && isOneOf(MILESTONES, x.milestone);
+  return (
+    isObj(x) &&
+    isStr(x.id) &&
+    isStr(x.title_ar) &&
+    isOneOf(MILESTONES, x.milestone) &&
+    (x.title_en === undefined || x.title_en === null || isStr(x.title_en))
+  );
 }
 
 export function isMentorRequest(x: unknown): x is MentorRequest {

@@ -549,3 +549,25 @@ def test_english_units_in_number_spans() -> None:
     assert [(s.value, s.unit) for s in number_spans("The number of showrooms is 20")] == [("20", "معرض")]
     assert [(s.value, s.unit) for s in number_spans("probation is 90 days")] == [("90", "يوم")]
     assert [(s.value, s.unit) for s in number_spans("founded in 1991")] == [("1991", "عام")]
+
+
+# ------------------------------------------------------------------ P17 (QA medium #2)
+
+@pytest.mark.parametrize(
+    ("text", "claims"),
+    [
+        ("مديري قال إنه عنا 20 معرض، صح؟", ["مديري قال إنه عنا 20 معرض"]),
+        ("فترة التجربة 60 يوم، مزبوط؟", ["فترة التجربة 60 يوم"]),
+        ("عنا 17 معرض. صحيح؟", ["عنا 17 معرض"]),
+        ("We have 20 showrooms, right?", ["We have 20 showrooms"]),
+        ("The probation is 60 days, correct? True?", ["The probation is 60 days"]),
+        ("صح؟", []),
+    ],
+)
+def test_a_pure_tag_question_is_not_a_claim(text: str, claims: list[str]) -> None:
+    assert [c.text for c in factcheck.split_claims(text)[0]] == claims
+
+
+def test_premise_question_gets_no_not_found_card_for_its_tag(agent: Agent) -> None:
+    resp = check(agent, "مديري قال إنه عنا 20 معرض، صح؟")
+    assert [(c.label, c.source.id if c.source else None) for c in resp.claims] == [("differs", "K02")]

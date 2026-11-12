@@ -617,7 +617,7 @@ otherwise the Arabic with `lang="ar" dir="rtl"`; the Arabic UI never shows them.
 
 | Shape | Added field(s) | Key in `content_en.csv` |
 |---|---|---|
-| `Activity`, `DetailActivity` | `title_en` | `activity:<id>` |
+| `Activity`, `DetailActivity`, `LinkedActivity` (P17) | `title_en` | `activity:<id>` |
 | `Milestone` | `learning_goal_en` | `goal:<milestone>` (the official goal is the same for both roles) |
 | `ScenarioOut` | `scenario_en` | `scenario:<S>` |
 | `Option` | `text_en` | `option:<O>` |
