@@ -35,7 +35,8 @@ function useChatDot(item: Item): boolean {
   return item.path === "/chat" && needsAttention(attention);
 }
 
-const DOT = "absolute size-2.5 rounded-full bg-amber ring-2 ring-surface-0";
+// The yellow alone is about 1.5:1 on white: the amber-ink edge keeps the dot visible (>= 3:1).
+const DOT = "absolute size-2.5 rounded-full border border-amber-ink bg-amber ring-2 ring-surface-0";
 
 /** Spoken after the item's label while the dot shows. */
 function DotHint() {
@@ -59,7 +60,7 @@ function SideLink({ item, current }: { item: Item; current: boolean }) {
           current ? "bg-accent-soft text-accent" : "text-fg-2 hover:bg-surface-2 hover:text-fg-1",
         )}
       >
-        {/* Current page: a teal bar on the start edge (shape, not only colour). */}
+        {/* Current page: a blue bar on the start edge (shape, not only colour). */}
         {current && <span aria-hidden="true" className="absolute inset-y-2 start-0 w-1 rounded-full bg-accent max-lg:hidden" />}
         <span className="relative shrink-0">
           <Icon name={item.icon} size={20} className="shrink-0" />

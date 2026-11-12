@@ -77,10 +77,10 @@ export function Header({ health }: { health: Health | null }) {
       role="note"
       aria-label={chipLabel}
       title={chipLabel}
-      className={cn(pill, "m-0 min-w-0 border-line bg-surface-0 ps-1.5 pe-3 text-fg-1 shadow-1")}
+      className={cn(pill, "m-0 min-w-0 border-line bg-surface-0 ps-1.5 pe-3 text-fg-1 shadow-1 max-[23.5rem]:ps-3")}
       data-testid="role-chip"
     >
-      <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-soft text-accent">
+      <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-soft text-accent max-[23.5rem]:hidden">
         <Icon name={role === "Sales" ? "briefcase" : "map"} size={16} />
       </span>
       <span aria-hidden="true" className="truncate">
@@ -189,7 +189,7 @@ export function Header({ health }: { health: Health | null }) {
             >
               <Icon name="settings" size={20} />
               {forceOffline && (
-                <span aria-hidden="true" className="absolute end-1.5 top-1.5 size-2 rounded-full bg-amber ring-2 ring-surface-0" />
+                <span aria-hidden="true" className="absolute end-1 top-1 size-2.5 rounded-full border border-amber-ink bg-amber ring-2 ring-surface-0" />
               )}
             </button>
           </div>

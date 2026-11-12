@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div
               data-shell
               role="note"
-              className="flex items-center gap-2 border-b border-line bg-surface-1 py-1.5 ps-4 pe-1 text-sm text-fg-2 md:hidden"
+              className="flex items-center gap-2 border-b border-sand-line bg-surface-1 py-1.5 ps-4 pe-1 text-sm text-fg-2 md:hidden"
             >
               <Icon name="info" size={16} className="shrink-0 text-fg-3" />
               <span className="flex-1">{t("app.disclaimer")}</span>
@@ -67,7 +67,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <main id="main" tabIndex={-1} className={`flex-1 outline-none ${role ? "pb-(--da-bottom-nav)" : ""}`}>
             <HealthContext.Provider value={health}>{children}</HealthContext.Provider>
           </main>
-          <footer data-shell className="hidden border-t border-line px-6 py-4 text-center text-xs text-fg-3 md:block">
+          <footer data-shell className="hidden border-t border-sand-line bg-surface-1 px-6 py-4 text-center text-xs text-fg-3 md:block">
             {t("app.disclaimer")}
           </footer>
         </div>
