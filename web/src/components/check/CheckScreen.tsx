@@ -2,7 +2,7 @@
 // user's own words and the company row verbatim. Nothing on a card is generated text.
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { postCheck } from "@/api/client";
-import { CHECK_LIMITS, type CheckClaim, type CheckLabel, type CheckResponse, type Source } from "@/api/types";
+import { CHECK_LIMITS, quizErrorReason, type CheckClaim, type CheckLabel, type CheckRequest, type CheckResponse, type Source } from "@/api/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
@@ -16,6 +16,7 @@ import { useServerLabel, useT, type DictKey } from "@/i18n";
 import { useAppState } from "@/state/useAppState";
 import { useMyQuestions } from "@/components/questions/myQuestions"; // P18.1
 import { SendClaimButton } from "@/components/questions/SendToMentor"; // P18.1
+import { QuizLockNotice } from "@/components/quiz/QuizLockNotice"; // P23.2
 
 /** P18.1: claims with no confirming row can be sent to the mentor. */
 const SEND_LABELS: ReadonlySet<CheckLabel> = new Set<CheckLabel>(["not_found", "related"]);
@@ -167,6 +168,8 @@ export default function CheckScreen() {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [result, setResult] = useState<CheckResponse | null>(null);
+  // P23.2: a locked quiz is open (`reason:quiz_open`): the server checks nothing until it ends
+  const [quizOpen, setQuizOpen] = useState(false);
   const seq = useRef(0);
   const footer = useServerLabel(result?.label_ar, "check.footer");
   const trimmed = text.trim();
@@ -178,10 +181,19 @@ export default function CheckScreen() {
     const mine = ++seq.current;
     setBusy(true);
     setFailed(false);
-    const res = await postCheck({ text: body, force_offline: app.forceOffline });
+    setQuizOpen(false);
+    // P23.2: the profile lets the server see an open locked quiz
+    const req: CheckRequest = { text: body, force_offline: app.forceOffline, ...(app.profileId ? { profile_id: app.profileId } : {}) };
+    const res = await postCheck(req);
     if (mine !== seq.current) return;
     setBusy(false);
     if (!res.ok) {
+      const e = res.error;
+      if (e.kind === "http" && e.status === 400 && typeof e.detail === "object" && quizErrorReason(e.detail?.message ?? "")?.reason === "quiz_open") {
+        setResult(null);
+        setQuizOpen(true);
+        return;
+      }
       setFailed(true);
       return;
     }
@@ -242,6 +254,8 @@ export default function CheckScreen() {
             </Button>
           </div>
         </form>
+
+        {quizOpen && <QuizLockNotice />}
 
         {failed && (
           <Notice tone="danger" role="alert" action={<Button variant="secondary" size="md" onClick={() => void run(text)}>{t("common.retry")}</Button>}>

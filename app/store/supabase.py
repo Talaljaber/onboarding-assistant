@@ -83,12 +83,21 @@ from app.store.base import (  # P20 practice quizzes
     quiz_set_record,
     quiz_set_row,
 )
+from app.store.base import (  # P23 quiz runs
+    QUIZ_RUN_COLUMNS,
+    quiz_run_attempt_record,
+    quiz_run_attempt_row,
+    quiz_run_close_changes,
+    quiz_run_record,
+    quiz_run_row,
+)
 from app.store.local import LocalStore
 
 T = TypeVar("T")
 _QUESTION_SELECT = ",".join(QUESTION_COLUMNS)  # P18.1
 _QUIZ_SET_SELECT = ",".join(QUIZ_SET_COLUMNS)  # P20
 _QUIZ_ITEM_SELECT = ",".join(QUIZ_ITEM_COLUMNS)  # P20
+_QUIZ_RUN_SELECT = ",".join(QUIZ_RUN_COLUMNS)  # P23
 
 REST_PATH = "/rest/v1"
 CALL_TIMEOUT_S = 3.0
@@ -1279,7 +1288,8 @@ class SupabaseStore:
             for n in range(0, len(qids), _IN_CHUNK):
                 for page in range(_METRICS_MAX_PAGES):
                     rows = self._list("quiz_attempts", {
-                        "select": "profile_id,question_id,correct,at", "question_id": f"in.{_in_list(qids[n:n + _IN_CHUNK])}",
+                        "select": "profile_id,question_id,correct,at,run_id",
+                        "question_id": f"in.{_in_list(qids[n:n + _IN_CHUNK])}",
                         "order": "at.asc,id.asc", "limit": str(_PAGE), "offset": str(page * _PAGE)})
                     out += [quiz_answer_row(r) for r in rows]
                     if len(rows) < _PAGE:
@@ -1287,3 +1297,112 @@ class SupabaseStore:
             return out  # app.quiz_sets orders by the parsed time
 
         return self._imports("quiz_answers", remote, lambda s: s.quiz_answers(qids), None)
+
+    # Quiz runs (P23) -------------------------------------------------------------------------------
+    # Like the quiz sets: never flips to the LocalStore. Without migration 0011 (PostgREST 404/400) or on a failing
+    # call only the run routes are unavailable (None -> 503).
+
+    def quiz_runs(
+        self, *, ids: list[str] | None = None, profile_ids: list[str] | None = None,
+        intern_ids: list[str] | None = None, set_ids: list[str] | None = None,
+    ) -> list[dict[str, Any]] | None:
+        params = {"select": _QUIZ_RUN_SELECT, "order": "started_at.asc,id.asc"}
+        for col, values in (("id", ids), ("profile_id", profile_ids), ("intern_id", intern_ids)):
+            if values is not None:
+                clean = [i for i in (valid_uuid(x) for x in values) if i]
+                if not clean:
+                    return []
+                params[col] = f"in.{_in_list(clean[:_IN_CHUNK])}"
+        if set_ids is not None:
+            sets = [s for s in set_ids if isinstance(s, str) and (s == "official" or valid_uuid(s) == s)]
+            if not sets:
+                return []
+            params["set_id"] = f"in.{_in_list(sets[:_IN_CHUNK])}"
+
+        def remote() -> list[dict[str, Any]] | None:
+            out: list[dict[str, Any]] = []
+            for page in range(_METRICS_MAX_PAGES):
+                rows = self._list("quiz_runs", {**params, "limit": str(_PAGE), "offset": str(page * _PAGE)})
+                out += [quiz_run_row(r) for r in rows]
+                if len(rows) < _PAGE:
+                    break
+            return sorted(out, key=lambda r: (str(parse_ts(r["started_at"]) or r["started_at"]), r["id"]))
+
+        return self._imports("quiz_runs", remote,
+                             lambda s: s.quiz_runs(ids=ids, profile_ids=profile_ids, intern_ids=intern_ids,
+                                                   set_ids=set_ids), None)
+
+    def _open_run(self, profile_id: str, set_id: str) -> dict[str, Any] | None:
+        found = self._list("quiz_runs", {"select": _QUIZ_RUN_SELECT, "profile_id": f"eq.{profile_id}",
+                                         "set_id": f"eq.{set_id}", "status": "eq.in_progress"})
+        return quiz_run_row(found[0]) if found else None
+
+    def quiz_run_start(self, record: dict[str, Any]) -> dict[str, Any] | None:
+        rec = quiz_run_record(record)
+        if rec is None:
+            log_event("store_rejected", store="supabase", op="quiz_run_start", reason="invalid_input")
+            return None
+
+        def remote() -> dict[str, Any] | None:
+            found = self._open_run(rec["profile_id"], rec["set_id"])
+            if found is not None:
+                return found
+            try:
+                self._req("POST", "quiz_runs", json=rec, prefer="return=minimal")
+            except _Conflict:  # another device started it first (one open run per profile and set): use that one
+                return self._open_run(rec["profile_id"], rec["set_id"])
+            return quiz_run_row(rec)
+
+        return self._imports("quiz_run_start", remote, lambda s: s.quiz_run_start(rec), None)
+
+    def quiz_run_close(self, run_id: str, status: str, finished_at: str) -> dict[str, Any] | None:
+        rid = valid_uuid(run_id)
+        changes = quiz_run_close_changes(status, finished_at)
+        if rid is None:
+            return {}
+        if changes is None:
+            log_event("store_rejected", store="supabase", op="quiz_run_close", reason="invalid_input")
+            return None
+
+        def remote() -> dict[str, Any] | None:
+            self._req("PATCH", "quiz_runs", params={"id": f"eq.{rid}", "status": "eq.in_progress"}, json=changes,
+                      prefer="return=minimal")
+            found = self._list("quiz_runs", {"select": _QUIZ_RUN_SELECT, "id": f"eq.{rid}"})
+            return quiz_run_row(found[0]) if found else {}
+
+        return self._imports("quiz_run_close", remote, lambda s: s.quiz_run_close(rid, status, finished_at), None)
+
+    def quiz_run_answer(self, run: dict[str, Any], question_id: str, option: str, correct: bool) -> bool | None:
+        rec = quiz_run_attempt_record(run, question_id, option, correct)
+        if rec is None:
+            log_event("store_rejected", store="supabase", op="quiz_run_answer", reason="invalid_input")
+            return None
+
+        def remote() -> bool | None:
+            try:
+                self._req("POST", "quiz_attempts", json=rec, prefer="return=minimal")
+            except _Conflict:  # the unique (run_id, question_id) index: this run already has that answer
+                return False
+            return True
+
+        return self._imports("quiz_run_answer", remote, lambda s: s.quiz_run_answer(run, question_id, option, correct),
+                             None)
+
+    def quiz_run_attempts(self, run_ids: list[str]) -> list[dict[str, Any]] | None:
+        rids = sorted({i for i in (valid_uuid(x) for x in run_ids) if i})
+        if not rids:
+            return []
+
+        def remote() -> list[dict[str, Any]] | None:
+            out: list[dict[str, Any]] = []
+            for n in range(0, len(rids), _IN_CHUNK):
+                for page in range(_METRICS_MAX_PAGES):
+                    rows = self._list("quiz_attempts", {
+                        "select": "run_id,question_id,option,correct,at", "run_id": f"in.{_in_list(rids[n:n + _IN_CHUNK])}",
+                        "order": "at.asc,id.asc", "limit": str(_PAGE), "offset": str(page * _PAGE)})
+                    out += [quiz_run_attempt_row(r) for r in rows]
+                    if len(rows) < _PAGE:
+                        break
+            return out
+
+        return self._imports("quiz_run_attempts", remote, lambda s: s.quiz_run_attempts(rids), None)

@@ -1,0 +1,83 @@
+{
+  "run_id": "0000c002-4d3a-4e8b-9c71-2a5d0e7f3b14",
+  "set_id": "0000a001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+  "status": "expired",
+  "started_at": "2026-11-12T09:00:00.000+00:00",
+  "finished_at": "2026-11-12T09:10:00.000+00:00",
+  "total": 3,
+  "answered": 2,
+  "right": 1,
+  "items": [
+    {
+      "item_id": "M001",
+      "question_ar": "كم معرضاً تمتلك المجموعة؟",
+      "options": {
+        "A": "17 معرضاً",
+        "B": "12 معرضاً",
+        "C": "25 معرضاً"
+      },
+      "question_en": null,
+      "options_en": null,
+      "your_option": "A",
+      "correct_option": "A",
+      "right": true,
+      "explanation": {
+        "id": "K02",
+        "topic": "Company",
+        "answer_ar": "تمتلك المجموعة 17 معرضاً في عمان والسلط وإربد والزرقاء والعقبة.",
+        "source_document": "Company Profile 2026",
+        "source_page": 4,
+        "edited": false,
+        "status": "official"
+      }
+    },
+    {
+      "item_id": "M002",
+      "question_ar": "عبر أي نظام يُقدَّم طلب الإجازة؟",
+      "options": {
+        "A": "رسالة إلى الزملاء",
+        "B": "نظام الموارد البشرية",
+        "C": "لوحة الإعلانات في المعرض"
+      },
+      "question_en": null,
+      "options_en": null,
+      "your_option": "C",
+      "correct_option": "B",
+      "right": false,
+      "explanation": {
+        "id": "K16",
+        "topic": "Policy",
+        "answer_ar": "يُقدَّم طلب الإجازة عبر نظام الموارد البشرية ويستلزم موافقة المدير المباشر قبل بدء الإجازة.",
+        "source_document": "General Policies",
+        "source_page": 2,
+        "edited": false,
+        "status": "official"
+      }
+    },
+    {
+      "item_id": "M003",
+      "question_ar": "ما الذي يجب المحافظة عليه بخصوص معلومات الشركة؟",
+      "options": {
+        "A": "نشرها على وسائل التواصل",
+        "B": "سريتها وعدم إفشائها دون تصريح",
+        "C": "مشاركتها مع العملاء"
+      },
+      "question_en": null,
+      "options_en": null,
+      "your_option": null,
+      "correct_option": "B",
+      "right": false,
+      "explanation": {
+        "id": "K17",
+        "topic": "Policy",
+        "answer_ar": "يجب المحافظة على سرية معلومات الشركة وعدم إفشائها دون تصريح.",
+        "source_document": "General Policies",
+        "source_page": 1,
+        "edited": false,
+        "status": "official"
+      }
+    }
+  ],
+  "mode": "checkpoint",
+  "official": false
+}

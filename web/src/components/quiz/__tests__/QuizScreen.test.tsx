@@ -1,114 +1,73 @@
+// The official sample quiz (P23.2: a server run too, never timed or locked).
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import quiz from "@fixtures/quiz.json";
 import quizCheck from "@fixtures/quiz_check.json";
-import { json, renderScreen, stubApi } from "@/components/plan/__tests__/harness";
+import { renderScreen, stubApi } from "@/components/plan/__tests__/harness";
 import { QuizRunner } from "../QuizRunner";
+import { PID, runServer } from "./runServer";
 
-const QuizScreen = () => <QuizRunner setId="official" />;
-
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "#/");
+});
 
 const first = quiz.items[0]!;
 
+function mount() {
+  const srv = runServer({ setId: "official" });
+  const spy = stubApi({ "/api/quiz-sets": srv.handler, "/api/quiz-runs": srv.handler });
+  window.history.replaceState(null, "", "#/quiz?set=official");
+  renderScreen(<QuizRunner setId="official" />, { data: { profile_id: PID } });
+  return { srv, spy };
+}
+
 describe("QuizRunner: the official sample quiz", () => {
-  it("is labelled practice, shows one question at a time and never the answer in the GET", async () => {
-    stubApi();
-    renderScreen(<QuizScreen />);
+  it("is labelled practice, starts at once (no notice, no timer) and shows one question at a time", async () => {
+    const { srv } = mount();
     expect(await screen.findByText(first.question_ar)).toBeInTheDocument();
     expect(screen.getByText("اختبار تدريبي، ليس تقييماً")).toBeInTheDocument();
-    expect(screen.queryByText("الترتيب حسب المسار")).toBeNull();
     expect(screen.getByText("السؤال 1 من 5")).toBeInTheDocument();
     expect(screen.getAllByRole("radio")).toHaveLength(3);
+    expect(document.querySelector("[data-run-gate]")).toBeNull();
+    expect(document.querySelector("[data-countdown]")).toBeNull();
+    expect(srv.runs[0]!.run.locked).toBe(false);
     expect(JSON.stringify(quiz)).not.toContain("correct_option");
-    expect(screen.getByRole("button", { name: "تحقق" })).toBeDisabled();
   });
 
   it("keeps Arabic options in RTL", async () => {
-    stubApi();
-    renderScreen(<QuizScreen />);
+    mount();
     const span = (await screen.findByText(first.options.A)) as HTMLElement;
     expect(span).toHaveAttribute("dir", "rtl");
     expect(span).toHaveAttribute("lang", "ar");
   });
 
-  it("checks an answer, shows the verbatim row with id, document and page, then moves on", async () => {
-    const spy = stubApi();
-    renderScreen(<QuizScreen />);
-    await userEvent.click(await screen.findByRole("radio", { name: first.options.A }));
-    await userEvent.click(screen.getByRole("button", { name: "تحقق" }));
-    expect(await screen.findByText("إجابة صحيحة")).toBeInTheDocument();
-    expect(screen.getByText(quizCheck.explanation.answer_ar)).toBeInTheDocument();
-    expect(screen.getByText("K14")).toBeInTheDocument();
-    expect(screen.getByText("On-Boarding Policy")).toBeInTheDocument();
-    expect(screen.getByText("صفحة 4")).toBeInTheDocument();
-    const post = spy.mock.calls.find((c) => String(c[0]).startsWith("/api/quiz/check"))!;
-    expect(JSON.parse(String((post[1] as RequestInit).body))).toMatchObject({ id: "Q01", option: "A" });
-    await userEvent.click(screen.getByRole("button", { name: "التالي" }));
-    expect(await screen.findByText("السؤال 2 من 5")).toBeInTheDocument();
-  });
-
-  it("after a wrong answer marks the correct option and the wrong pick with an icon and text", async () => {
-    stubApi({ "/api/quiz/check": () => json({ ...quizCheck, correct: false, correct_option: "B" }) });
-    renderScreen(<QuizScreen />);
-    await userEvent.click(await screen.findByRole("radio", { name: first.options.A }));
-    await userEvent.click(screen.getByRole("button", { name: "تحقق" }));
-    expect(await screen.findByText("إجابة غير صحيحة")).toBeInTheDocument();
-    const radio = (k: "A" | "B" | "C") => screen.getAllByRole("radio").find((r) => r.textContent?.includes(first.options[k]))!;
-    expect(radio("B").querySelector('[data-verdict="correct"]')).toHaveTextContent("الإجابة الصحيحة");
-    expect(radio("B").querySelector("svg")).not.toBeNull();
-    expect(radio("A").querySelector('[data-verdict="wrong"]')).toHaveTextContent("إجابتك");
-    expect(radio("A")).toHaveAttribute("aria-checked", "true");
-    expect(radio("C").querySelector("[data-verdict]")).toBeNull();
-  });
-
-  it("finishing records a practice attempt (counts only) and completes the Day 30 quiz activity", async () => {
-    const wrongAnswer = { ...quizCheck, correct: false, correct_option: "B" };
-    let n = 0;
-    stubApi({ "/api/quiz/check": () => json(n++ === 0 ? wrongAnswer : quizCheck) });
-    renderScreen(<QuizScreen />);
+  it("finishing shows the report, records a practice attempt and ticks the Day 30 quiz activity on the server", async () => {
+    const user = userEvent.setup();
+    const { spy } = mount();
+    await screen.findByText(first.question_ar);
     for (let i = 0; i < 5; i++) {
-      await userEvent.click((await screen.findAllByRole("radio"))[0]!);
-      await userEvent.click(screen.getByRole("button", { name: "تحقق" }));
-      if (i === 0) {
-        expect(await screen.findByText("إجابة غير صحيحة")).toBeInTheDocument();
-        expect(screen.getByRole("link", { name: "اسأل المساعد عن هذا السؤال" })).toHaveAttribute(
-          "href",
-          // P22 (owner): the question with its three options and the intern's pick
-          `#/chat?ask=${encodeURIComponent(
-            `سؤال من الاختبار: ${first.question_ar} الخيارات: أ) ${first.options.A} ب) ${first.options.B} ج) ${first.options.C} — اخترتُ: أ`,
-          )}`,
-        );
-      } else await screen.findByText("إجابة صحيحة");
-      await userEvent.click(screen.getByRole("button", { name: "التالي" }));
+      const id = document.querySelector("[data-question-id]")!.getAttribute("data-question-id")!;
+      const item = quiz.items.find((q) => q.id === id)!;
+      // the test server's key: A is right; the first question is answered B (wrong)
+      await user.click(screen.getByRole("radio", { name: item.options[i === 0 ? "B" : "A"] }));
+      await user.click(screen.getByRole("button", { name: "اعتمد الإجابة" }));
+      if (i < 4) await waitFor(() => expect(document.querySelector(`[data-question-id="${id}"]`)).toBeNull());
     }
-    expect(await screen.findByText("أنهيت 5 أسئلة")).toBeInTheDocument();
-    expect(screen.getByText("4 من 5 صحيحة (تدريب)")).toBeInTheDocument();
-    // the line already says "practice": no second, separate practice badge
-    expect(screen.queryByText("تدريب", { exact: true })).toBeNull();
-    expect(screen.getByRole("button", { name: "أعد المحاولة" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "إنهاء الاختبار" }));
+    expect(await screen.findByRole("heading", { name: "تقرير الاختبار" })).toBeInTheDocument();
+    expect(document.querySelector("[data-run-score]")).toHaveTextContent("نتيجتك: 4 / 5");
+    expect(screen.getAllByText(quizCheck.explanation.answer_ar)).toHaveLength(5);
+    // the official quiz: the assistant hand-off, no mentor hand-off
     expect(screen.getByRole("link", { name: "اسأل المساعد عن هذا السؤال" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "اسأل مشرفي عن هذا" })).toBeNull();
     expect(await screen.findByText("تم تحديث التقدم: 12%")).toBeInTheDocument();
     await waitFor(() => expect(document.body.textContent).not.toMatch(/درجة|score/i));
-    await userEvent.click(screen.getByRole("button", { name: "أعد المحاولة" }));
-    expect(await screen.findByText("السؤال 1 من 5")).toBeInTheDocument();
-  });
-
-  it("finishing sends the quiz activity tick to the server for a signed-in intern", async () => {
-    const pid = "6f1c2b9e-0000-4000-8000-000000000001";
-    const spy = stubApi();
-    renderScreen(<QuizScreen />, { data: { profile_id: pid } });
-    for (let i = 0; i < 5; i++) {
-      await userEvent.click((await screen.findAllByRole("radio"))[0]!);
-      await userEvent.click(screen.getByRole("button", { name: "تحقق" }));
-      await screen.findByText("إجابة صحيحة");
-      await userEvent.click(screen.getByRole("button", { name: "التالي" }));
-    }
-    expect(await screen.findByText("أنهيت 5 أسئلة")).toBeInTheDocument();
     const puts = spy.mock.calls
       .filter(([url, init]) => url === "/api/progress" && (init as RequestInit | undefined)?.method === "PUT")
       .map(([, init]) => JSON.parse(String((init as RequestInit).body)) as unknown);
-    expect(puts).toEqual([{ profile_id: pid, activity_ids: ["SA-D30-quiz"], completed: true }]);
+    expect(puts).toEqual([{ profile_id: PID, activity_ids: ["SA-D30-quiz"], completed: true }]);
+    expect(spy.mock.calls.some(([u]) => String(u).startsWith("/api/quiz/check"))).toBe(false);
   });
 });

@@ -1,0 +1,52 @@
+{
+  "id": "0000c002-4d3a-4e8b-9c71-2a5d0e7f3b14",
+  "set_id": "0000a001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+  "status": "in_progress",
+  "started_at": "2026-11-12T09:00:00.000+00:00",
+  "deadline_at": "2026-11-12T09:10:00.000+00:00",
+  "remaining_seconds": 412,
+  "items": [
+    {
+      "id": "M001",
+      "question_ar": "كم معرضاً تمتلك المجموعة؟",
+      "options": {
+        "A": "17 معرضاً",
+        "B": "12 معرضاً",
+        "C": "25 معرضاً"
+      },
+      "source_knowledge_id": "K02",
+      "question_en": null,
+      "options_en": null
+    },
+    {
+      "id": "M002",
+      "question_ar": "عبر أي نظام يُقدَّم طلب الإجازة؟",
+      "options": {
+        "A": "رسالة إلى الزملاء",
+        "B": "نظام الموارد البشرية",
+        "C": "لوحة الإعلانات في المعرض"
+      },
+      "source_knowledge_id": "K16",
+      "question_en": null,
+      "options_en": null
+    },
+    {
+      "id": "M003",
+      "question_ar": "ما الذي يجب المحافظة عليه بخصوص معلومات الشركة؟",
+      "options": {
+        "A": "نشرها على وسائل التواصل",
+        "B": "سريتها وعدم إفشائها دون تصريح",
+        "C": "مشاركتها مع العملاء"
+      },
+      "source_knowledge_id": "K17",
+      "question_en": null,
+      "options_en": null
+    }
+  ],
+  "answers": {
+    "M001": "A"
+  },
+  "mode": "checkpoint",
+  "official": false,
+  "locked": true
+}

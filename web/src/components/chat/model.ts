@@ -43,6 +43,8 @@ export interface ReplyItem {
   at?: string;
   /** P14.1: KB version the reply was built on (`trace.retrieval.kb_version`, else the watcher's last known). */
   kbVersion?: string;
+  /** P23.2: the server refused because a locked quiz is open (`quiz_lock`): the quiz to go back to. */
+  quizLock?: { set_id: string };
 }
 export interface ErrorItem {
   id: string;

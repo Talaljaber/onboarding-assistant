@@ -445,6 +445,8 @@ export interface ChatResponse {
   state: ClientState;
   mode: Mode;
   trace: Trace;
+  /** P23: present (and the reply is the fixed lock text) while the intern has an open locked quiz run. */
+  quiz_lock?: QuizLock | null;
 }
 
 // ---------------------------------------------------------------- scenarios
@@ -1041,7 +1043,8 @@ export function isChatResponse(x: unknown): x is ChatResponse {
     isObj(x.state) &&
     isStrOrNull(x.state.active_scenario) &&
     isOneOf(MODES, x.mode) &&
-    isTrace(x.trace)
+    isTrace(x.trace) &&
+    (x.quiz_lock === undefined || x.quiz_lock === null || isQuizLock(x.quiz_lock))
   );
 }
 
@@ -1488,6 +1491,8 @@ export const CHECK_LIMITS = { textMax: 600, claimsMax: 5 } as const;
 export interface CheckRequest {
   text: string;
   force_offline?: boolean;
+  /** P23: the signed-in intern's profile; 400 field "profile_id" `reason:quiz_open` during a locked quiz run. */
+  profile_id?: string | null;
 }
 
 export interface CheckNumbers {
@@ -1880,6 +1885,8 @@ export interface AdminQuizSet {
   created_at: string;
   updated_at: string;
   mode: QuizMode;
+  /** P23: minutes from opening the quiz (1–120); null = no limit. The server always sends it. */
+  time_limit_minutes?: number | null;
 }
 
 /** The built-in official sample quiz (read-only, always open, everyone). */
@@ -1906,6 +1913,8 @@ export interface QuizSetCreate {
   intern_ids?: string[];
   opens_at_percent?: number;
   mode?: QuizMode;
+  /** P23: 1–120 minutes, or null (no limit). */
+  time_limit_minutes?: number | null;
 }
 
 /** `PATCH /api/admin/quiz-sets/{id}`: any field (at least one); publishing an empty set is 400 field "status". */
@@ -1919,6 +1928,8 @@ export interface QuizSetPatch {
   status?: QuizSetStatus;
   /** 400 field "mode" once anyone has answered one of the set's questions. */
   mode?: QuizMode;
+  /** P23: 1–120 minutes; null clears the limit (runs already started keep their deadline). */
+  time_limit_minutes?: number | null;
 }
 
 /** A stored question (admin only): `correct_option` is the item's own answer key; `row` is the cited row
@@ -2005,6 +2016,16 @@ export interface QuizSetSummary {
   mode: QuizMode;
   /** P21.2: the signed-in intern's own shared result (checkpoint sets only; null otherwise or anonymous). */
   my_result?: CheckpointMyResult | null;
+  /** P23: the set's limit in minutes (null = none; always null for the official quiz). */
+  time_limit_minutes?: number | null;
+  /** P23: this profile's open run of the set (resume it with `startQuizRun`), else null. */
+  open_run_id?: string | null;
+  /** P23: seconds left on that open run (null without a limit or without an open run). */
+  open_run_remaining_seconds?: number | null;
+  /** P23: the latest finished or expired run (its review: `getQuizRunReview`), else null. */
+  last_review_run_id?: string | null;
+  /** P23 lock: a checkpoint or timed set (while its run is open the assistant is closed); never the official quiz. */
+  locked?: boolean;
 }
 
 /** P21.2: the intern's own checkpoint result, with the admin's rule (first answer per question). */
@@ -2049,8 +2070,17 @@ export function isAdminQuizSet(x: unknown): x is AdminQuizSet {
     isNum(x.interns_practised) &&
     isStr(x.created_at) &&
     isStr(x.updated_at) &&
-    isOneOf(QUIZ_MODES, x.mode)
+    isOneOf(QUIZ_MODES, x.mode) &&
+    isNumOrNullOrAbsent(x.time_limit_minutes)
   );
+}
+
+function isNumOrNullOrAbsent(x: unknown): boolean {
+  return x === undefined || x === null || isNum(x);
+}
+
+function isStrOrNullOrAbsent(x: unknown): boolean {
+  return x === undefined || x === null || isStr(x);
 }
 
 export function isAdminQuizSetList(x: unknown): x is AdminQuizSetList {
@@ -2130,7 +2160,12 @@ function isQuizSetSummary(x: unknown): x is QuizSetSummary {
     isBool(x.open) &&
     isBool(x.official) &&
     isOneOf(QUIZ_MODES, x.mode) &&
-    (x.my_result === undefined || x.my_result === null || isCheckpointMyResult(x.my_result))
+    (x.my_result === undefined || x.my_result === null || isCheckpointMyResult(x.my_result)) &&
+    isNumOrNullOrAbsent(x.time_limit_minutes) &&
+    isStrOrNullOrAbsent(x.open_run_id) &&
+    isNumOrNullOrAbsent(x.open_run_remaining_seconds) &&
+    isStrOrNullOrAbsent(x.last_review_run_id) &&
+    (x.locked === undefined || isBool(x.locked))
   );
 }
 
@@ -2268,4 +2303,164 @@ function isFinalReportRow(x: unknown): x is FinalReportRow {
 
 export function isFinalReport(x: unknown): x is FinalReport {
   return isObj(x) && isStr(x.generated_at) && isArrayOf(x.interns, isFinalReportRow) && isStr(x.label_ar);
+}
+
+// ---------------------------------------------------------------- P23 quiz runs
+// One sitting of one quiz by one intern, kept on the server: opening a quiz starts or resumes the open run (same
+// questions, same order, answers kept, remaining time) on any device. Answers are locked in and never revealed
+// during the run; the review (the intern's own result) comes when the run is finished or expired.
+
+export const QUIZ_RUN_STATUSES = ["in_progress", "finished", "expired"] as const;
+export type QuizRunStatus = (typeof QUIZ_RUN_STATUSES)[number];
+/** Run errors: 400 `validation_error`, `message: "reason:<code>"` (read it with `quizErrorReason`).
+ *  expired / finished (field "status"): the run is closed, finish it to get the review; answered (field "item_id"):
+ *  one answer per item per run; in_progress (field "status"): the review of an open run; use_run (field "id"):
+ *  `POST /api/quiz/check` for an item of a timed or checkpoint set; quiz_open (field "profile_id"): `POST /api/check`
+ *  during a locked run. */
+export const QUIZ_RUN_REASONS = ["expired", "finished", "answered", "in_progress", "use_run", "quiz_open"] as const;
+export type QuizRunReason = (typeof QUIZ_RUN_REASONS)[number];
+/** The admin's time limit per set, in minutes (empty = no limit). */
+export const QUIZ_TIME_LIMIT = { min: 1, max: 120 } as const;
+
+/** `POST /api/quiz-runs` body: start the profile's run of a set, or resume its open one. */
+export interface QuizRunStart {
+  profile_id: string;
+  set_id: string;
+}
+
+/** A run while it is open: items in the order served (never the correct option), the answers given so far (never
+ *  whether they are right). `deadline_at` and `remaining_seconds` are null without a time limit. */
+export interface QuizRun {
+  id: string;
+  set_id: string;
+  status: QuizRunStatus;
+  started_at: string;
+  deadline_at: string | null;
+  remaining_seconds: number | null;
+  items: QuizItem[];
+  answers: Record<string, QuizOptionKey>;
+  mode: QuizMode;
+  official: boolean;
+  /** P23 lock: a checkpoint or timed set; while it is open the chat and the Rumour Check are closed to the intern. */
+  locked?: boolean;
+}
+
+/** `POST /api/quiz-runs/{id}/answer` body (an item is answered once per run). */
+export interface QuizRunAnswer {
+  profile_id: string;
+  item_id: string;
+  option: QuizOptionKey;
+}
+
+/** The answer was stored; no correctness until the review. */
+export interface QuizRunAnswered {
+  answered: number;
+  total: number;
+  remaining_seconds: number | null;
+  status: QuizRunStatus;
+}
+
+/** One question of a closed run: your answer (null = unanswered, not right), the correct one and the cited row. */
+export interface QuizRunReviewItem {
+  item_id: string;
+  question_ar: string;
+  options: Record<QuizOptionKey, string>;
+  question_en: string | null;
+  options_en: Record<QuizOptionKey, string> | null;
+  your_option: QuizOptionKey | null;
+  correct_option: QuizOptionKey;
+  right: boolean;
+  explanation: Source;
+}
+
+/** The end-of-quiz report (finish, or the review of a closed run): the intern's own result only. */
+export interface QuizRunReview {
+  run_id: string;
+  set_id: string;
+  status: "finished" | "expired";
+  started_at: string;
+  finished_at: string;
+  total: number;
+  answered: number;
+  right: number;
+  items: QuizRunReviewItem[];
+  mode: QuizMode;
+  official: boolean;
+}
+
+const RUN_OPTION_KEYS = ["A", "B", "C"] as const;
+
+export function isQuizRun(x: unknown): x is QuizRun {
+  return (
+    isObj(x) &&
+    isStr(x.id) &&
+    isStr(x.set_id) &&
+    isOneOf(QUIZ_RUN_STATUSES, x.status) &&
+    isStr(x.started_at) &&
+    isStrOrNull(x.deadline_at) &&
+    (x.remaining_seconds === null || isNum(x.remaining_seconds)) &&
+    isArrayOf(x.items, isQuizItem) &&
+    isObj(x.answers) &&
+    Object.values(x.answers).every((v) => isOneOf(RUN_OPTION_KEYS, v)) &&
+    isOneOf(QUIZ_MODES, x.mode) &&
+    isBool(x.official) &&
+    (x.locked === undefined || isBool(x.locked))
+  );
+}
+
+export function isQuizRunAnswered(x: unknown): x is QuizRunAnswered {
+  return (
+    isObj(x) &&
+    isNum(x.answered) &&
+    isNum(x.total) &&
+    (x.remaining_seconds === null || isNum(x.remaining_seconds)) &&
+    isOneOf(QUIZ_RUN_STATUSES, x.status)
+  );
+}
+
+function isQuizRunReviewItem(x: unknown): x is QuizRunReviewItem {
+  return (
+    isObj(x) &&
+    isStr(x.item_id) &&
+    isStr(x.question_ar) &&
+    isOptions(x.options) &&
+    isStrOrNull(x.question_en) &&
+    (x.options_en === null || isOptions(x.options_en)) &&
+    (x.your_option === null || isOneOf(RUN_OPTION_KEYS, x.your_option)) &&
+    isOneOf(RUN_OPTION_KEYS, x.correct_option) &&
+    isBool(x.right) &&
+    isSource(x.explanation)
+  );
+}
+
+export function isQuizRunReview(x: unknown): x is QuizRunReview {
+  return (
+    isObj(x) &&
+    isStr(x.run_id) &&
+    isStr(x.set_id) &&
+    (x.status === "finished" || x.status === "expired") &&
+    isStr(x.started_at) &&
+    isStr(x.finished_at) &&
+    isNum(x.total) &&
+    isNum(x.answered) &&
+    isNum(x.right) &&
+    isArrayOf(x.items, isQuizRunReviewItem) &&
+    isOneOf(QUIZ_MODES, x.mode) &&
+    isBool(x.official)
+  );
+}
+
+/** P23 lock: the chat's reply while the intern has an open locked run names the run, to link back to it. */
+export interface QuizLock {
+  run_id: string;
+  set_id: string;
+  remaining_seconds: number | null;
+}
+
+/** The fixed lock text (the server sends it as the reply's `text_ar` / `text_en`). */
+export const QUIZ_LOCK_TEXT_AR = "لديك اختبار مفتوح. أنهِه أولاً، ثم اسألني ما تريد.";
+export const QUIZ_LOCK_TEXT_EN = "You have an open quiz. Finish it first, then ask me anything.";
+
+export function isQuizLock(x: unknown): x is QuizLock {
+  return isObj(x) && isStr(x.run_id) && isStr(x.set_id) && (x.remaining_seconds === null || isNum(x.remaining_seconds));
 }

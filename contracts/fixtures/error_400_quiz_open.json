@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "validation_error",
+    "message": "reason:quiz_open",
+    "request_id": "3f1c2a9b7d12",
+    "field": "profile_id"
+  }
+}

@@ -166,6 +166,9 @@ export function useChat(): UseChat {
         return;
       }
       const { reply, state, mode, trace } = res.value;
+      // P23.2: a locked quiz is open (another tab): the fixed reply comes with the quiz to go back to
+      const lock = res.value.quiz_lock;
+      const quizLock = lock ? { quizLock: { set_id: lock.set_id } } : {};
       const at = new Date().toISOString();
       const kbVersion = trace.retrieval?.kb_version ?? liveRef.current?.version;
       const stamp = kbVersion ? { at, kbVersion } : { at };
@@ -185,7 +188,7 @@ export function useChat(): UseChat {
       const cached = Boolean(trace.answer?.cached || trace.feedback?.cached);
       commit((cur) => [
         ...cur,
-        { id: newId(), type: "reply", reply, mode, cached, trace, active: state.active_scenario, ...stamp },
+        { id: newId(), type: "reply", reply, mode, cached, trace, active: state.active_scenario, ...stamp, ...quizLock },
       ]);
       // Practice counts once feedback exists, even if the user leaves without "end practice".
       if (reply.kind === "scenario_feedback" && reply.feedback) markPractised(reply.feedback.scenario_id);

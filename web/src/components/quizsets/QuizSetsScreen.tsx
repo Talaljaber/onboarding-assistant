@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useLang, useT } from "@/i18n";
 import { questionCount } from "@/lib/format";
+import { pluralForm } from "@/lib/plural";
 import { navigate } from "@/router";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -44,6 +45,20 @@ export function CheckpointBadge() {
     <span data-checkpoint className="inline-flex">
       <Badge tone="info" size="sm" icon="eye">
         {t("adminQuizzes.checkpointBadge")}
+      </Badge>
+    </span>
+  );
+}
+
+/** P23.2: the set's time limit, "10 د" / "10 min" (the full wording for screen readers). */
+export function TimeLimitBadge({ minutes }: { minutes: number }) {
+  const t = useT();
+  const { lang } = useLang();
+  return (
+    <span data-time-limit={minutes} className="inline-flex">
+      <Badge tone="neutral" size="sm" icon="clock">
+        <span aria-hidden="true">{t("quizRuns.limitBadge", { n: minutes })}</span>
+        <span className="sr-only">{t("quizRuns.limitNamed", { time: t(`quizRuns.minutes${pluralForm(minutes, lang)}`, { n: minutes }) })}</span>
       </Badge>
     </span>
   );
@@ -93,6 +108,7 @@ function SetCard({ s }: { s: AdminQuizSet }) {
             </span>
             <StatusBadge status={s.status} />
             {s.mode === "checkpoint" && <CheckpointBadge />}
+            {s.time_limit_minutes ? <TimeLimitBadge minutes={s.time_limit_minutes} /> : null}
           </span>
           <SetMeta s={s} />
         </span>

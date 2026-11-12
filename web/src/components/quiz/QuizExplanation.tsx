@@ -1,3 +1,4 @@
+import { useId } from "react";
 import type { Source } from "@/api/types";
 import { KRowQuote } from "@/components/plan/shared";
 import { ArabicOnlyTag } from "@/components/ui/ContentText";
@@ -8,9 +9,11 @@ import { useLang, useT } from "@/i18n";
 export function QuizExplanation({ source }: { source: Source }) {
   const t = useT();
   const { lang } = useLang();
+  // P23.2: the run report shows one block per question, so each heading gets its own id
+  const id = useId();
   return (
-    <section aria-labelledby="quiz-why" className="flex flex-col gap-2">
-      <h3 id="quiz-why" className="flex items-center gap-1.5 text-sm font-bold text-fg-2">
+    <section aria-labelledby={id} className="flex flex-col gap-2">
+      <h3 id={id} className="flex items-center gap-1.5 text-sm font-bold text-fg-2">
         <Icon name="book" size={16} className="shrink-0 text-accent" />
         {t("quiz.why")}
         {/* P16.3: the cited K-row is quoted verbatim, so it stays Arabic in the English UI; say so once. */}

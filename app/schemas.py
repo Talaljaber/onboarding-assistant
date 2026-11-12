@@ -151,6 +151,9 @@ SCENARIO_LIST_LABEL_AR = "مواقف تدريبية افتراضية"
 PLAN_STATUS = "SUGGESTED_COMPETITION_PLAN_NOT_OFFICIAL_POLICY"
 PLAN_DISCLAIMER_AR = "خطة تعلم مقترحة للمسابقة، وليست جدول تقييم رسمياً"
 QUIZ_LABEL_AR = "اختبار تدريبي"
+#: P23: the chat's only reply while the intern has an open locked quiz run (no retrieval, no model call).
+QUIZ_LOCK_TEXT_AR = "لديك اختبار مفتوح. أنهِه أولاً، ثم اسألني ما تريد."
+QUIZ_LOCK_TEXT_EN = "You have an open quiz. Finish it first, then ask me anything."
 INTERNS_LABEL_AR = "متدربون للعرض بأسماء افتراضية — أعداد الإكمال والتدريب فقط، ليست تقييماً"
 
 # --------------------------------------------------------------------------------------
@@ -663,11 +666,31 @@ class Reply(_Model):
         return self
 
 
+class QuizLock(_Model):
+    """P23: the intern has an open locked run (a checkpoint or timed set): the chat answers only the fixed lock text,
+    and this names the run so the client can link back to it. `remaining_seconds` is null without a time limit."""
+
+    run_id: UuidStr
+    set_id: QuizSetId
+    remaining_seconds: NonNeg | None
+
+
 class ChatResponse(_Model):
+    """`quiz_lock` (P23) is optional and left out of the JSON when null, so older clients and fixtures see the
+    same shape."""
+
     reply: Reply
     state: ClientState
     mode: Mode
     trace: Trace
+    quiz_lock: QuizLock | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_lock(self, handler: SerializerFunctionWrapHandler, info: SerializationInfo) -> Any:
+        data = handler(self)
+        if isinstance(data, dict) and data.get("quiz_lock") is None:
+            data.pop("quiz_lock", None)
+        return data
 
     @model_validator(mode="after")
     def _state_follows_reply(self) -> ChatResponse:
@@ -682,6 +705,8 @@ class ChatResponse(_Model):
             raise ValueError("scenario_end must clear state.active_scenario")
         if self.mode != self.trace.mode:
             raise ValueError("mode and trace.mode must agree")
+        if self.quiz_lock is not None and (self.reply.kind != "text" or self.reply.text_ar != QUIZ_LOCK_TEXT_AR):
+            raise ValueError("a quiz lock reply is the fixed lock text")
         return self
 
 
@@ -1570,6 +1595,9 @@ CHECK_LABELS: tuple[str, ...] = get_args(CheckLabel)
 class CheckRequest(_Model):
     text: Annotated[Block, Field(min_length=1, max_length=CHECK_TEXT_MAX)]
     force_offline: bool = False
+    #: P23: the signed-in intern's profile; while they have an open locked quiz run the check is 400
+    #: `field: "profile_id"`, `reason:quiz_open`.
+    profile_id: ProfileId | None = None
 
 
 class CheckNumbers(_Model):
@@ -1904,6 +1932,10 @@ QuizItemId = Annotated[str, Field(pattern=QUIZ_ITEM_ID_RE)]
 QuizSetId = Annotated[str, Field(pattern=QUIZ_SET_ID_RE)]
 QuizSetTitle = Annotated[Line, Field(min_length=1, max_length=QUIZ_SET_TITLE_MAX)]
 QuizSetTitleEn = Annotated[Line, Field(max_length=QUIZ_SET_TITLE_MAX)]
+#: P23: an optional time limit per set, in whole minutes (the official quiz never has one).
+QUIZ_TIME_LIMIT_MIN = 1
+QUIZ_TIME_LIMIT_MAX = 120
+QuizTimeLimit = Annotated[int, Field(ge=QUIZ_TIME_LIMIT_MIN, le=QUIZ_TIME_LIMIT_MAX)]
 #: Loose bounds only: `check_item` applies the real limits and answers with a reason code.
 QuizQuestionIn = Annotated[Line, Field(max_length=1000)]
 QuizOptionIn = Annotated[Line, Field(max_length=500)]
@@ -1940,6 +1972,8 @@ class AdminQuizSet(_Model):
     created_at: str
     updated_at: str
     mode: QuizMode = "practice"
+    #: P23: minutes an intern has from opening the quiz (1–120); null = no limit.
+    time_limit_minutes: QuizTimeLimit | None = None
 
     @model_validator(mode="after")
     def _audience_shape(self) -> AdminQuizSet:
@@ -1978,6 +2012,8 @@ class QuizSetCreate(_Model):
     intern_ids: Annotated[list[InternId], Field(max_length=QUIZ_SET_INTERNS_MAX)] = Field(default_factory=list)
     opens_at_percent: Percent = 0
     mode: QuizMode = "practice"
+    #: P23: 1–120 minutes, or null (no limit).
+    time_limit_minutes: QuizTimeLimit | None = None
 
     @field_validator("title_en")
     @classmethod
@@ -2005,6 +2041,8 @@ class QuizSetPatch(_Model):
     #: P20: changing the mode is 400 `field: "mode"` once anyone has answered one of the set's questions (a
     #: practice answer never becomes a shared result).
     mode: QuizMode | None = None
+    #: P23: 1–120 minutes; null clears the limit. Runs already started keep their deadline.
+    time_limit_minutes: QuizTimeLimit | None = None
 
     @field_validator("title_en")
     @classmethod
@@ -2199,6 +2237,16 @@ class QuizSetSummary(_Model):
     mode: QuizMode = "practice"
     #: P21.2: the intern's own shared result; only for a checkpoint set and a signed-in intern, else null.
     my_result: CheckpointMyResult | None = None
+    #: P23: the set's time limit in minutes (null = none; always null for the official quiz).
+    time_limit_minutes: QuizTimeLimit | None = None
+    #: P23: this profile's run of the set that is still open (resume it), else null.
+    open_run_id: UuidStr | None = None
+    #: P23: seconds left on that open run (null when it has no limit or there is no open run).
+    open_run_remaining_seconds: NonNeg | None = None
+    #: P23: the intern's latest finished or expired run of the set (its review stays reachable), else null.
+    last_review_run_id: UuidStr | None = None
+    #: P23 lock: a checkpoint or timed set (while its run is open the assistant is closed); never the official quiz.
+    locked: bool = False
 
     @model_validator(mode="after")
     def _official(self) -> QuizSetSummary:
@@ -2210,6 +2258,12 @@ class QuizSetSummary(_Model):
             raise ValueError("the official quiz is always practice")
         if self.my_result is not None and self.mode != "checkpoint":
             raise ValueError("my_result is only for checkpoint sets")
+        if self.official and self.time_limit_minutes is not None:
+            raise ValueError("the official quiz has no time limit")
+        if self.official and self.locked:
+            raise ValueError("the official quiz never locks")
+        if self.open_run_remaining_seconds is not None and self.open_run_id is None:
+            raise ValueError("open_run_remaining_seconds needs an open run")
         return self
 
 
@@ -2239,6 +2293,147 @@ class QuizSetList(_Model):
     """`GET /api/quiz-sets?profile_id=`: the official quiz first, then the published sets for this intern."""
 
     sets: list[QuizSetSummary]
+
+
+# --------------------------------------------------------------------------------------
+# Quiz runs (P23): one sitting of one quiz by one intern, kept on the server. Opening a quiz starts or resumes the
+# open run (same questions, same order, answers kept, remaining time) on any device. Answers are locked in and not
+# revealed during the run; the review (the intern's own result) comes when the run is finished or expired.
+# --------------------------------------------------------------------------------------
+
+QuizRunStatus = Literal["in_progress", "finished", "expired"]
+QUIZ_RUN_STATUSES: tuple[str, ...] = get_args(QuizRunStatus)
+#: Errors of the run routes: 400 `validation_error` with `message` `reason:<code>` (the frozen error enum).
+#: expired / finished (field "status"): the run is closed; answered (field "item_id"): one answer per item per run;
+#: in_progress (field "status"): the review of a run that is still open; use_run (field "id"): `POST /api/quiz/check`
+#: for an item of a timed or checkpoint set (only a run may answer it); quiz_open (field "profile_id"): `POST
+#: /api/check` while the intern has an open locked run.
+QuizRunReason = Literal["expired", "finished", "answered", "in_progress", "use_run", "quiz_open"]
+QUIZ_RUN_REASONS: tuple[str, ...] = get_args(QuizRunReason)
+#: Seconds after the deadline during which an answer sent before it still counts (network delay).
+QUIZ_RUN_GRACE_S = 2
+
+
+class QuizRunStart(_Model):
+    """`POST /api/quiz-runs`: start the profile's run of a set, or resume its open one. An anonymous profile may take
+    only the official quiz."""
+
+    profile_id: ProfileId
+    set_id: QuizSetId
+
+
+class QuizRun(_Model):
+    """A run as the intern sees it while it is open: the items in the order served (never the correct option) and
+    the answers given so far (never whether they are right). `deadline_at` = `started_at` + the set's limit (null
+    without one); `remaining_seconds` is computed by the server when it answers."""
+
+    id: UuidStr
+    set_id: QuizSetId
+    status: QuizRunStatus
+    started_at: str
+    deadline_at: str | None
+    remaining_seconds: NonNeg | None
+    items: list[QuizItem]
+    answers: dict[QuizId, QuizOptionKey]
+    mode: QuizMode
+    official: bool
+    #: P23 lock: a checkpoint or timed set; while it is open the chat and the Rumour Check are closed to the intern.
+    locked: bool = False
+
+    @model_validator(mode="after")
+    def _shape(self) -> QuizRun:
+        if self.official != (self.set_id == OFFICIAL_QUIZ_SET_ID):
+            raise ValueError("official is true exactly for the set 'official'")
+        if (self.deadline_at is None) != (self.remaining_seconds is None):
+            raise ValueError("deadline_at and remaining_seconds are set together")
+        if not set(self.answers) <= {i.id for i in self.items}:
+            raise ValueError("answers are for the run's items only")
+        if self.official and self.locked:
+            raise ValueError("the official quiz never locks")
+        return self
+
+
+class QuizRunAnswer(_Model):
+    """`POST /api/quiz-runs/{id}/answer`: one answer, locked in (an item is answered once per run)."""
+
+    profile_id: ProfileId
+    item_id: QuizId
+    option: QuizOptionKey
+
+
+class QuizRunAnswered(_Model):
+    """The answer was stored. No correctness here: it comes in the review."""
+
+    answered: NonNeg
+    total: NonNeg
+    remaining_seconds: NonNeg | None
+    status: QuizRunStatus
+
+    @model_validator(mode="after")
+    def _counts(self) -> QuizRunAnswered:
+        if self.answered > self.total:
+            raise ValueError("answered <= total")
+        return self
+
+
+class QuizRunFinish(_Model):
+    """`POST /api/quiz-runs/{id}/finish` (idempotent; an expired run returns its review)."""
+
+    profile_id: ProfileId
+
+
+class QuizRunReviewItem(_Model):
+    """One question of a closed run: the intern's answer (null = unanswered, not right), the correct option and the
+    cited K-row verbatim as the explanation."""
+
+    item_id: QuizId
+    question_ar: str
+    options: dict[QuizOptionKey, str]
+    question_en: str | None = None
+    options_en: dict[QuizOptionKey, str] | None = None
+    your_option: QuizOptionKey | None
+    correct_option: QuizOptionKey
+    right: bool
+    explanation: Source
+
+    @model_validator(mode="after")
+    def _shape(self) -> QuizRunReviewItem:
+        if set(self.options) != {"A", "B", "C"}:
+            raise ValueError("options must have exactly the keys A, B, C")
+        if (self.question_en is None) != (self.options_en is None):
+            raise ValueError("question_en and options_en are set together")
+        if self.right and self.your_option != self.correct_option:
+            raise ValueError("right only when your_option is the correct option")
+        return self
+
+
+class QuizRunReview(_Model):
+    """`POST /api/quiz-runs/{id}/finish` and `GET /api/quiz-runs/{id}/review?profile_id=`: the end-of-quiz report.
+    The intern's OWN result only (never sent to the admin; a checkpoint's shared result is a separate admin shape)."""
+
+    run_id: UuidStr
+    set_id: QuizSetId
+    status: Literal["finished", "expired"]
+    started_at: str
+    finished_at: str
+    total: NonNeg
+    answered: NonNeg
+    right: NonNeg
+    items: list[QuizRunReviewItem]
+    mode: QuizMode
+    official: bool
+
+    @model_validator(mode="after")
+    def _counts(self) -> QuizRunReview:
+        if self.official != (self.set_id == OFFICIAL_QUIZ_SET_ID):
+            raise ValueError("official is true exactly for the set 'official'")
+        if not self.right <= self.answered <= self.total == len(self.items):
+            raise ValueError("right <= answered <= total == len(items)")
+        if self.answered != sum(1 for i in self.items if i.your_option is not None):
+            raise ValueError("answered counts the items with an answer")
+        if self.right != sum(1 for i in self.items if i.right):
+            raise ValueError("right counts the right items")
+        return self
 
 
 # --------------------------------------------------------------------------------------
@@ -2283,6 +2478,10 @@ class FinalReport(_Model):
     #: the fixed note (FINAL_REPORT_NOTE_AR)
     label_ar: str
 
+
+# P23: QuizLock names the quiz-set id type declared further down.
+QuizLock.model_rebuild()
+ChatResponse.model_rebuild()
 
 __all__ = [
     "CheckpointMyResult",
@@ -2499,6 +2698,25 @@ __all__ = [
     "QuizSetSummary",
     "QuizSignal",
     "QuizSignals",
+    # P23 quiz runs
+    "QUIZ_LOCK_TEXT_AR",
+    "QUIZ_LOCK_TEXT_EN",
+    "QuizLock",
+    "QUIZ_RUN_GRACE_S",
+    "QUIZ_RUN_REASONS",
+    "QUIZ_RUN_STATUSES",
+    "QUIZ_TIME_LIMIT_MAX",
+    "QUIZ_TIME_LIMIT_MIN",
+    "QuizRun",
+    "QuizRunAnswer",
+    "QuizRunAnswered",
+    "QuizRunFinish",
+    "QuizRunReason",
+    "QuizRunReview",
+    "QuizRunReviewItem",
+    "QuizRunStart",
+    "QuizRunStatus",
+    "QuizTimeLimit",
     # P21.1 task deadlines
     "DUE_AT_MAX_DAYS",
     "DUE_SOON_HOURS",
