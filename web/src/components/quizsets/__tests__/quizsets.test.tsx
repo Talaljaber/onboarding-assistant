@@ -175,7 +175,7 @@ describe("the set editor", () => {
     await userEvent.click(screen.getByTestId("quiz-settings-save"));
     expect(await screen.findByText("اختر متدرباً واحداً على الأقل.")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("checkbox", { name: /سارة الخطيب/ }));
-    const pct = screen.getByRole("spinbutton");
+    const pct = screen.getByRole("textbox", { name: /النسبة المئوية/ });
     await userEvent.clear(pct);
     await userEvent.type(pct, "40");
     await userEvent.click(screen.getByTestId("quiz-settings-save"));
@@ -199,6 +199,31 @@ describe("the set editor", () => {
     await userEvent.click(screen.getByTestId("quiz-settings-save"));
     expect(await screen.findByText("لا يمكن تغيير نوع الاختبار بعد أن أجاب أحد المتدربين عن أسئلته.")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "نقطة تحقق — تُشارك نتيجة المحاولة الأولى مع المشرف" })).toBeChecked();
+  });
+
+  it("the opening share box is a text box in Latin digits and reads Arabic-Indic digits too (P22.2)", async () => {
+    const calls = backend();
+    mount(<QuizSetEditor />);
+    const pct = await screen.findByRole("textbox", { name: /النسبة المئوية/ });
+    // not type=number: Chrome draws that in the browser locale's digits («٠» beside the %, even in English)
+    expect(pct).toHaveAttribute("type", "text");
+    expect(pct).toHaveAttribute("inputmode", "numeric");
+    expect(pct).toHaveValue(String(detail.set.opens_at_percent));
+    // its own fixed width, so the slider keeps the rest of the row on phones
+    expect(pct.parentElement).toHaveClass("w-20");
+    await userEvent.clear(pct);
+    await userEvent.type(pct, "٤٥");
+    expect(pct).toHaveValue("45");
+    await userEvent.click(screen.getByTestId("quiz-settings-save"));
+    await waitFor(() => expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ opens_at_percent: 45 }));
+  });
+
+  it("the delete-quiz confirmation names the quiz in the UI language (P22.2)", async () => {
+    backend();
+    mount(<QuizSetEditor />, "en");
+    await userEvent.click(await screen.findByTestId("quiz-set-delete"));
+    const dlg = screen.getByRole("dialog", { name: "Delete quiz" });
+    expect(dlg).toHaveTextContent(`Delete “${detail.set.title_en}”`);
   });
 
   it("publishing an empty set says to add a question first", async () => {

@@ -60,7 +60,9 @@ describe("the intern page's checkpoints card", () => {
     mount(<InternDetailScreen />);
     const card = (await screen.findByRole("heading", { name: "نقاط التحقق" })).closest("[data-detail-checkpoints]") as HTMLElement;
     const cp = detailFx.checkpoints![0]!;
-    expect(within(card).getByRole("link", { name: cp.title_ar })).toHaveAttribute("href", `#/admin/quizzes/${cp.set_id}`);
+    const link = within(card).getByRole("link", { name: cp.title_ar });
+    expect(link).toHaveAttribute("href", `#/admin/quizzes/${cp.set_id}`);
+    expect(link).toHaveClass("max-sm:min-h-11"); // P22.2: a 44 px tap target on phones
     expect(within(card).getByText("2 / 3")).toBeInTheDocument();
     expect(within(card).getByText(/نتائج الاختبارات التدريبية لا تُعرض/)).toBeInTheDocument();
   });

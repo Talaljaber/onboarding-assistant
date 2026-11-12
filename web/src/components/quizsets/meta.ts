@@ -70,7 +70,8 @@ export function itemProblems(f: ItemForm): ItemErrors {
 // ---- the server's grounding errors
 
 const ARABIC_DIGITS = /[٠-٩۰-۹]/g;
-const asciiDigits = (s: string) =>
+/** Arabic-Indic digits as ASCII ("٣٠" → "30"). */
+export const asciiDigits = (s: string) =>
   s.replace(ARABIC_DIGITS, (d) => String((d.charCodeAt(0) & 0xf) % 10));
 
 /** Numbers written in `text` (Arabic-Indic digits read as ASCII), e.g. "30", "2.5". */

@@ -226,7 +226,8 @@ export default function InternReportScreen() {
                   ].map(([label, value]) => (
                     <div key={String(label)} className="flex min-w-0 flex-col">
                       <dt className="text-xs text-fg-2 print:text-black">{label}</dt>
-                      <dd className="m-0 font-id text-xl font-bold text-fg-1" dir="ltr">
+                      {/* P22.2: self-start keeps the LTR number under its label in RTL (it sat at the far edge) */}
+                      <dd className="m-0 self-start font-id text-xl font-bold text-fg-1" dir="ltr">
                         {value}
                       </dd>
                     </div>

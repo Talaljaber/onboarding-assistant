@@ -34,7 +34,7 @@ import {
 } from "@/api/types";
 import { CsvImport } from "./CsvImport";
 import { ItemDialog } from "./ItemDialog";
-import { KEYS, roleKey, titleOk } from "./meta";
+import { asciiDigits, KEYS, roleKey, titleOk } from "./meta";
 import { CheckpointBadge, SetMeta, StatusBadge } from "./QuizSetsScreen";
 import { ResultsPanel } from "./ResultsPanel";
 import { SignalsPanel } from "./SignalsPanel";
@@ -253,20 +253,26 @@ function SettingsCard({ set, onSaved }: { set: AdminQuizSet; onSaved: (s: AdminQ
               disabled={busy}
               className="h-11 min-w-0 flex-1 accent-(--da-accent)"
             />
+            {/* P22.2: a text box (not type=number, which Chrome shows in the browser locale's digits, e.g. «٠»
+                beside the % in the English UI) in a fixed-width wrapper (CONTROL's w-full won over w-20 and
+                left the slider ~90 px wide on phones) */}
             <span className="flex shrink-0 items-center gap-1">
-              <input
-                type="number"
-                inputMode="numeric"
-                lang="en"
-                min={0}
-                max={100}
-                value={opens}
-                onChange={(e) => setOpens(clamp(Number(e.target.value)))}
-                aria-label={`${t("adminQuizzes.opensLabel")} (${t("adminQuizzes.opensNumber")})`}
-                disabled={busy}
-                dir="ltr"
-                className={cn(CONTROL, "min-h-11 w-20 px-2 text-center")}
-              />
+              <span className="block w-20">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  lang="en"
+                  maxLength={3}
+                  value={String(opens)}
+                  onChange={(e) => setOpens(clamp(Number(asciiDigits(e.target.value).replace(/\D/g, "") || 0)))}
+                  aria-label={`${t("adminQuizzes.opensLabel")} (${t("adminQuizzes.opensNumber")})`}
+                  disabled={busy}
+                  dir="ltr"
+                  data-opens-number
+                  className={cn(CONTROL, "min-h-11 px-2 text-center font-id")}
+                />
+              </span>
               <span aria-hidden="true" className="text-fg-2">
                 %
               </span>
@@ -620,7 +626,7 @@ export default function QuizSetEditor() {
         </div>
       </Dialog>
       <Dialog open={removingSet} onClose={() => !busy && setRemovingSet(false)} title={t("adminQuizzes.deleteSet")}>
-        <p className="mb-5 text-base text-fg-1">{t("adminQuizzes.confirmDeleteSet", { title: set?.title_ar ?? "" })}</p>
+        <p className="mb-5 text-base text-fg-1">{t("adminQuizzes.confirmDeleteSet", { title: title?.text ?? "" })}</p>
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button variant="secondary" onClick={() => setRemovingSet(false)} disabled={busy}>
             {t("common.cancel")}
