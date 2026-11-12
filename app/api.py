@@ -1790,7 +1790,9 @@ def add_quiz_run_routes(r: APIRouter) -> None:
         now = runs_view.utcnow()
         run = runs_view.settle(store, _owned_run(store, run_id, body.profile_id), now)
         if run["status"] == runs_view.OPEN:
-            closed = _quiz_or_503(store.quiz_run_close(run["id"], "finished", runs_view.iso(now)))
+            end = runs_view.deadline_of(run)
+            status = "expired" if end is not None and now >= end else "finished"  # a timer-driven finish
+            closed = _quiz_or_503(store.quiz_run_close(run["id"], status, runs_view.iso(now)))
             if not closed:
                 raise ApiError("not_found", 404, "unknown quiz run")
             if closed["status"] == "finished" and closed["set_id"] == OFFICIAL_QUIZ_SET_ID:

@@ -511,3 +511,21 @@ def test_supabase_without_migration_0011_does_not_flip(tmp_path: Path) -> None:
     assert sb.quiz_runs() is None
     assert sb.name == "supabase" and sb.fallback_reason is None and sb.list_interns()
     sb.close()
+
+
+def test_a_finish_at_the_deadline_counts_as_expired_and_time_rounds_up(env: Env, clock: Clock) -> None:
+    """Integrator follow-up: the client's countdown finishes the run at zero, inside the grace period; that is a
+    time-up (`expired`), not a normal finish. Remaining time is rounded up so the client's zero is never early."""
+    made, ids = ready_set(env, time_limit_minutes=1)
+    pid = env.pid[SARA]
+    run = start(env.client, pid, made.id)
+    clock.tick(seconds=0.4)
+    r = answer_run(env.client, run.id, pid, ids[0], "A")
+    assert r.status_code == 200 and r.json()["remaining_seconds"] == 60  # 59.6 s left, shown as 60
+    clock.tick(seconds=59.6)  # exactly at the deadline, inside the grace
+    review = finish(env.client, run.id, pid)
+    assert review.status == "expired" and review.answered == 1
+    # A finish before the deadline stays a normal finish.
+    run2 = start(env.client, pid, made.id)
+    clock.tick(seconds=10)
+    assert finish(env.client, run2.id, pid).status == "finished"

@@ -12,6 +12,8 @@ let a second answer replace the first, trust the client's clock, or call the net
 
 from __future__ import annotations
 
+import math
+
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
@@ -57,7 +59,7 @@ def remaining_seconds(run: Mapping[str, Any], now: datetime) -> int | None:
     end = deadline_of(run)
     if end is None:
         return None
-    return max(0, int((end - now).total_seconds()))
+    return max(0, math.ceil((end - now).total_seconds()))  # rounded up: the client's zero is never early
 
 
 def settle(store: Any, run: dict[str, Any], now: datetime) -> dict[str, Any]:
