@@ -16,6 +16,7 @@ import { cn } from "../ui/cn";
 import { Icon } from "../ui/Icon";
 import { surface } from "../ui/recipes";
 import { useMyQuestions } from "./myQuestions";
+import { questionSourceKey } from "./sourceLabel"; // P20.2
 
 const STATUS: Record<QuestionStatus, { key: DictKey; tone: "neutral" | "ok" | "warn" }> = {
   open: { key: "questions.statusOpen", tone: "neutral" },
@@ -31,7 +32,7 @@ function QuestionItem({ q, busy, onReask }: { q: MentorQuestion; busy: boolean; 
     <li data-question={q.id} data-status={q.status} className={cn(surface.card, "flex min-w-0 flex-col gap-2 p-3 sm:p-4")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="m-0 text-xs text-fg-3">
-          {t(q.source === "check" ? "questions.sourceCheck" : "questions.sourceChat")} · {formatWhen(q.created_at, lang)}
+          {t(questionSourceKey(q.source))} · {formatWhen(q.created_at, lang)}
         </p>
         <Badge tone={s.tone} size="sm">
           {t(s.key)}

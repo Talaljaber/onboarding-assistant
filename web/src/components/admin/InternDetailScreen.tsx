@@ -25,6 +25,7 @@ import { Page, PageHeader } from "../ui/Page";
 import { link, surface } from "../ui/recipes";
 import { useToast } from "../ui/Toast";
 import { ValueTag } from "../ui/ValueLabel";
+import { CheckpointsCard } from "../quizsets/CheckpointsCard"; // P20.2
 import { InternDialog } from "./InternDialog";
 import { StatusBadge } from "./InternsScreen";
 
@@ -275,6 +276,9 @@ export default function InternDetailScreen() {
                     </>
                   )}
                 </Section>
+
+                {/* P20.2: checkpoint quizzes only (first-attempt results); absent on an older server */}
+                {d.checkpoints && <CheckpointsCard items={d.checkpoints} />}
 
                 <Section title={t("uiIntern.secChat")} icon="chat">
                   <p className="m-0 text-xs text-fg-3">{t("uiIntern.chatNote")}</p>

@@ -4,13 +4,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import quiz from "@fixtures/quiz.json";
 import quizCheck from "@fixtures/quiz_check.json";
 import { json, renderScreen, stubApi } from "@/components/plan/__tests__/harness";
-import QuizScreen from "../QuizScreen";
+import { QuizRunner } from "../QuizRunner";
+
+const QuizScreen = () => <QuizRunner setId="official" />;
 
 afterEach(() => vi.unstubAllGlobals());
 
 const first = quiz.items[0]!;
 
-describe("QuizScreen", () => {
+describe("QuizRunner: the official sample quiz", () => {
   it("is labelled practice, shows one question at a time and never the answer in the GET", async () => {
     stubApi();
     renderScreen(<QuizScreen />);
