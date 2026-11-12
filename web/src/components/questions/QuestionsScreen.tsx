@@ -18,6 +18,7 @@ import { TabPanel, Tabs } from "../ui/Tabs";
 import { useToast } from "../ui/Toast";
 import { AnswerDialog } from "./AnswerDialog";
 import { setOpenQuestionCount } from "./openCount";
+import { questionSourceKey } from "./sourceLabel"; // P20.2
 
 type Filter = QuestionStatus | "all";
 
@@ -56,7 +57,7 @@ function QuestionCard({
             {internName(q.intern, lang)}
           </span>
           <span aria-hidden="true">·</span>
-          <span>{t(q.source === "check" ? "questions.sourceCheck" : "questions.sourceChat")}</span>
+          <span>{t(questionSourceKey(q.source))}</span>
           <span aria-hidden="true">·</span>
           <span>{formatWhen(q.created_at, lang)}</span>
         </p>

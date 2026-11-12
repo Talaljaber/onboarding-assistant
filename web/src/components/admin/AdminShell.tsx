@@ -22,6 +22,8 @@ const ITEMS: Item[] = [
   { href: "#/kb", key: "nav.kb", icon: "book", current: (p) => p === "/kb" || p.startsWith("/admin/kb/") },
   // P18.1 questions inbox
   { href: "#/admin/questions", key: "adminQuestions.nav", icon: "mail", current: (p) => p === "/admin/questions", count: true },
+  // P20.2 practice quizzes
+  { href: "#/admin/quizzes", key: "adminQuizzes.nav", icon: "help", current: (p) => p.startsWith("/admin/quizzes") },
 ];
 
 /** P18.1: the open-question count beside the nav item (nothing while 0 or unknown). */
@@ -47,7 +49,7 @@ const roundBtn =
 
 /**
  * The admin's own frame (P11.2): brand with an "Admin" label, the admin navigation (Interns, Knowledge
- * base, questions) in the header from lg and as a tab row under it below lg (the three items and the
+ * base, questions, quizzes) in the header from lg and as a tab row under it below lg (the four items and the
  * open-questions badge do not fit beside the brand at 768 px), the language toggle and sign out.
  * No intern bottom bar, no intern chip. Shell parts carry `data-shell` so print hides them.
  */
@@ -64,13 +66,14 @@ export function AdminShell({ children }: { children: ReactNode }) {
     window.setTimeout(() => toast.show(t("uiAuth.signedOut"), "ok"), 0); // P16.4: after the route change
   };
 
-  const links = (cls: string, on: string, off: string) =>
+  // P20.2: `iconCls` hides the icons where four items are tight (the tab row on phones; the header below xl).
+  const links = (cls: string, on: string, off: string, iconCls: string) =>
     ITEMS.map((i) => {
       const current = i.current(path);
       return (
         <li key={i.href} className="flex flex-1 lg:flex-none">
           <a href={i.href} aria-current={current ? "page" : undefined} className={cn(cls, current ? on : off)}>
-            <Icon name={i.icon} size={18} className="shrink-0 max-sm:hidden" />
+            <Icon name={i.icon} size={18} className={cn("shrink-0", iconCls)} />
             {t(i.key)}
             {i.count && <OpenCount path={path} />}
           </a>
@@ -101,12 +104,14 @@ export function AdminShell({ children }: { children: ReactNode }) {
               <span className="text-xs font-semibold text-accent">{t("uiIntern.adminArea")}</span>
             </span>
           </a>
-          <nav aria-label={t("uiIntern.adminNav")} className="ms-4 hidden lg:block">
+          <nav aria-label={t("uiIntern.adminNav")} className="ms-2 hidden lg:block xl:ms-4">
             <ul className="m-0 flex list-none gap-1 p-0">
               {links(
-                "inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors",
+                // P20.2: four items with the open-questions count fit beside the brand at 1024 px
+                "inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-sm font-semibold whitespace-nowrap transition-colors xl:px-4",
                 "bg-accent-soft text-accent",
                 "text-fg-2 hover:bg-surface-2 hover:text-fg-1",
+                "max-xl:hidden",
               )}
             </ul>
           </nav>
@@ -138,6 +143,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
               "flex min-h-12 flex-1 items-center justify-center gap-2 border-b-2 px-2 py-1 text-center text-sm leading-tight font-semibold sm:px-3",
               "border-accent text-accent",
               "border-transparent text-fg-2",
+              "max-sm:hidden",
             )}
           </ul>
         </nav>

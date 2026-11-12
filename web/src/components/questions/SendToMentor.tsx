@@ -61,8 +61,9 @@ export function SendQuestionPrompt({ itemId, question }: { itemId: string; quest
   );
 }
 
-/** On a Rumour Check claim labelled `not_found` or `related`: «أرسلها لمشرفي». */
-export function SendClaimButton({ text, source = "check" }: { text: string; source?: QuestionSource }) {
+/** On a Rumour Check claim labelled `not_found` or `related`: «أرسلها لمشرفي». P20.2: also after a wrong practice
+ *  quiz answer, with its own `label` («اسأل مشرفي عن هذا») and source "quiz". */
+export function SendClaimButton({ text, source = "check", label }: { text: string; source?: QuestionSource; label?: string }) {
   const t = useT();
   const { profileId } = useAppState();
   const items = useMyQuestions(profileId, false);
@@ -73,7 +74,7 @@ export function SendClaimButton({ text, source = "check" }: { text: string; sour
   return (
     <div>
       <Button variant="secondary" size="md" icon="send" onClick={() => setOpen(true)} data-question-open>
-        {t("questions.sendCheck")}
+        {label ?? t("questions.sendCheck")}
       </Button>
       {open && (
         <SendQuestionDialog source={source} initialText={text} onClose={() => setOpen(false)} onSent={() => setSent(true)} />

@@ -23,6 +23,8 @@ import { AppShell } from "@/components/shell/AppShell";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import WelcomeScreen from "@/components/welcome/WelcomeScreen";
 import QuestionsScreen from "@/components/questions/QuestionsScreen"; // P18.1
+import QuizSetEditor from "@/components/quizsets/QuizSetEditor"; // P20.2
+import QuizSetsScreen from "@/components/quizsets/QuizSetsScreen"; // P20.2
 import { replace, usePath } from "@/router";
 import { AppStateProvider, useAppState } from "@/state/useAppState";
 
@@ -63,6 +65,14 @@ export const ROUTES: readonly RouteDef[] = [
     match: /^\/admin\/kb\/import\/[0-9a-f-]{36}$/,
   },
   { path: "/admin/questions", Screen: QuestionsScreen, needsRole: false, needsAdmin: true }, // P18.1
+  { path: "/admin/quizzes", Screen: QuizSetsScreen, needsRole: false, needsAdmin: true }, // P20.2
+  {
+    path: "/admin/quizzes/:id",
+    Screen: QuizSetEditor,
+    needsRole: false,
+    needsAdmin: true,
+    match: /^\/admin\/quizzes\/[0-9a-f-]{36}$/,
+  },
   { path: "/admin", Screen: AdminScreen, needsRole: false },
   { path: "/about", Screen: AboutScreen, needsRole: false },
 ];
