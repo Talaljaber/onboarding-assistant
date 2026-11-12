@@ -9,7 +9,8 @@ SMTP and a failure never reaches the user. The event functions below build Arabi
 plain-text part, English under the Arabic) for: a new mentor request (to the intern), a comment on a request (the
 admin's to the intern, the intern's to ADMIN_EMAIL, with the comment's files attached), a request marked done
 (to ADMIN_EMAIL), a question sent to the mentor (to ADMIN_EMAIL), a question answered (to the intern, with the
-answer row verbatim and its K-id) and the admin's test email (to ADMIN_EMAIL).
+answer row verbatim and its K-id; P18.5: or the mentor's private reply, said to be personal and not part of the
+knowledge base) and the admin's test email (to ADMIN_EMAIL).
 What it must never do: log, print, store or return the SMTP password (or any SMTP reply text); raise to an API
 route; send while OFFLINE=1 or unconfigured; put a link (localhost included) in an email; reach the assistant
 (the agent, answer, LLM and prompt code never import this module).
@@ -333,9 +334,10 @@ def question_submitted_mail(intern: dict[str, Any], text: str, source: str, to_a
     return compose(
         "question_submitted", to_addr, f"سؤال جديد من {name_ar}", f"New question from {name_en}",
         [f"أرسل {name_ar} سؤالاً لم يجد المساعد إجابته{where_ar}.",
-         "أجب عنه من «أسئلة المتدربين» في منطقة المشرف؛ تُضاف إجابتك إلى قاعدة المعرفة."],
+         "أجب عنه من «أسئلة المتدربين» في منطقة المشرف: أضف إجابتك إلى قاعدة المعرفة، أو ردّ على المتدرب وحده."],
         [f"{name_en} sent a question the assistant could not answer{where_en}.",
-         "Answer it under Interns' questions in the admin area; your answer is added to the knowledge base."],
+         "Answer it under Interns' questions in the admin area: add your answer to the knowledge base, or reply "
+         "to this intern only."],
         [("السؤال · Question", text)],
     )
 
@@ -346,6 +348,17 @@ def question_answered_mail(question: str, row_id: str, answer_ar: str, to_addr: 
         ["أجاب مشرفك عن سؤالك، وأُضيفت الإجابة إلى قاعدة المعرفة."],
         ["Your mentor answered your question; the answer was added to the knowledge base."],
         [("سؤالك · Your question", question), (f"الإجابة ({row_id}) · Answer ({row_id})", answer_ar)],
+    )
+
+
+def question_answered_private_mail(question: str, answer_text: str, to_addr: str) -> Mail:
+    """P18.5: the mentor's reply to this intern only (recorded as `question_answered`, like a K-row answer)."""
+    return compose(
+        "question_answered", to_addr, "ردّ مشرفك على سؤالك", "Your mentor replied to your question",
+        ["ردّ مشرفك على سؤالك ردّاً خاصاً بك. هذا الرد ليس من قاعدة المعرفة ولا يراه غيرك."],
+        ["Your mentor sent you a personal reply to your question. It is not part of the knowledge base, and only "
+         "you can see it."],
+        [("سؤالك · Your question", question), ("ردّ مشرفك · Your mentor's reply", answer_text)],
     )
 
 
@@ -409,6 +422,16 @@ def question_answered(mailer: Mailer | None, *, intern_id: str, question: str, r
     mailer.submit(lambda: [question_answered_mail(question, row_id, answer_ar, mailer.intern_email(intern_id))])
 
 
+def question_answered_private(mailer: Mailer | None, *, intern_id: str, question: str, answer_text: str) -> None:
+    """P18.5: the admin replied privately to an intern's question → that intern's email.
+
+    `question`: the intern's question as sent; `answer_text`: the stored private reply verbatim. Call after the
+    question is marked answered."""
+    if mailer is None:
+        return
+    mailer.submit(lambda: [question_answered_private_mail(question, answer_text, mailer.intern_email(intern_id))])
+
+
 def send_test(mailer: Mailer) -> tuple[str, str | None]:
     """The admin's "send a test email to me" (ADMIN_EMAIL): ("queued", None) or ("skipped", reason). The result
     of a queued email appears in the mail log."""
@@ -429,6 +452,7 @@ __all__ = [
     "compose",
     "error_code",
     "question_answered",
+    "question_answered_private",
     "question_submitted",
     "request_created",
     "request_done",

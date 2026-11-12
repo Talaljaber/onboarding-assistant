@@ -1016,12 +1016,15 @@ export const ar = {
     sourceChat: "من المحادثة",
     answerAdded: "أُضيف الجواب إلى قاعدة المعرفة:",
     reask: "أعد السؤال",
+    /** P18.5: a personal reply from the mentor (not a K-row). */
+    privateTitle: "ردّ خاص من مشرفك",
+    privateLabel: "ردّ خاص من مشرفك — ليس من قاعدة المعرفة",
   },
   /** P18.1: the admin's «أسئلة المتدربين» screen. */
   adminQuestions: {
     nav: "أسئلة المتدربين",
     openAria: "أسئلة مفتوحة: {n}",
-    lead: "أسئلة أرسلها المتدربون حين لم يجد المساعد الجواب. جوابك يُضاف إلى قاعدة المعرفة صفاً جديداً، ويُستشهد به من بعدها.",
+    lead: "أسئلة أرسلها المتدربون حين لم يجد المساعد الجواب. أضف جوابك إلى قاعدة المعرفة صفاً جديداً يُستشهد به من بعدها، أو ردّ على المتدرب وحده إن كان السؤال شخصياً.",
     filterOpen: "مفتوحة",
     filterAnswered: "مُجابة",
     filterDismissed: "مُغلقة",
@@ -1033,7 +1036,7 @@ export const ar = {
     dismiss: "أغلق دون جواب",
     from: "{name} · {source} · {when}",
     answeredWith: "أُجيب بالصف",
-    dialogTitle: "أجب وأضف إلى قاعدة المعرفة",
+    dialogTitle: "أجب عن سؤال المتدرب",
     questionLabel: "السؤال كما أرسله المتدرب",
     answerLabel: "الجواب (يُضاف كما كتبته صفاً جديداً)",
     answerRule: "{min}–{max} حرفاً، بلا رقم هاتف أو بريد أو رابط.",
@@ -1048,6 +1051,16 @@ export const ar = {
     failed: "تعذّر الحفظ. حاول مرة أخرى.",
     errContact: "احذف أي رقم هاتف أو بريد إلكتروني أو رابط.",
     notOpen: "هذا السؤال أُجيب أو أُغلق من قبل.",
+    /** P18.5: answer to the knowledge base, or reply to this intern only. */
+    scopeLabel: "كيف تجيب؟",
+    scopeKb: "أضفه إلى قاعدة المعرفة",
+    scopePrivate: "ردّ على المتدرب فقط",
+    privateHint: "لن يُضاف إلى قاعدة المعرفة ولن يراه غير هذا المتدرب",
+    answerLabelPrivate: "ردّك على المتدرب",
+    savePrivate: "أرسل الرد للمتدرب",
+    repliedPrivately: "أُرسل ردّك إلى المتدرب وحده.",
+    privateTag: "ردّ خاص",
+    privateWith: "ردّ خاص للمتدرب (ليس في قاعدة المعرفة)",
   },
 };
 

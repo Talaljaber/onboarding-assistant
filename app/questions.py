@@ -1,4 +1,5 @@
-"""Questions inbox (P18.1): a question the intern chooses to send to the mentor, answered as a new K-row.
+"""Questions inbox (P18.1): a question the intern chooses to send to the mentor, answered as a new K-row or
+(P18.5) as a private reply to that intern only (stored on the question, never a K-row).
 
 What it does: checks the intern's text (the guards and the contact rule: a guarded question keeps its fixed
 refusal and is never sent; no email, link or phone number), checks the admin's answer fields with the same
@@ -34,8 +35,10 @@ def check_question(text: str) -> None:
 
 
 def check_answer(fields: dict[str, Any]) -> None:
-    """400 when an answer field holds an email, a link or a phone number (the KB row will be cited verbatim)."""
-    for key in ("answer_ar", "topic", "keyword_en", "source_document"):
+    """400 when an answer field holds an email, a link or a phone number (the KB row will be cited verbatim; a
+    private reply follows the same rule: only `answer_ar` is used then)."""
+    keys = ("answer_ar",) if fields.get("scope") == "private" else ("answer_ar", "topic", "keyword_en", "source_document")
+    for key in keys:
         val = fields.get(key)
         if isinstance(val, str) and has_contact_or_link(val) is not None:
             raise ApiError("validation_error", 400,
@@ -49,6 +52,7 @@ def view(rec: dict[str, Any], kb_row: KbLookup) -> schemas.MentorQuestion:
         answer_row_id=rid, created_at=iso(rec["created_at"]),
         answered_at=iso(rec["answered_at"]) if rec.get("answered_at") else None,
         answer_row=kb_row(rid) if rid else None,
+        answer_text=rec.get("answer_text") if rec["status"] == "answered" and not rid else None,
     )
 
 

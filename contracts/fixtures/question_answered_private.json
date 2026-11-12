@@ -1,0 +1,17 @@
+{
+  "question": {
+    "id": "00000c04-4d3a-4e8b-9c71-2a5d0e7f3b14",
+    "intern_id": "00000001-4d3a-4e8b-9c71-2a5d0e7f3b14",
+    "source": "chat",
+    "text": "هل يمكنني تبديل يوم التدريب الميداني هذا الأسبوع بسبب موعد طبي؟",
+    "status": "answered",
+    "answer_row_id": null,
+    "created_at": "2026-11-12T08:40:00.000+00:00",
+    "answered_at": "2026-11-12T10:20:00.000+00:00",
+    "answer_row": null,
+    "answer_text": "نعم، بدّلت يومك الميداني إلى الأحد القادم وأبلغت فريق المبيعات. لا حاجة لأي إجراء منك."
+  },
+  "row": null,
+  "version": null,
+  "reindex_ms": null
+}

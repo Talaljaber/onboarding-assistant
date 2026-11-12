@@ -1038,7 +1038,7 @@ def _open_question(store: Any, question_id: str) -> dict[str, Any]:
 
 def add_question_routes(r: APIRouter) -> None:
     """Intern: send a question (only on their explicit Send) and see their own; admin: list, answer with a new
-    K-row through the KB editor's add path, or dismiss."""
+    K-row through the KB editor's add path or with a private reply to that intern only (P18.5), or dismiss."""
 
     @r.post("/questions", status_code=201)
     def question_add(body: QuestionCreate, request: Request) -> JSONResponse:
@@ -1075,12 +1075,22 @@ def add_question_routes(r: APIRouter) -> None:
         agent = _agent(request)
         _open_question(store, question_id)
         questions_view.check_answer(body.model_dump())
+        if body.scope == "private":  # P18.5: a reply to this intern only; the KB, index and version are untouched
+            rec = _questions_or_503(store.mentor_question_update(question_id, {"status": "answered",
+                                                                               "answer_text": body.answer_ar}))
+            log_event("question_answered", request_id=_rid(request), scope="private")
+            mailer.question_answered_private(_mailer(request), intern_id=str(rec["intern_id"]),
+                                             question=str(rec["text"]), answer_text=str(rec["answer_text"]))
+            return _json(QuestionAnswered(question=questions_view.view(rec, _kb_source(request)), row=None,
+                                          version=None, reindex_ms=None))
+        if body.topic is None:  # QuestionAnswer already requires it for scope "kb"
+            raise ApiError("validation_error", 400, "topic is required", "topic")
         new_row = KbNewRow(topic=body.topic, answer_ar=body.answer_ar, keyword_en=body.keyword_en,
                            source_document=body.source_document or QUESTION_ANSWER_DOCUMENT, source_page=1)
         row, ms = kb_add_row(agent, new_row)
         rec = _questions_or_503(store.mentor_question_update(question_id, {"status": "answered",
                                                                            "answer_row_id": row.id}))
-        log_event("question_answered", request_id=_rid(request), row_id=row.id)
+        log_event("question_answered", request_id=_rid(request), row_id=row.id, scope="kb")
         mailer.question_answered(_mailer(request), intern_id=str(rec["intern_id"]), question=str(rec["text"]),
                                  row_id=row.id, answer_ar=row.answer_ar)
         return _json(QuestionAnswered(question=questions_view.view(rec, _kb_source(request)), row=_kb_row(row),

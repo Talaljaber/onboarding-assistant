@@ -1,7 +1,9 @@
 // «أسئلتك لمشرفك» (P18.1): the intern's questions to the mentor, in the chat dock beside «من مشرفك». A compact
 // bar (collapsed by default); when the mentor answered one, the bar says «أجاب مشرفك عن سؤالك». Each answered
 // question shows the answer row verbatim (K-id) and «أعد السؤال», which asks it again in the chat (the answer
-// is now in the knowledge base, so the assistant cites it). Nothing renders while there are no questions.
+// is now in the knowledge base, so the assistant cites it). A private reply (P18.5) shows as the mentor's message,
+// labelled as personal and not from the knowledge base: no K-id and no «أعد السؤال» (the assistant would not find
+// it). Nothing renders while there are no questions.
 import { useId, useState } from "react";
 import type { MentorQuestion, QuestionStatus } from "@/api/types";
 import { useLang, useT, type DictKey } from "@/i18n";
@@ -55,6 +57,24 @@ function QuestionItem({ q, busy, onReask }: { q: MentorQuestion; busy: boolean; 
           </div>
         </div>
       )}
+      {q.status === "answered" && q.answer_text !== null && (
+        <div data-question-private className="flex flex-col gap-2 border-t border-line pt-2">
+          <p className="m-0 flex items-center gap-2 text-sm font-bold text-fg-1">
+            <Icon name="user" size={16} className="shrink-0 text-accent" />
+            {t("questions.privateTitle")}
+          </p>
+          <p data-private-label className="m-0 flex items-start gap-1.5 text-xs text-fg-2">
+            <Icon name="lock" size={14} className="mt-0.5 shrink-0 text-fg-3" />
+            {t("questions.privateLabel")}
+          </p>
+          <p
+            dir="auto"
+            className="m-0 whitespace-pre-line rounded-md border-s-4 border-s-accent bg-surface-1 px-3 py-2 text-base leading-[1.8] text-fg-1"
+          >
+            {q.answer_text}
+          </p>
+        </div>
+      )}
     </li>
   );
 }
@@ -67,7 +87,7 @@ export function MyQuestionsPanel({ busy, onReask }: { busy: boolean; onReask: (t
   const [open, setOpen] = useState(false);
   const listId = useId();
   if (!profileId || !items || items.length === 0) return null;
-  const answered = items.some((q) => q.status === "answered" && q.answer_row);
+  const answered = items.some((q) => q.status === "answered" && (q.answer_row || q.answer_text !== null));
   return (
     <section
       data-my-questions

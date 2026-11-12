@@ -7,5 +7,6 @@
   "answer_row_id": null,
   "created_at": "2026-11-12T09:10:00.000+00:00",
   "answered_at": null,
-  "answer_row": null
+  "answer_row": null,
+  "answer_text": null
 }

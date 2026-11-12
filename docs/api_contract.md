@@ -670,8 +670,11 @@ prompts or the turn log. Every route answers 503 `requests_unavailable` when the
 (Supabase before migration `0006_questions.sql`).
 
 `MentorQuestion` = `{id, intern_id, source: "check"|"chat", text, status: "open"|"answered"|"dismissed",
-answer_row_id, created_at, answered_at, answer_row: Source|null}`; `answer_row` is the answer row verbatim from
-the live KB (null until answered, or when the row is gone). `QuestionCounts` = `{open, answered, dismissed}`.
+answer_row_id, created_at, answered_at, answer_row: Source|null, answer_text: string|null}`; `answer_row` is the
+answer row verbatim from the live KB (null until answered, or when the row is gone). `answer_text` (P18.5) is the
+mentor's private reply to this intern: never a K-row, returned only to the owning intern and the admin (the same
+scoping as every question route). An answered question has exactly one of `answer_row_id` and `answer_text`; an
+open or dismissed one has neither. `QuestionCounts` = `{open, answered, dismissed}`.
 
 ### POST /api/questions
 
@@ -695,9 +698,19 @@ answer form's topic and keyword.
 ### POST /api/admin/questions/{id}/answer (admin)
 
 Body `QuestionAnswer` `{answer_ar (5–600), topic (1–40), keyword_en? (≤ 60), source_document? (≤ 80; default
-«Mentor answer»)}`; the row's page is 1 → `QuestionAnswered` `{question, row: KbRow, version, reindex_ms}`. 400
-with `field` when a field holds an email, a link or a phone number (nothing is added); 400 `field: "status"`
-when the question is not open; 404 unknown; 423 while a reindex holds the KB lock.
+«Mentor answer»), scope?: "kb"|"private" (default "kb")}`.
+
+- `scope: "kb"` (P18.1): `topic` is required; the row's page is 1 → `QuestionAnswered` `{question, row: KbRow,
+  version, reindex_ms}`.
+- `scope: "private"` (P18.5): a reply to this intern only. `answer_ar` is stored on the question as `answer_text`;
+  no K-row, no re-index, no version bump; `topic`, `keyword_en` and `source_document` are not used →
+  `QuestionAnswered` `{question (answered, answer_text set, answer_row_id null), row: null, version: null,
+  reindex_ms: null}`. The intern is emailed the reply (mail log event `question_answered`). The text never
+  reaches the knowledge base, the index, the assistant's prompts or the turn log.
+
+400 with `field` when a used field holds an email, a link or a phone number (nothing is stored); 400 when `scope`
+is `"kb"` without a `topic`; 400 `field: "status"` when the question is not open; 404 unknown; 423 while a
+reindex holds the KB lock (KB scope).
 
 ### POST /api/admin/questions/{id}/dismiss (admin)
 
@@ -748,6 +761,7 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
 - premise correction (P16.5): `chat_answer_premise.json`;
 - questions inbox (P18.1): `question_create_request.json`, `question.json`, `questions.json`,
   `admin_questions.json`, `question_answer_request.json`, `question_answered.json`, `question_dismissed.json`;
+  P18.5 private replies: `question_answer_private_request.json`, `question_answered_private.json`;
 - request threads (P15): `request_thread.json`, `request_comment.json`, `request_comment_create_request.json`,
   `request_comment_admin_create_request.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,
