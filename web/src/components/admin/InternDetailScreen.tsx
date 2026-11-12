@@ -128,7 +128,10 @@ export default function InternDetailScreen() {
   }
 
   const d = data;
-  const activityTitle = new Map(d?.progress.milestones.flatMap((m) => m.activities.map((a) => [a.id, a.title_ar] as const)) ?? []);
+  // P17 (QA #9): both titles, so the English UI's timeline shows the authored English
+  const activityTitle = new Map(
+    d?.progress.milestones.flatMap((m) => m.activities.map((a) => [a.id, { ar: a.title_ar, en: a.title_en }] as const)) ?? [],
+  );
   const roleName = (r: string) => t(r === "Sales" ? "role.sales" : "role.delivery");
   return (
     <section data-screen="admin-intern" className="min-w-0">
@@ -325,9 +328,7 @@ export default function InternDetailScreen() {
                                   <>
                                     <span>
                                       {t(KIND[e.kind].key)}:{" "}
-                                      <span lang="ar" dir="rtl" className="font-semibold">
-                                        {title}
-                                      </span>
+                                      <ContentText ar={title.ar} en={title.en} className="font-semibold" />
                                     </span>
                                     {ids(e.ids)}
                                   </>

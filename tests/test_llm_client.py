@@ -619,6 +619,22 @@ def test_llm_feedback_drops_a_repeated_or_off_scenario_tip_and_never_caches_it(
     assert tip not in stored and json.loads(stored)["tip_ar"] is None and json.loads(stored)["met"] == ["S02-C1"]
 
 
+S01 = next(s for s in SCENARIOS if s["id"] == "S01")
+CHECK_S01 = [c for c in csv_rows(ROOT / "data" / "ours" / "scenario_checklists.csv") if c["scenario_id"] == "S01"]
+#: P17 (QA #8c/U6, screenshot 19_s01_dishonest_360): this tip nearly repeats «اسأل عن حجم الأسرة…».
+S01_REPEAT_TIP = "اسأل الزبون عن حجم أسرته والمساحة والميزانية قبل تقديم أي توصية، وتأكد من المعلومات مع المصدر الموثوق."
+
+
+def test_llm_feedback_drops_a_tip_that_repeats_the_family_size_line(tmp_path: Path, online: None) -> None:
+    raw = json.dumps({"met": [], "missing": ["S01-C1"], "value": "Customer Centricity", "tip_ar": S01_REPEAT_TIP},
+                     ensure_ascii=False)
+    chat, *_ = make_chat(tmp_path, ChatResult(raw, 1, 1, None, 3))
+    info: dict[str, Any] = {}
+    result, reason = llm_feedback(S01, CHECK_S01, "بعطيك أحسن ثلاجة عنا.", chat, 3.5, info=info)
+    assert reason is None and result is not None and result["tip_ar"] is None
+    assert info["tip_reason"] == "tip_repeats_checklist"
+
+
 def test_llm_feedback_rejected(tmp_path: Path, online: None) -> None:
     chat, _, cache, _ = make_chat(tmp_path, "feedback_bad_value")
     assert llm_feedback(S02, CHECK_S02, USER, chat, 3.5) == (None, "bad_value") and cache.puts == 0

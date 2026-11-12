@@ -10,6 +10,7 @@ import { topicLabel } from "@/lib/topic";
 import { SourceRow } from "../chat/SourceRow";
 import { Badge } from "../ui/Badge";
 import { cn } from "../ui/cn";
+import { ContentText } from "../ui/ContentText";
 import { Icon } from "../ui/Icon";
 import { link, segmented, surface } from "../ui/recipes";
 import { useToast } from "../ui/Toast";
@@ -139,9 +140,8 @@ export function RequestCard({ req, footer, showStatus }: { req: MentorRequest; f
               <Icon name="calendar" size={16} className="shrink-0" />
               <span>
                 {t("mentorReq.openActivity")}:{" "}
-                <span lang="ar" dir="rtl">
-                  {req.activity.title_ar}
-                </span>
+                {/* P17 (QA #9): the authored English title in the English UI */}
+                <ContentText ar={req.activity.title_ar} en={req.activity.title_en} />
               </span>
             </a>
           )}

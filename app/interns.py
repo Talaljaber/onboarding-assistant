@@ -74,7 +74,8 @@ def _current_ids(profiles: list[dict[str, Any]], role: str) -> set[str]:
 
 
 def summary_row(intern: dict[str, Any], profiles: list[dict[str, Any]], act: dict[str, list[dict[str, Any]]],
-                plan: PlanBook) -> schemas.InternSummary:
+                plan: PlanBook, extra: Iterable[object] = ()) -> schemas.InternSummary:
+    """`extra`: more timestamps of the intern's own doing (P17: mentor-request replies and status changes)."""
     role = intern["role"]
     current = _current_ids(profiles, role)
     known = {a.id for a in plan.activities(role)}
@@ -87,13 +88,13 @@ def summary_row(intern: dict[str, Any], profiles: list[dict[str, Any]], act: dic
         scenarios_practised=len({r["scenario_id"] for r in act["scenarios"]}),
         quiz_attempts=len(act["quiz"]),
         questions_asked=sum(1 for t in act["turns"] if t.get("tool") in QUESTION_TOOLS),
-        last_active=_last(_stamps(act)),
+        last_active=_last([*_stamps(act), *extra]),
     )
 
 
 def detail(intern: dict[str, Any], profiles: list[dict[str, Any]], act: dict[str, list[dict[str, Any]]],
            plan: PlanBook, scenario_value: Callable[[str], str | None],
-           kb_topic: Callable[[str], str | None]) -> schemas.InternDetail:
+           kb_topic: Callable[[str], str | None], extra: Iterable[object] = ()) -> schemas.InternDetail:
     role = intern["role"]
     roles = {str(p["id"]): str(p["role"]) for p in profiles}
     current = _current_ids(profiles, role)
@@ -159,7 +160,7 @@ def detail(intern: dict[str, Any], profiles: list[dict[str, Any]], act: dict[str
     events.sort(key=lambda e: e.at, reverse=True)
 
     return schemas.InternDetail(
-        intern=out(intern), last_active=_last(_stamps(act)),
+        intern=out(intern), last_active=_last([*_stamps(act), *extra]),
         progress=schemas.DetailProgress(role=role, percent=percent_of(done, total), done=done, total=total,
                                         milestones=milestones),
         scenarios=scenarios, quiz=quiz, chat=chat, timeline=events[:TIMELINE_MAX],
@@ -167,4 +168,20 @@ def detail(intern: dict[str, Any], profiles: list[dict[str, Any]], act: dict[str
     )
 
 
-__all__ = ["QUESTION_TOOLS", "SEED", "detail", "iso", "out", "public", "summary_row"]
+def request_stamps(requests: Iterable[dict[str, Any]],
+                   comments: Callable[[str], list[dict[str, Any]] | None]) -> dict[str, list[str]]:
+    """P17 (QA #8): per intern id, the times a request's status changed (the intern's status control;
+    `status_changed_at` equals `created_at` until the first change) and the intern's replies on its thread.
+    `comments(request_id)` is only asked for requests that have comments (None = unavailable: skipped)."""
+    out: dict[str, list[str]] = {}
+    for r in requests:
+        stamps = out.setdefault(str(r.get("intern_id")), [])
+        changed, created = _ts(r.get("status_changed_at")), _ts(r.get("created_at"))
+        if changed and created and changed > created:
+            stamps.append(iso(r["status_changed_at"]))
+        if r.get("comment_count"):
+            stamps += [iso(c.get("created_at")) for c in comments(str(r["id"])) or [] if c.get("author") == "intern"]
+    return out
+
+
+__all__ = ["QUESTION_TOOLS", "SEED", "detail", "iso", "out", "public", "request_stamps", "summary_row"]

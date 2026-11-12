@@ -1228,6 +1228,8 @@ class LinkedActivity(_Model):
     kind: ActivityKind
     title_ar: str
     milestone: MilestoneKey
+    #: P17 (QA #9): the authored English title (`activity:<id>` in content_en.csv) for the English UI, or null.
+    title_en: str | None = None
 
 
 class MentorRequest(_Model):

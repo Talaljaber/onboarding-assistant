@@ -678,7 +678,7 @@ def _strip_en(obj: Any) -> Any:
 def test_english_helper_fields_are_optional_and_named_in_types() -> None:
     """P16.3: fixtures carry the authored English; a payload without it (older server) still validates."""
     for name in ("plan.json", "quiz.json", "scenarios_list.json", "scenario_feedback.json", "intern_detail.json",
-                 "chat_progress_proposal.json", "chat_scenario_feedback_option.json"):
+                 "chat_progress_proposal.json", "chat_scenario_feedback_option.json", "mentor_requests.json"):
         data = load(name)
         assert any(k in json.dumps(data) for k in EN_FIELDS), name
         FIXTURES[name].model_validate(_strip_en(data))

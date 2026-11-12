@@ -67,6 +67,9 @@ _EDGE = " \t«»\"'“”-–—"
 _HAS_WORD = re.compile(r"[^\W_]")
 #: A leading conjunction «و» is dropped from the retrieval query only («وفترة التجربة» → «فترة التجربة»).
 _LEADING_WAW = re.compile(r"^و(?=[^\W\d_]{3})")
+#: P17 (QA medium #2): a pure tag question («…، صح؟», "…, right?") asks for a check; it is not a claim.
+_TAG_QUESTIONS = re.compile(r"(?:(?:%s)\s*[?؟]?\s*)+" % "|".join(normalize(w).lower() for w in (
+    "صح", "صحيح", "مزبوط", "مظبوط", "مضبوط", "is that right", "is that true", "right", "correct", "true")))
 
 
 @dataclass(frozen=True)
@@ -118,7 +121,7 @@ def split_claims(text: str, limit: int = MAX_CLAIMS) -> tuple[list[Claim], bool]
         for a, b in _pieces(seg):
             piece = seg[a:b]
             body = piece.strip(_EDGE)
-            if not body or not _HAS_WORD.search(body):
+            if not body or not _HAS_WORD.search(body) or _TAG_QUESTIONS.fullmatch(normalize(body).lower()):
                 continue
             if len(claims) == limit:
                 return claims, True

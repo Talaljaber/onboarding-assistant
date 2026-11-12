@@ -254,6 +254,7 @@ def _accept_feedback(
     allowed_texts = [str(scenario.get("scenario_ar") or ""), str(scenario.get("suggested_good_response_ar") or "")]
     # P16.1: the tip may not repeat a checklist line or name a fact outside the scenario (journey #8c/d)
     lines = [str(c.get(k) or "") for c in checklist for k in ("text_ar", "done_ar", "add_ar")]
+    lines.append(allowed_texts[1])  # P17: nor may it repeat the suggested response (journey #8c / U6)
     v = verify_feedback(parsed, ids, allowed_texts, user_text=user_text, checklist_texts=[t for t in lines if t])
     if not v.ok:
         return None, v.reason or BAD_SHAPE

@@ -312,34 +312,55 @@ _TIP_FACTS: tuple[re.Pattern[str], ...] = tuple(
 _TIP_TOKEN = re.compile(r"[^\W_]+")
 _TIP_PREFIX = re.compile(r"^(?:وال|بال|لل|ال|و)(?=\w{3})")
 _TIP_STOP = frozenset({"في", "من", "علي", "الي", "عن", "مع", "ان", "او", "ثم", "قبل", "بعد", "اي", "كل", "هذا", "هذه",
-                       "ما", "لا", "قد", "حتي", "اذا", "the", "a", "to", "and", "of"})
+                       "ما", "لا", "قد", "حتي", "اذا", "the", "a", "to", "and", "of",
+                       # P17: every tip talks to "the customer"; it says nothing about which line it repeats
+                       "زبون", "عميل"})
+#: P17: pronoun suffixes (and ة/ه) dropped so «أسرته» and «الأسرة», «توصية» and «توصي» compare equal.
+_TIP_SUFFIXES = ("تهم", "تها", "ته", "هم", "هن", "ها", "كم", "نا", "ه", "ك")
+_TIP_CLAUSE = re.compile(r"[،,.؛;:!?؟]")
 #: Share of the shorter text's content words that the other text holds for a "repeat" (and at least 3 words).
 TIP_REPEAT_SHARE = 0.6
+
+
+def _tip_stem(w: str) -> str:
+    w = _TIP_PREFIX.sub("", w)
+    for suf in _TIP_SUFFIXES:
+        if w.endswith(suf) and len(w) - len(suf) >= 3:
+            return w[: -len(suf)]
+    return w
 
 
 def _tip_words(text: str) -> set[str]:
     out = set()
     for w in _TIP_TOKEN.findall(_normalize(text)):
-        w = _TIP_PREFIX.sub("", w)
+        w = _tip_stem(w)
         if len(w) > 2 and w not in _TIP_STOP:
             out.add(w)
     return out
 
 
+def _tip_repeats(tip_ar: str, line: str) -> bool:
+    """The tip, or one of its clauses, mostly repeats `line` (P17: compared on stemmed content words)."""
+    other = _tip_words(line)
+    for part in [tip_ar, *_TIP_CLAUSE.split(tip_ar)]:
+        words = _tip_words(part)
+        shared = words & other
+        if len(shared) >= 3 and len(shared) >= TIP_REPEAT_SHARE * min(len(words), len(other)):
+            return True
+    return False
+
+
 def tip_scope_reason(tip_ar: str, context_texts: Sequence[str], checklist_texts: Sequence[str]) -> str | None:
     """`tip_off_scenario` / `tip_repeats_checklist` / None. `context_texts`: the scenario, its suggested response
-    and the trainee's reply; `checklist_texts`: every checklist item's text, done and add lines."""
+    and the trainee's reply; `checklist_texts`: every checklist item's text, done and add lines (and, P17, the
+    suggested response: a tip that repeats it adds nothing either)."""
     tip = _normalize(tip_ar)
     context = _normalize(" ".join([*context_texts, *checklist_texts]))
     for rx in _TIP_FACTS:
         if rx.search(tip) and not rx.search(context):
             return TIP_OFF_SCENARIO
-    words = _tip_words(tip_ar)
-    for line in checklist_texts:
-        other = _tip_words(line)
-        shared = words & other
-        if len(shared) >= 3 and len(shared) >= TIP_REPEAT_SHARE * min(len(words), len(other)):
-            return TIP_REPEATS_CHECKLIST
+    if any(_tip_repeats(tip_ar, line) for line in checklist_texts):
+        return TIP_REPEATS_CHECKLIST
     return None
 
 

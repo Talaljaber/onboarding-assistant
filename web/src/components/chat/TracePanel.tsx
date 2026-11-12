@@ -4,8 +4,9 @@
 // disclosure (closed by default); the route, retrieval, vote rows, summary and checks stay visible.
 import { useId, useState, type ReactNode } from "react";
 import type { PanelRole, Trace, TracePanelVote } from "@/api/types";
-import { useT, type DictKey } from "@/i18n";
+import { useLang, useT, type DictKey } from "@/i18n";
 import { ms, score } from "@/lib/format";
+import { topicLabel } from "@/lib/topic";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { surface } from "../ui/recipes";
@@ -101,6 +102,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readonly string[] }) {
   const t = useT();
+  const { lang } = useLang();
   const cited = new Set(citedIds);
   const r = trace.retrieval;
   const verifier = trace.answer?.verifier ?? trace.feedback?.verifier ?? null;
@@ -176,7 +178,7 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
       <Section title={t("trace.retrieval")}>
         {r ? (
           <>
-            {r.topic_expanded && <p className="mb-1">{t("trace.topicExpansion", { topic: r.topic_expanded })}</p>}
+            {r.topic_expanded && <p className="mb-1">{t("trace.topicExpansion", { topic: topicLabel(r.topic_expanded, lang) })}</p>}
             <div className="overflow-x-auto" dir="ltr">
               <table className="w-full border-collapse whitespace-nowrap text-start text-xs" dir="ltr">
                 <thead>
@@ -208,7 +210,10 @@ export function TracePanel({ trace, citedIds }: { trace: Trace; citedIds: readon
                           )}
                         </span>
                       </td>
-                      <td className="max-w-[7rem] truncate px-1 py-1.5 sm:px-1.5">{h.topic}</td>
+                      <td className="max-w-[7rem] truncate px-1 py-1.5 sm:px-1.5" dir="auto">
+                        {/* P17 (QA #10): the Arabic topic names in the Arabic UI */}
+                        {topicLabel(h.topic, lang)}
+                      </td>
                       <td className="font-id px-1 py-1.5 sm:px-1.5">{score(h.dense)}</td>
                       <td className="font-id px-1 py-1.5 sm:px-1.5">{score(h.bm25)}</td>
                       <td className="font-id px-1 py-1.5 sm:px-1.5">{score(h.rrf)}</td>

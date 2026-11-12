@@ -264,7 +264,7 @@ export const en: Dict = {
     quizNone: "No attempt yet",
     updated: "Progress updated: {pct}%",
     reset: "Reset progress",
-    resetConfirm: "This will delete the {role} progress, practised scenarios and practice quiz attempts from this browser. Continue?",
+    resetConfirm: "This deletes the {role} progress, practised scenarios and practice quiz attempts from this browser and clears your completed activities on the server too, so your mentor will also see 0%. Continue?",
     proposal: "Mark \"{label}\" as complete?",
     wouldBe: "Current {from}% → would become {to}%",
     done: "Done. Progress is now {to}% (was {from}%).",
@@ -304,7 +304,7 @@ export const en: Dict = {
     leaves: "What leaves your device?",
     leavesText: "With an API key: your question (and the previous one for a short follow-up), the knowledge rows and your scenario replies go to the model provider with data collection disabled. Without a key: nothing leaves this laptop, except database writes when a database is configured.",
     stored: "What is stored?",
-    storedText: "Track, language, progress, quiz and practice attempts are kept in your browser. When the server has its database configured they are also stored on the server under a demo alias, with no names and no chat text. The turn log keeps metadata only, no message or answer text. The clear button clears this browser only.",
+    storedText: "Your progress and quiz and practice ticks are saved on the server so your mentor can see them. Mentor-request replies and their attachments are stored on the server. Chat text is not stored on the server: it stays in this browser with your track and language, and the turn log keeps metadata only, no message or answer text. Knowledge imports keep only the approved passages. The clear button clears this browser only.",
     clear: "Clear this browser's data",
     limits: "Limitations",
     limitsText: "Offline mode answers only from the approved rows, and refuses or shows \"no confirmed answer\" when unsure. Answer and refusal accuracy were measured on a separate set of evaluation questions, apart from the tuning examples. It does not replace HR procedures and makes no employment decisions.",
@@ -445,7 +445,7 @@ export const en: Dict = {
     openPlan: "Open the plan",
     milestonesTitle: "Stages",
     manage: "Manage progress data",
-    resetHint: "Deletes this track's progress, scenarios and quiz attempts from this browser only.",
+    resetHint: "Deletes this track's progress, scenarios and quiz attempts from this browser, and resets your progress for your mentor too.",
   },
   uiAdmin: {
     // Worker D (kb, manager, about) appends here.
@@ -798,7 +798,6 @@ export const en: Dict = {
     add: "added:",
     reask: "Ask again",
     addedHint: "New sources were added after this reply — ask again",
-    impact: "Cited in answers to {n} intern(s) ({names})",
     impactNote: "When an answer's source changes, everyone who received it sees a notice with exactly what changed.",
   },
   check: {
@@ -919,5 +918,14 @@ export const en: Dict = {
     arabicOnly: "Arabic only",
     arabicOnlyHint: "The model wrote this note in Arabic; it is not translated.",
     sourceArabic: "Source text in Arabic",
+  },
+  /** P17: verification fixes (KB impact agreement, stale keyword hint, reset wording). */
+  p17: {
+    impactOne: "Cited in answers to 1 intern ({names})",
+    impactTwo: "Cited in answers to 2 interns ({names})",
+    impactFew: "Cited in answers to {n} interns ({names})",
+    impactMany: "Cited in answers to {n} interns ({names})",
+    keywordStale: "The keyword mentions {n}, which is not in the text — update it if needed.",
+    resetDone: "Progress reset to 0% — here and for your mentor.",
   },
 };

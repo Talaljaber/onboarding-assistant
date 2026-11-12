@@ -28,6 +28,7 @@ from app.verify import (
     numbers_in,
     parse_json_object,
     quote_in_row,
+    tip_scope_reason,
     verify_answer,
     verify_feedback,
     verify_tip,
@@ -399,6 +400,26 @@ def test_verify_feedback_ok_and_tip_dropped() -> None:
     assert v.ok and v.tip_ar is None and v.tip_reason == FOREIGN_NUMBER
     v = verify_feedback({"met": [], "missing": [], "value": "One Team", "tip_ar": None}, CHECKLIST, SCEN_TEXTS)
     assert v.ok and v.tip_ar is None and v.tip_reason is None
+
+
+# P17 (QA #8c/U6): compared on stemmed content words, per clause, against checklist lines and the suggested
+# response: «أسرته» = «الأسرة», «توصية» = «توصي», «الزبون» carries no meaning.
+S01_FAMILY_LINE = "اسأل عن حجم الأسرة والمساحة والميزانية والاستخدام قبل تقديم توصية."
+
+
+@pytest.mark.parametrize(
+    ("tip", "why"),
+    [
+        ("اسأل الزبون عن حجم أسرته والمساحة والميزانية قبل تقديم أي توصية، وتأكد من المعلومات مع المصدر الموثوق.",
+         "tip_repeats_checklist"),
+        ("اسأل الزبون عن حجم أسرته والمساحة والميزانية قبل التوصية.", "tip_repeats_checklist"),
+        ("ابدأ بسؤال مفتوح عن احتياج الزبون قبل ذكر أي ميزة.", None),
+        ("اقترح خيارين مناسبين واشرح الفرق بينهما بهدوء.", None),
+    ],
+)
+def test_tip_scope_reason_drops_a_near_repeat(tip: str, why: str | None) -> None:
+    scenario = "يسأل زبون عن ثلاجة مناسبة لأسرة كبيرة."
+    assert tip_scope_reason(tip, [scenario], [S01_FAMILY_LINE]) == why
 
 
 @pytest.mark.parametrize(

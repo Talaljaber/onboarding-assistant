@@ -14,6 +14,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Loadable } from "@/components/ui/Loadable";
 import { Page, PageHeader } from "@/components/ui/Page";
 import { surface } from "@/components/ui/recipes";
+import { useToast } from "@/components/ui/Toast";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { ValueTag } from "@/components/ui/ValueLabel";
 import { useT } from "@/i18n";
@@ -62,6 +63,7 @@ function MilestoneSummary({ milestone, current }: { milestone: Milestone; curren
 
 export default function ProgressScreen() {
   const t = useT();
+  const toast = useToast();
   const { role, profileId, plan, planStatus, reloadPlan, progress, quiz, scenarios } = useAppState();
   const list = useScenarioList(role);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -208,6 +210,7 @@ export default function ProgressScreen() {
               onClick={() => {
                 progress.reset();
                 setConfirmReset(false);
+                toast.show(t("p17.resetDone"), "ok"); // P17 (QA medium #3)
               }}
             >
               {t("progress.reset")}

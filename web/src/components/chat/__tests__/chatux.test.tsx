@@ -18,6 +18,7 @@ import { AttentionWatcher } from "@/components/shell/AttentionWatcher";
 import { BottomNav, NavTabs } from "@/components/shell/NavBars";
 import ChatScreen from "../ChatScreen";
 import { resetAttention, setAttention } from "../attention";
+import { claimText } from "../PremiseLine";
 import { stripForStorage, type ChatItem } from "../model";
 
 const PID = "6f1c2b9e-0000-4000-8000-000000000001";
@@ -118,6 +119,8 @@ describe("Answer Recall banner (P16.5)", () => {
       return el as HTMLElement;
     });
     expect(banner).toHaveTextContent("Sources of an earlier answer changed (1)");
+    // P17 (QA B1): in the sticky dock above the composer, so a long chat shows it without scrolling
+    expect(banner.closest("[data-chat-dock]")).not.toBeNull();
     await userEvent.click(within(banner).getByRole("button", { name: "Show" }));
     expect(scroll).toHaveBeenCalledTimes(1);
     expect((scroll.mock.contexts[0] as HTMLElement).getAttribute("data-item-id")).toBe("r1");
@@ -137,6 +140,30 @@ describe("Answer Recall banner (P16.5)", () => {
       await new Promise((r) => setTimeout(r, 20));
     });
     expect(document.querySelector("[data-recall-banner]")).toBeNull();
+  });
+});
+
+describe("mentor bar in the dock (P17, QA B1)", () => {
+  it("sits in the sticky dock with the recall banner, not above the thread", async () => {
+    backend([], { kb: kb("v2", K02_18) }, listFx);
+    render(
+      <Harness initial={seed(savedK02())}>
+        <ChatScreen />
+      </Harness>,
+    );
+    const bar = await waitFor(() => {
+      const el = document.querySelector("[data-mentor-requests]");
+      if (!el) throw new Error("not yet");
+      return el as HTMLElement;
+    });
+    const strip = bar.closest("[data-chat-strip]") as HTMLElement;
+    expect(strip).not.toBeNull();
+    expect(strip.closest("[data-chat-dock]")).not.toBeNull();
+    await waitFor(() => expect(strip.querySelector("[data-recall-banner]")).not.toBeNull());
+    // the strip comes before the composer inside the dock
+    const dock = strip.closest("[data-chat-dock]") as HTMLElement;
+    expect(dock.firstElementChild).toBe(strip);
+    expect(dock.querySelector("textarea")).not.toBeNull();
   });
 });
 
@@ -188,7 +215,38 @@ describe("premise correction (P16.5)", () => {
     expect(line.closest('[data-kind="unconfirmed"]')).not.toBeNull();
     expect(line).toHaveTextContent("You said 20; the source says 17");
     const a = within(line).getByRole("link", { name: "Check what you heard" });
-    expect(a.getAttribute("href")).toBe(`#/check?text=${encodeURIComponent(SAID_20)}`);
+    // P17: only the claim sentence, without the tag question «صح؟» (the check would make a card of it)
+    expect(a.getAttribute("href")).toBe(`#/check?text=${encodeURIComponent("مديري قال إنه عنا 20 معرض")}`);
+  });
+
+  it("claimText drops the tag question and keeps the sentence with the user's number (P17)", () => {
+    expect(claimText(SAID_20, "20")).toBe("مديري قال إنه عنا 20 معرض");
+    expect(claimText("We have 20 showrooms, right?", "20")).toBe("We have 20 showrooms");
+    expect(claimText("فترة التجربة 90 يوم مزبوط؟", "90")).toBe("فترة التجربة 90 يوم");
+    expect(claimText("سؤال سريع. مديري قال عنا 20 معرض. صح؟", "20")).toBe("مديري قال عنا 20 معرض");
+    expect(claimText("Is the copyright 2026?", "2026")).toBe("Is the copyright 2026?");
+    expect(claimText("صح؟", "20")).toBe("صح؟");
+  });
+
+  it("a recalled answer hides its old premise line under the recall notice (P17)", async () => {
+    const thread = stripForStorage([
+      { id: "u1", type: "user", text: SAID_20 },
+      {
+        id: "r1",
+        type: "reply",
+        reply: { ...answerOffline.reply, sources: [k02Source], premise: { claim: "20", row_number: "17", row_id: "K02" } },
+        mode: "offline",
+        cached: false,
+      },
+    ] as ChatItem[]);
+    backend([], { kb: kb("v2", K02_18) });
+    render(
+      <Harness initial={seed(thread)}>
+        <ChatScreen />
+      </Harness>,
+    );
+    await waitFor(() => expect(document.querySelector('[data-recall="changed"]')).not.toBeNull());
+    expect(document.querySelector("[data-premise]")).toBeNull();
   });
 
   it("an answer shows the line inside the cited row, above its text; no premise, no line", async () => {

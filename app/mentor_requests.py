@@ -15,7 +15,7 @@ from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from typing import Any
 
-from app import schemas
+from app import content_en, schemas
 from app.errors import ApiError
 from app.plan import PlanBook
 from app.verify import has_contact_or_link
@@ -63,7 +63,8 @@ def _activity(plan: PlanBook, aid: str | None, role: str | None) -> schemas.Link
     if act is None:
         return None
     return schemas.LinkedActivity(id=act.id, kind=act.kind, title_ar=act.title_ar,  # type: ignore[arg-type]
-                                  milestone=act.milestone)  # type: ignore[arg-type]
+                                  milestone=act.milestone,  # type: ignore[arg-type]
+                                  title_en=content_en.en(f"activity:{act.id}"))
 
 
 def view(rec: dict[str, Any], kb_row: KbLookup, plan: PlanBook, role: str | None,

@@ -356,6 +356,9 @@ describe("practice mode", () => {
     expect(card("scenario_start")!.querySelectorAll("[data-option-id]")).toHaveLength(3);
     const banner = document.querySelector("[data-practice-banner]") as HTMLElement;
     expect(banner).toHaveTextContent("S02 ·");
+    // P17 (QA #9): the English UI names the value in English, not «النزاهة»
+    expect(banner).toHaveTextContent(`S02 · ${scenarioStart.reply.scenario.company_value}`);
+    expect(banner.textContent).not.toContain(scenarioStart.reply.scenario.value_ar);
     expect(screen.getByRole("textbox")).toHaveAttribute("placeholder", "Write your reply…");
 
     await ask("بقوله إني رح أتأكد");

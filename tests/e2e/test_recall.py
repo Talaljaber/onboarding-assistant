@@ -72,7 +72,7 @@ def recall_flow(r: smoke.Run) -> None:
     kb.get_by_role("button", name="تعديل K02").first.click()
     form = page.locator('[data-kb-form="edit"]')
     impact = form.locator("[data-kb-impact]")
-    expect(impact).to_contain_text("استُشهد بهذا الصف في إجابات لـ")
+    expect(impact).to_contain_text("استُشهد بهذا الصف في إجابات ل")  # P17: «لمتدرب واحد» / «لمتدربَين»
     expect(impact).to_contain_text(sales_ar)
     r.no_overflow("recall-impact")
     area = form.get_by_label("النص (بالعربية)")

@@ -25,7 +25,9 @@ export function sortForIntern(list: MentorRequest[]): MentorRequest[] {
   return [...list].sort((a, b) => ORDER[a.status] - ORDER[b.status] || b.created_at.localeCompare(a.created_at));
 }
 
-export function MentorRequestsPanel() {
+/** `docked` (P17, QA B1): in the chat dock above the composer; it shares a row with the recall banner and its
+ *  open list scrolls inside, so the composer stays on screen. */
+export function MentorRequestsPanel({ docked = false }: { docked?: boolean } = {}) {
   const t = useT();
   const toast = useToast();
   const { profileId } = useAppState();
@@ -77,7 +79,13 @@ export function MentorRequestsPanel() {
       data-mentor-requests
       data-expanded={expanded || undefined}
       aria-labelledby={`${listId}-h`}
-      className={cn(surface.soft, "mb-3 flex flex-col", expanded && "gap-3 pb-3 sm:pb-4")}
+      className={cn(
+        surface.soft,
+        "flex flex-col",
+        docked ? "min-w-0 flex-[1_1_12rem]" : "mb-3",
+        expanded && "gap-3 pb-3 sm:pb-4",
+        expanded && docked && "basis-full",
+      )}
     >
       {/* One line: the whole bar is the disclosure button (heading > button keeps the heading outline). */}
       <h2 id={`${listId}-h`} className="m-0 text-base font-bold text-fg-1">
@@ -102,13 +110,14 @@ export function MentorRequestsPanel() {
             </span>
           )}
           <span className="ms-auto inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-accent">
-            {t(expanded ? "mentorReq.hide" : "mentorReq.show")}
+            {/* docked on a phone: the chevron alone, so the title is not cut ("From your me…") */}
+            <span className={cn(docked && "max-sm:sr-only")}>{t(expanded ? "mentorReq.hide" : "mentorReq.show")}</span>
             <Icon name="chevron-down" size={16} className={cn("shrink-0 transition-transform", expanded && "rotate-180")} />
           </span>
         </button>
       </h2>
       {expanded && (
-        <>
+        <div className={cn("flex flex-col gap-3", docked && "max-h-[45dvh] overflow-y-auto overscroll-contain")}>
           <p className="m-0 px-3 text-sm text-fg-2 sm:px-4">{t("mentorReq.intro")}</p>
           <ul id={listId} className="m-0 flex list-none flex-col gap-3 px-3 sm:px-4">
             {sorted.map((req) => (
@@ -129,7 +138,7 @@ export function MentorRequestsPanel() {
               />
             ))}
           </ul>
-        </>
+        </div>
       )}
     </section>
   );
