@@ -14,6 +14,7 @@ import { ContentText } from "../ui/ContentText";
 import { Icon } from "../ui/Icon";
 import { link, segmented, surface } from "../ui/recipes";
 import { useToast } from "../ui/Toast";
+import { DeadlineInfo } from "./Deadline";
 import { KIND, STATUS } from "./meta";
 
 /** Three-state status control (a radio group shaped like the segmented recipe). */
@@ -92,7 +93,10 @@ export function RequestCard({ req, footer, showStatus }: { req: MentorRequest; f
             {t(STATUS[req.status].key)}
           </Badge>
         )}
-        {req.due_date && (
+        {/* P21.1: the deadline (Amman time) and its timing badge; a request from an older server keeps the date */}
+        {req.due_at ? (
+          <DeadlineInfo req={req} />
+        ) : req.due_date && (
           <span className="inline-flex items-center gap-1 text-xs text-fg-2">
             <Icon name="calendar" size={14} className="shrink-0 text-fg-3" />
             {t("mentorReq.due", { date: formatDay(req.due_date, lang) })}

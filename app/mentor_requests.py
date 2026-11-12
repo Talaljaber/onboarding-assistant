@@ -5,6 +5,8 @@ text (`verify.has_contact_or_link`: no email, link or phone number), checks a li
 KB and a linked activity id against the intern's plan, and shapes stored rows into the contract
 (`MentorRequest`, with the K-row verbatim, the activity title for one-click opening and the thread's comment
 count). Replies and files live on the request's comment thread (P15, `app/request_comments.py`).
+P21.1: checks a new deadline (in the future on create, at most a year ahead) and adds `due_at`, `done_at`, the
+computed `timing` and `late_by_minutes` (`app/deadlines.py`) to every request, plus the intern's task counts.
 What it must never do: hold a score, or let request text reach the assistant (the agent, answer, LLM and
 prompt code never import this module; the text is shown to the intern only).
 """
@@ -12,10 +14,10 @@ prompt code never import this module; the text is shown to the intern only).
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from app import content_en, schemas
+from app import content_en, deadlines, schemas
 from app.errors import ApiError
 from app.plan import PlanBook
 from app.verify import has_contact_or_link
@@ -56,6 +58,26 @@ def check_links(fields: dict[str, Any], kb_row: KbLookup, plan: PlanBook, roles:
                 raise ApiError("validation_error", 400, f"not an activity of the {role} plan: {aid}", "activity_id")
 
 
+def check_due(fields: dict[str, Any], now: datetime, *, creating: bool) -> None:
+    """P21.1: 400 when the deadline a create or edit would store is more than a year ahead, or (on create) not in
+    the future. A bare `due_date` is checked as 23:59 Amman of that day."""
+    keys = ("due_at", "due_date")
+    sent = {k: v for k, v in fields.items() if k in keys and (v is not None or not creating)}  # create: None = unset
+    due = deadlines.parse_ts(deadlines.resolve_due(sent).get("due_at"))
+    if due is None:
+        return
+    field = "due_at" if sent.get("due_at") is not None else "due_date"
+    if creating and due <= now:
+        raise ApiError("validation_error", 400, f"{field} must be in the future", field)
+    if due > now + timedelta(days=schemas.DUE_AT_MAX_DAYS):
+        raise ApiError("validation_error", 400, f"{field} must be at most one year ahead", field)
+
+
+def task_summary(recs: list[dict[str, Any]] | None, now: datetime) -> schemas.TaskSummary | None:
+    """P21.1: the intern's requests by deadline outcome (None when the requests cannot be read now)."""
+    return None if recs is None else schemas.TaskSummary(**deadlines.task_counts(recs, now))
+
+
 def _activity(plan: PlanBook, aid: str | None, role: str | None) -> schemas.LinkedActivity | None:
     if aid is None or role is None:
         return None
@@ -68,9 +90,11 @@ def _activity(plan: PlanBook, aid: str | None, role: str | None) -> schemas.Link
 
 
 def view(rec: dict[str, Any], kb_row: KbLookup, plan: PlanBook, role: str | None,
-         comment_count: int = 0) -> schemas.MentorRequest:
+         comment_count: int = 0, now: datetime | None = None) -> schemas.MentorRequest:
     """The contract shape of one stored request; `role` is the intern's current track."""
     kid = rec.get("kb_id")
+    when, late = deadlines.timing(rec, now or datetime.now(UTC))
+    due_at, done_at = rec.get("due_at"), rec.get("done_at")
     return schemas.MentorRequest(
         id=rec["id"], intern_id=rec["intern_id"], title=rec["title"], note=rec.get("note") or "",
         kind=rec["kind"], kb_id=kid, activity_id=rec.get("activity_id"), due_date=rec.get("due_date"),
@@ -79,17 +103,22 @@ def view(rec: dict[str, Any], kb_row: KbLookup, plan: PlanBook, role: str | None
         kb_row=kb_row(kid) if kid else None,
         activity=_activity(plan, rec.get("activity_id"), role),
         comment_count=comment_count,
+        due_at=iso(due_at) if due_at else None,
+        done_at=iso(done_at) if done_at and rec.get("status") == "done" else None,
+        timing=when,  # type: ignore[arg-type]
+        late_by_minutes=late,
     )
 
 
 def listing(recs: list[dict[str, Any]], kb_row: KbLookup, plan: PlanBook,
             role_of: Callable[[str], str | None],
-            comment_counts: dict[str, int] | None = None) -> schemas.MentorRequestList:
+            comment_counts: dict[str, int] | None = None, now: datetime | None = None) -> schemas.MentorRequestList:
     counted = comment_counts or {}
-    items = [view(r, kb_row, plan, role_of(str(r["intern_id"])), counted.get(str(r["id"]), 0)) for r in recs]
+    at = now or datetime.now(UTC)
+    items = [view(r, kb_row, plan, role_of(str(r["intern_id"])), counted.get(str(r["id"]), 0), at) for r in recs]
     counts = {s: sum(1 for i in items if i.status == s) for s in schemas.REQUEST_STATUSES}
     return schemas.MentorRequestList(requests=items, counts=schemas.RequestCounts(**counts),
                                      label_ar=schemas.REQUESTS_LABEL_AR)
 
 
-__all__ = ["check_links", "check_text", "listing", "view"]
+__all__ = ["check_due", "check_links", "check_text", "listing", "task_summary", "view"]

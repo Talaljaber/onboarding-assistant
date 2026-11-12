@@ -23,7 +23,11 @@
         "status": "official"
       },
       "activity": null,
-      "comment_count": 0
+      "comment_count": 0,
+      "due_at": "2026-11-20T15:00:00.000+00:00",
+      "done_at": null,
+      "timing": "upcoming",
+      "late_by_minutes": null
     },
     {
       "id": "000000a2-4d3a-4e8b-9c71-2a5d0e7f3b14",
@@ -48,7 +52,11 @@
         "status": "official"
       },
       "activity": null,
-      "comment_count": 0
+      "comment_count": 0,
+      "due_at": "2026-11-20T15:00:00.000+00:00",
+      "done_at": null,
+      "timing": "upcoming",
+      "late_by_minutes": null
     }
   ],
   "counts": {

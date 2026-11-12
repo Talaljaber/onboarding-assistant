@@ -1223,6 +1223,47 @@ class DetailCheckpoint(_Model):
     finished_at: str | None
 
 
+# --------------------------------------------------------------------------------------
+# Task deadlines (P21.1): a request's deadline, when it was done and how that compares (task facts, not scores)
+# --------------------------------------------------------------------------------------
+
+RequestTiming = Literal["no_deadline", "upcoming", "due_soon", "overdue", "done_on_time", "done_late"]
+REQUEST_TIMINGS: tuple[str, ...] = get_args(RequestTiming)
+#: `due_soon`: an open request whose deadline is at most this many hours away.
+DUE_SOON_HOURS = 24
+#: A new deadline may be at most this many days ahead.
+DUE_AT_MAX_DAYS = 365
+
+
+def _aware_iso(v: str | None) -> str | None:
+    """An ISO 8601 date-time with a UTC offset (`2026-11-20T18:00:00+03:00` or `...Z`); kept as sent."""
+    if v is None:
+        return v
+    try:
+        dt = datetime.datetime.fromisoformat(v)
+    except ValueError:
+        raise ValueError("due_at must be an ISO 8601 date-time with an offset") from None
+    if dt.tzinfo is None or "T" not in v:
+        raise ValueError("due_at must be an ISO 8601 date-time with an offset")
+    return v
+
+
+DueAt = Annotated[str, Field(min_length=16, max_length=40)]
+
+
+class TaskSummary(_Model):
+    """P21.1: the intern's mentor requests by deadline outcome (counts only, never a score).
+    `total` = `done` + `open` + `overdue`; `done` = `done_on_time` + `done_late` + done requests without a
+    deadline; `open` = not done and not past the deadline; `overdue` = not done and past it."""
+
+    total: NonNeg
+    done: NonNeg
+    done_on_time: NonNeg
+    done_late: NonNeg
+    overdue: NonNeg
+    open: NonNeg
+
+
 class InternDetail(_Model):
     intern: InternOut
     last_active: str | None
@@ -1234,6 +1275,8 @@ class InternDetail(_Model):
     label_ar: str
     #: P20: checkpoint quizzes only (empty when none); see DetailCheckpoint.
     checkpoints: list[DetailCheckpoint] = Field(default_factory=list)
+    #: P21.1: mentor requests by deadline outcome; null when the requests cannot be read now.
+    tasks: TaskSummary | None
 
 
 # --------------------------------------------------------------------------------------
@@ -1294,6 +1337,12 @@ class MentorRequest(_Model):
     activity: LinkedActivity | None
     #: P15: how many comments (both ways) the request's thread has.
     comment_count: NonNeg
+    #: P21.1: the deadline (UTC, ISO 8601) and when the intern marked it done (cleared when reopened).
+    due_at: str | None
+    done_at: str | None
+    timing: RequestTiming
+    #: Whole minutes past the deadline for `overdue` and `done_late`, else null.
+    late_by_minutes: NonNeg | None
 
 
 class RequestCounts(_Model):
@@ -1323,11 +1372,18 @@ class MentorRequestCreate(_Model):
     kb_id: KbId | None = None
     activity_id: ActivityId | None = None
     due_date: DueDate | None = None
+    #: P21.1: the deadline with an offset; decides over `due_date` when both are sent.
+    due_at: DueAt | None = None
 
     @field_validator("due_date")
     @classmethod
     def _due_ok(cls, v: str | None) -> str | None:
         return _real_date(v)
+
+    @field_validator("due_at")
+    @classmethod
+    def _due_at_ok(cls, v: str | None) -> str | None:
+        return _aware_iso(v)
 
     @model_validator(mode="after")
     def _one_target(self) -> MentorRequestCreate:
@@ -1337,8 +1393,8 @@ class MentorRequestCreate(_Model):
 
 
 class MentorRequestPatch(_Model):
-    """`PATCH /api/admin/requests/{id}`: absent = unchanged; `note`/`kb_id`/`activity_id`/`due_date` null
-    clears; `title`, `kind`, `status` cannot be null. At least one field."""
+    """`PATCH /api/admin/requests/{id}`: absent = unchanged; `note`/`kb_id`/`activity_id`/`due_date`/`due_at`
+    null clears; `title`, `kind`, `status` cannot be null. At least one field."""
 
     kind: RequestKind | None = None
     title: RequestTitle | None = None
@@ -1347,11 +1403,18 @@ class MentorRequestPatch(_Model):
     activity_id: ActivityId | None = None
     due_date: DueDate | None = None
     status: RequestStatus | None = None
+    #: P21.1: the deadline with an offset (null clears it); decides over `due_date` when both are sent.
+    due_at: DueAt | None = None
 
     @field_validator("due_date")
     @classmethod
     def _due_ok(cls, v: str | None) -> str | None:
         return _real_date(v)
+
+    @field_validator("due_at")
+    @classmethod
+    def _due_at_ok(cls, v: str | None) -> str | None:
+        return _aware_iso(v)
 
     @model_validator(mode="after")
     def _some_change(self) -> MentorRequestPatch:
@@ -1626,6 +1689,7 @@ MailEvent = Literal[
     "question_submitted",
     "question_answered",
     "test",
+    "request_reminder",  # P21.1: a deadline reminder to the intern
 ]
 MailStatus = Literal["sent", "failed", "skipped"]
 MAIL_EVENTS: tuple[str, ...] = get_args(MailEvent)
@@ -2365,4 +2429,10 @@ __all__ = [
     "QuizSetSummary",
     "QuizSignal",
     "QuizSignals",
+    # P21.1 task deadlines
+    "DUE_AT_MAX_DAYS",
+    "DUE_SOON_HOURS",
+    "REQUEST_TIMINGS",
+    "RequestTiming",
+    "TaskSummary",
 ]

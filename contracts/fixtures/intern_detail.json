@@ -241,5 +241,13 @@
       "total": 3,
       "finished_at": "2026-11-12T10:05:00.000+00:00"
     }
-  ]
+  ],
+  "tasks": {
+    "total": 3,
+    "done": 1,
+    "done_on_time": 0,
+    "done_late": 1,
+    "overdue": 0,
+    "open": 2
+  }
 }

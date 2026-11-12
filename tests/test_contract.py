@@ -975,3 +975,42 @@ def test_checkpoint_contract() -> None:
                    "checkpoints"):
         assert needle in ts, needle
     assert "GET /api/admin/quiz-sets/{id}/results" in CONTRACT_MD.read_text(encoding="utf-8")
+
+
+# ------------------------------------------------------------------ P21.1 task deadlines
+
+
+def test_task_deadlines_contract() -> None:
+    """P21.1: `due_at` needs an offset, `timing` is one of six values with minutes late only when late, the admin
+    detail counts tasks (they add up), the mail log knows the reminder event, and none of it is a score."""
+    req = load("mentor_request_create_request.json")
+    assert req["due_at"].endswith("+03:00")
+    for bad in ("2026-11-20T18:00:00", "2026-11-20", "soon"):
+        with pytest.raises(ValidationError):
+            s.MentorRequestCreate.model_validate({**req, "due_at": bad})
+        with pytest.raises(ValidationError):
+            s.MentorRequestPatch.model_validate({"due_at": bad})
+    reqs = [*load("mentor_requests.json")["requests"], *load("mentor_requests_created.json")["requests"],
+            load("mentor_request.json")]
+    for r in reqs:
+        assert r["timing"] in s.REQUEST_TIMINGS
+        assert (r["late_by_minutes"] is not None) == (r["timing"] in ("overdue", "done_late"))
+        assert (r["due_at"] is None) == (r["timing"] == "no_deadline") == (r["due_date"] is None)
+        assert (r["done_at"] is not None) == (r["status"] == "done")
+    with pytest.raises(ValidationError):
+        s.MentorRequest.model_validate({**reqs[0], "timing": "late"})
+    tasks = load("intern_detail.json")["tasks"]
+    assert tasks["total"] == tasks["done"] + tasks["open"] + tasks["overdue"]
+    assert tasks["done"] >= tasks["done_on_time"] + tasks["done_late"]
+    banned = re.compile(r"correct|score|grade|accuracy|rating")
+    keys = set(s.TaskSummary.model_fields) | all_keys(tasks) | set(s.MentorRequest.model_fields)
+    assert not [k for k in keys if banned.search(k)]
+    assert "request_reminder" in s.MAIL_EVENTS
+    ts = TYPES_TS.read_text(encoding="utf-8")
+    for value in (*s.REQUEST_TIMINGS, "request_reminder"):
+        assert f'"{value}"' in ts, value
+    for needle in ("export interface TaskSummary", "tasks: TaskSummary | null", "due_at: string | null",
+                   "done_at: string | null", "timing: RequestTiming", "late_by_minutes: number | null",
+                   "due_at?: string | null"):
+        assert needle in ts, needle
+    assert "Task deadlines and reminders (P21.1)" in CONTRACT_MD.read_text(encoding="utf-8")

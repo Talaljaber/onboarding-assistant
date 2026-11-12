@@ -31,6 +31,7 @@ from app.config import ROOT, Settings, get_settings, validate_startup
 from app.errors import StartupError
 from app.logging_setup import log_event, setup_logging
 from app.mailer import Mailer
+from app.reminders import Reminders  # P21.1
 from app.interns import SEED as SEED_INTERNS
 from app.store import get_store
 
@@ -71,7 +72,12 @@ def create_app(settings: Settings | None = None, *, agent: Agent | None = None, 
 
     @asynccontextmanager
     async def lifespan(live: FastAPI) -> AsyncIterator[None]:
+        reminders = getattr(live.state, "reminders", None)
+        if reminders is not None:
+            reminders.start()  # P21.1: only when email can be sent (not OFFLINE, SMTP configured)
         yield
+        if reminders is not None:
+            reminders.stop()
         mail = getattr(live.state, "mailer", None)
         if mail is not None and not mail.wait(MAIL_DRAIN_S):  # queued emails get a chance to leave first
             log_event("mail_shutdown_pending")
@@ -87,6 +93,7 @@ def create_app(settings: Settings | None = None, *, agent: Agent | None = None, 
     app.state.encoder = {"model_id": meta["model_id"], "dim": meta["dim"], "sha_ok": True}
     app.state.admin = AdminAuth(s.admin_password.get_secret_value(), s.admin_session_hours * 3600)
     app.state.mailer = Mailer(s, st)  # P18.2: email notifications (skipped while OFFLINE or unconfigured)
+    app.state.reminders = Reminders(st, app.state.mailer, s.reminder_minutes)  # P21.1: deadline reminders
 
     install_api(app)
     # Every API router is included above this line: the catch-all and the web mount must stay last.

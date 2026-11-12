@@ -18,6 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypeVar
 
+from app.deadlines import due_at_of_date, norm_ts, parse_ts  # P21.1
 from app.logging_setup import log_event
 from app.store.base import (
     KB_COLUMNS,
@@ -195,7 +196,10 @@ create table if not exists mentor_requests (
     status text not null default 'new' check (status in ('new', 'in_progress', 'done')),
     created_at text not null,
     updated_at text not null,
-    status_changed_at text not null
+    status_changed_at text not null,
+    due_at text,
+    done_at text,
+    reminder_sent_at text
 );
 create index if not exists mentor_requests_intern_idx on mentor_requests (intern_id, created_at);
 create table if not exists mentor_request_comments (
@@ -310,6 +314,20 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "answer_text" not in {r[1] for r in conn.execute("pragma table_info(mentor_questions)")}:
         conn.execute("alter table mentor_questions add column answer_text text")
     _allow_quiz_questions(conn)  # P20
+    # P21.1 (supabase/migrations/0010_request_deadlines.sql): deadline, done time, reminder claim; the same
+    # backfill (a due_date means 23:59 Amman that day; a done request was done when its status last changed).
+    req_cols = {r[1] for r in conn.execute("pragma table_info(mentor_requests)")}
+    for col in ("due_at", "done_at", "reminder_sent_at"):
+        if col not in req_cols:
+            conn.execute(f"alter table mentor_requests add column {col} text")
+    if "due_at" not in req_cols:
+        for rid, day in conn.execute("select id, due_date from mentor_requests where due_date is not null").fetchall():
+            try:
+                conn.execute("update mentor_requests set due_at = ? where id = ?", (due_at_of_date(str(day)[:10]), rid))
+            except ValueError:
+                continue
+    if "done_at" not in req_cols:
+        conn.execute("update mentor_requests set done_at = status_changed_at where status = 'done' and done_at is null")
 
 
 def _jload(raw: Any) -> Any:
@@ -875,7 +893,7 @@ class LocalStore:
             cur = c.execute("select * from mentor_requests where id = ?", (rid,)).fetchone()
             if not cur:
                 return {}
-            clean = request_changes(changes, cur["status"])
+            clean = request_changes(changes, cur["status"], cur["due_at"])
             if clean is None:
                 log_event("store_rejected", store="local", op="mentor_request_update", reason="invalid_input")
                 return None
@@ -895,6 +913,29 @@ class LocalStore:
         if gone:
             shutil.rmtree(self.files_dir / rid, ignore_errors=True)  # its comments and file rows cascade
         return gone
+
+    # Deadline reminders (P21.1) ------------------------------------------------------------------
+
+    def mentor_requests_reminder_due(self, after: str, until: str) -> list[dict[str, Any]] | None:
+        lo, hi = parse_ts(after), parse_ts(until)
+        if lo is None or hi is None:
+            return []
+
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            rows = [request_row(dict(r)) for r in c.execute(
+                "select * from mentor_requests where status != 'done' and due_at is not null"
+                " and reminder_sent_at is null order by due_at")]
+            return [r for r in rows if (d := parse_ts(r["due_at"])) is not None and lo < d <= hi]
+
+        return self._run("mentor_requests_reminder_due", None, op)
+
+    def mentor_request_claim_reminder(self, request_id: str, due_at: str, at: str) -> bool | None:
+        rid, due, when = valid_uuid(request_id), norm_ts(due_at), norm_ts(at)
+        if rid is None or due is None or when is None:
+            return False
+        return self._run("mentor_request_claim_reminder", None, lambda c: c.execute(
+            "update mentor_requests set reminder_sent_at = ? where id = ? and due_at = ?"
+            " and reminder_sent_at is null and status != 'done'", (when, rid, due)).rowcount > 0)
 
     # Comments and files on mentor requests (P15) ----------------------------------------------------
 

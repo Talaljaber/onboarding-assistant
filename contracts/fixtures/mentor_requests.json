@@ -21,7 +21,11 @@
         "milestone": "Day 30",
         "title_en": "Short quiz"
       },
-      "comment_count": 0
+      "comment_count": 0,
+      "due_at": null,
+      "done_at": null,
+      "timing": "no_deadline",
+      "late_by_minutes": null
     },
     {
       "id": "000000a3-4d3a-4e8b-9c71-2a5d0e7f3b14",
@@ -31,14 +35,18 @@
       "kind": "learn",
       "kb_id": null,
       "activity_id": null,
-      "due_date": null,
+      "due_date": "2026-11-11",
       "status": "done",
       "created_at": "2026-11-10T09:05:00.000+00:00",
       "updated_at": "2026-11-11T11:40:00.000+00:00",
       "status_changed_at": "2026-11-11T11:40:00.000+00:00",
       "kb_row": null,
       "activity": null,
-      "comment_count": 0
+      "comment_count": 0,
+      "due_at": "2026-11-11T09:00:00.000+00:00",
+      "done_at": "2026-11-11T11:40:00.000+00:00",
+      "timing": "done_late",
+      "late_by_minutes": 160
     },
     {
       "id": "000000a1-4d3a-4e8b-9c71-2a5d0e7f3b14",
@@ -63,7 +71,11 @@
         "status": "official"
       },
       "activity": null,
-      "comment_count": 2
+      "comment_count": 2,
+      "due_at": "2026-11-20T20:59:00.000+00:00",
+      "done_at": null,
+      "timing": "upcoming",
+      "late_by_minutes": null
     }
   ],
   "counts": {

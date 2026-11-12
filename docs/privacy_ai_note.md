@@ -67,7 +67,7 @@ repository.
 | Header switch «بلا اتصال» | **nothing** to any AI service for that request | — |
 | Key present, mode «تلقائي» | see below | OpenRouter |
 | Supabase variables present | store records (section 4) | the project's Supabase database (Supabase-hosted project; region: to be confirmed) |
-| `SMTP_USER` and `SMTP_PASSWORD` set, not offline (P18.2) | notification emails: a new mentor request's title and note, request replies with their attachments, a "request done" notice, questions sent to the mentor and their answers (the K-row text, or the mentor's private reply) | the configured SMTP server (Gmail by default) and the addresses the admin entered: the intern's email, and `ADMIN_EMAIL` |
+| `SMTP_USER` and `SMTP_PASSWORD` set, not offline (P18.2) | notification emails: a new mentor request's title and note, request replies with their attachments, a "request done" notice, questions sent to the mentor and their answers (the K-row text, or the mentor's private reply), and (P21.1) a deadline reminder: the request's title and note and its deadline | the configured SMTP server (Gmail by default) and the addresses the admin entered: the intern's email, and `ADMIN_EMAIL` |
 
 With a key, per message, at most:
 - **tool choice:** the message, the previous message (only for short follow-ups), the six scenario
@@ -150,6 +150,7 @@ policies for anonymous or signed-in clients.
 | `turn_logs` | request id, profile id (if any), time, tool, mode, status, band, cited ids, verifier result and reason, latency, cached, model. **No message text, no answer text** |
 | `mentor_request_comments`, `mentor_request_files` (P15) | replies on a mentor request, both ways: author (intern or admin), text, time; and per attached file its name, type (PDF, Word, PNG or JPEG), size, sha256 and storage key (migration `0005_request_comments.sql`) |
 | `interns.email`, `mail_log` (P18.2) | the intern's email address (optional, entered by the admin; shown in the admin views only); per email sent, failed or skipped: event, recipient address, subject, status, a short error code and time. **No email body, no password** (migration `0007_email.sql`) |
+| `mentor_requests` deadline columns (P21.1) | per mentor request: its deadline (`due_at`), when the intern marked it done (`done_at`, cleared when reopened) and when its reminder email was claimed (`reminder_sent_at`). Task facts shown to the admin as on time / late / overdue / open counts, **never a score** (migration `0010_request_deadlines.sql`) |
 | Storage bucket `mentor-files` (P15, **private**) | the bytes of files attached to those replies (at most 3 per reply, 5 MB each), at `requests/{request id}/{file id}` |
 | `mentor_questions` (P18.1) | a question the intern **chose** to send to the mentor (Rumour Check, a chat refusal or, P20, «اسأل مشرفي عن هذا» after a wrong practice-quiz answer): intern id, source (check, chat or quiz), the text exactly as sent (≤ 600), status (open, answered, dismissed), the answer's K id or (P18.5) the mentor's private reply text (≤ 600), times (migrations `0006_questions.sql`, `0008_private_answers.sql`) |
 
@@ -200,6 +201,12 @@ chat thread. «امسح بيانات هذا المتصفح» on the «حول و�
   intern email addresses are stored on the server and shown to the admin only. The SMTP password stays in
   `.env`: it is never logged, stored, shown or returned, and the email log keeps a short error code, never the
   server's reply.
+- Deadline reminder emails (P21.1): when the admin gives a request a deadline, the server emails the intern once,
+  `REMINDER_MINUTES` (default 10) before it, with the request's title and note and the deadline in Amman time (no
+  link). Only while email is configured and the app is not offline (otherwise the reminder check does not run and
+  nothing is logged); only to an active intern with an email address; never late after the server was down. The
+  admin's intern page shows how many requests were done on time, done late, are overdue or open: task facts from
+  the deadlines the admin set, not an evaluation of the intern, and nothing of it reaches the assistant.
 - An intern's name is shown in the intern's header and the admin interface only. It never reaches the AI
   service, a chat request (which carries the profile id only), a turn log or generated text.
 - The admin's interns list and detail page show completion, activities with their completion dates,

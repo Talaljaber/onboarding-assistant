@@ -4,6 +4,7 @@
   "note": "ركّز على قيمة النزاهة.",
   "kb_id": "K05",
   "activity_id": null,
-  "due_date": "2026-11-24",
-  "status": "in_progress"
+  "due_date": null,
+  "status": "in_progress",
+  "due_at": "2026-11-24T17:00:00+03:00"
 }

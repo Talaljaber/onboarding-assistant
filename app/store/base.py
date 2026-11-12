@@ -16,6 +16,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
 
+from app.deadlines import norm_ts, resolve_due  # P21.1
 from app.logging_setup import log_event
 from app.schemas import EMAIL_MAX, EMAIL_RE  # P18.2
 
@@ -217,6 +218,18 @@ class Store(Protocol):
     def mentor_request_delete(self, request_id: str) -> bool | None:
         """True when deleted (with its comments, file records and stored files), False when unknown, None on
         failure."""
+        ...
+
+    # Deadline reminders (P21.1) ------------------------------------------------------------------
+    # Same failure rule as the requests table (None = unavailable now, never flips the store).
+
+    def mentor_requests_reminder_due(self, after: str, until: str) -> list[dict[str, Any]] | None:
+        """Requests not done, with no reminder claimed and `after` < due_at <= `until` (REQUEST_COLUMNS)."""
+        ...
+
+    def mentor_request_claim_reminder(self, request_id: str, due_at: str, at: str) -> bool | None:
+        """Set reminder_sent_at = `at` only if it is still null, the request is not done and its deadline is still
+        `due_at` (one atomic write: two servers never both win). True when this call claimed it."""
         ...
 
     # Comments and files on mentor requests (P15) ----------------------------------------------------
@@ -688,7 +701,9 @@ def draft_record(rec: object) -> dict[str, Any] | None:
 # Text-only "learn / do / read" requests from the admin to one intern: no files, no replies. A request may
 # link one K-row id and one plan activity id (the API checks them against the KB and the intern's plan).
 REQUEST_COLUMNS = ("id", "intern_id", "title", "note", "kind", "kb_id", "activity_id", "due_date", "status",
-                   "created_at", "updated_at", "status_changed_at")
+                   "created_at", "updated_at", "status_changed_at",
+                   # P21.1 (migration 0010): the deadline, when it was marked done, when its reminder was claimed
+                   "due_at", "done_at", "reminder_sent_at")
 REQUEST_KINDS = frozenset({"learn", "do", "read"})
 REQUEST_STATUSES = frozenset({"new", "in_progress", "done"})
 REQUEST_TITLE_MAX = 120
@@ -724,6 +739,8 @@ def _request_field_ok(key: str, val: object) -> bool:
         return val is None or (isinstance(val, str) and bool(_ACTIVITY_ID_RE.match(val)))
     if key == "due_date":
         return _valid_due(val)
+    if key == "due_at":  # P21.1
+        return val is None or norm_ts(val) is not None
     return False
 
 
@@ -738,19 +755,27 @@ def request_record(rec: object) -> dict[str, Any] | None:
     out["status"] = out["status"] or "new"
     if out["intern_id"] is None:
         return None
-    for key in ("title", "note", "kind", "status", "kb_id", "activity_id", "due_date"):
+    for key in ("title", "note", "kind", "status", "kb_id", "activity_id", "due_date", "due_at"):
         if not _request_field_ok(key, out[key]):
             return None
     at = now_iso()
     for key in ("created_at", "updated_at", "status_changed_at"):
         out[key] = out[key] if isinstance(out[key], str) and out[key] else at
+    # P21.1: one deadline rule (`deadlines.resolve_due`): due_at decides, a bare due_date means 23:59 Amman.
+    out.update(resolve_due({"due_at": out["due_at"]} if out["due_at"] is not None else {"due_date": out["due_date"]}))
+    out["done_at"] = out["status_changed_at"] if out["status"] == "done" else None
+    out["reminder_sent_at"] = None
     return out
 
 
-def request_changes(changes: dict[str, Any], current_status: str | None = None) -> dict[str, Any] | None:
+def request_changes(changes: dict[str, Any], current_status: str | None = None,
+                    current_due_at: object = None) -> dict[str, Any] | None:
     """Validated partial update of a request (updated_at set; status_changed_at set when the status changes),
-    or None when anything is invalid or unknown."""
-    allowed = ("title", "note", "kind", "status", "kb_id", "activity_id", "due_date")
+    or None when anything is invalid or unknown.
+
+    P21.1: `due_at`/`due_date` follow `deadlines.resolve_due`; a new deadline clears `reminder_sent_at`; moving
+    to done sets `done_at`, moving out of done clears it."""
+    allowed = ("title", "note", "kind", "status", "kb_id", "activity_id", "due_date", "due_at")
     out: dict[str, Any] = {}
     for key, val in changes.items():
         if key not in allowed:
@@ -763,6 +788,14 @@ def request_changes(changes: dict[str, Any], current_status: str | None = None) 
     out["updated_at"] = at
     if "status" in out and out["status"] != current_status:
         out["status_changed_at"] = at
+        if out["status"] == "done":
+            out["done_at"] = at
+        elif current_status == "done":
+            out["done_at"] = None
+    if "due_at" in out or "due_date" in out:
+        out.update(resolve_due({k: out[k] for k in ("due_at", "due_date") if k in out}))
+        if out["due_at"] != norm_ts(current_due_at):
+            out["reminder_sent_at"] = None
     return out
 
 
@@ -773,6 +806,8 @@ def request_row(r: dict[str, Any]) -> dict[str, Any]:
     out["note"] = out["note"] or ""
     if out["due_date"] is not None:
         out["due_date"] = str(out["due_date"])[:10]
+    for key in ("due_at", "done_at", "reminder_sent_at"):  # P21.1: one timestamp form for both stores
+        out[key] = norm_ts(out[key])
     return out
 
 
@@ -888,7 +923,8 @@ def comment_input(
 
 MAIL_COLUMNS = ("id", "event", "to_addr", "subject", "status", "error", "created_at")
 MAIL_EVENTS = frozenset({"request_created", "admin_comment", "intern_comment", "request_done", "question_submitted",
-                         "question_answered", "test"})
+                         "question_answered", "test",
+                         "request_reminder"})  # P21.1 (migration 0010 widens the check constraint)
 MAIL_STATUSES = frozenset({"sent", "failed", "skipped"})
 MAIL_SUBJECT_MAX = 200
 _MAIL_ERROR_RE = re.compile(r"^[a-z_]{1,40}$")

@@ -7,6 +7,7 @@ moves only their own requests, scoped by the session profile id. Status is a to-
 
 from __future__ import annotations
 
+import datetime
 import re
 import uuid
 from collections.abc import Iterator
@@ -31,6 +32,7 @@ from app.schemas import (
 from app.store import LocalStore
 
 UNKNOWN = "6f1c2b9e-4d3a-4e8b-9c71-2a5d0e7f3b14"
+DUE = (datetime.date.today() + datetime.timedelta(days=20)).isoformat()  # P21.1: a new deadline is in the future
 Env = tuple[TestClient, dict[str, str], LocalStore]
 
 
@@ -77,10 +79,10 @@ def test_admin_creates_for_one_intern_with_links(env: Env) -> None:
     act = sales_activity(client)
     out = create(client, auth, {"intern_id": sara.id, "kind": "read", "title": "  اقرأ   قيم الشركة ",
                                 "note": "سطر أول\n\n\n\nسطر ثان", "kb_id": "K05", "activity_id": act,
-                                "due_date": "2026-12-01"})
+                                "due_date": DUE})
     (req,) = out.requests
     assert req.intern_id == sara.id and req.title == "اقرأ قيم الشركة" and req.note == "سطر أول\n\nسطر ثان"
-    assert req.status == "new" and req.kind == "read" and req.due_date == "2026-12-01"
+    assert req.status == "new" and req.kind == "read" and req.due_date == DUE
     assert req.kb_row is not None and req.kb_row.id == "K05" and req.kb_row.answer_ar  # verbatim live row
     assert req.activity is not None and req.activity.id == act and req.activity.title_ar
     assert out.counts.new == 1 and out.label_ar == REQUESTS_LABEL_AR
@@ -158,7 +160,7 @@ def test_admin_edit_and_delete(env: Env) -> None:
     sara = roster(client)[0]
     act = sales_activity(client)
     req = create(client, auth, {"intern_id": sara.id, "kind": "learn", "title": "t", "kb_id": "K01",
-                                "activity_id": act, "due_date": "2026-12-01", "note": "n"}).requests[0]
+                                "activity_id": act, "due_date": DUE, "note": "n"}).requests[0]
     r = client.patch(f"/api/admin/requests/{req.id}", json={"title": "عنوان جديد", "kind": "do", "kb_id": None,
                                                             "activity_id": None, "due_date": None, "note": None},
                      headers=auth)

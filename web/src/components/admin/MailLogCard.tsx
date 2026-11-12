@@ -25,6 +25,7 @@ const EVENT_KEY: Record<MailEvent, DictKey> = {
   question_submitted: "mail.eventQuestionSubmitted",
   question_answered: "mail.eventQuestionAnswered",
   test: "mail.eventTest",
+  request_reminder: "deadline.mailEvent", // P21.1
 };
 
 const STATUS: Record<MailStatus, { key: DictKey; tone: "ok" | "danger" | "neutral" }> = {
