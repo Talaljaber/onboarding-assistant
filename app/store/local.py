@@ -72,6 +72,14 @@ from app.store.base import (  # P20 practice quizzes
     quiz_set_record,
     quiz_set_row,
 )
+from app.store.base import (  # P23 quiz runs
+    QUIZ_RUN_COLUMNS,
+    quiz_run_attempt_record,
+    quiz_run_attempt_row,
+    quiz_run_close_changes,
+    quiz_run_record,
+    quiz_run_row,
+)
 
 T = TypeVar("T")
 
@@ -264,7 +272,8 @@ create table if not exists quiz_sets (
     status text not null default 'draft' check (status in ('draft', 'published')),
     mode text not null default 'practice' check (mode in ('practice', 'checkpoint')),
     created_at text not null,
-    updated_at text not null
+    updated_at text not null,
+    time_limit_minutes integer check (time_limit_minutes is null or time_limit_minutes between 1 and 120)
 );
 create table if not exists quiz_set_items (
     id text primary key check (id glob 'M[0-9][0-9][0-9]'),
@@ -281,6 +290,27 @@ create table if not exists quiz_set_items (
 );
 create index if not exists quiz_set_items_set_idx on quiz_set_items (set_id, position);
 create index if not exists quiz_attempts_question_idx on quiz_attempts (question_id);
+"""
+
+# P23 quiz runs (the same table as supabase/migrations/0011_quiz_runs.sql; item_ids as JSON text). The columns
+# added to existing tables (quiz_sets.time_limit_minutes, quiz_attempts.run_id) and the run indexes are in _migrate.
+RUNS_SCHEMA = """
+create table if not exists quiz_runs (
+    id text primary key,
+    set_id text not null,
+    intern_id text references interns (id) on delete cascade,
+    profile_id text not null references profiles (id) on delete cascade,
+    item_ids text not null default '[]',
+    started_at text not null,
+    deadline_at text,
+    finished_at text,
+    status text not null default 'in_progress' check (status in ('in_progress', 'finished', 'expired')),
+    check ((finished_at is null) = (status = 'in_progress')),
+    check (intern_id is not null or set_id = 'official')
+);
+create unique index if not exists quiz_runs_one_open_uidx on quiz_runs (profile_id, set_id) where status = 'in_progress';
+create index if not exists quiz_runs_profile_idx on quiz_runs (profile_id, set_id, started_at);
+create index if not exists quiz_runs_intern_idx on quiz_runs (intern_id, set_id, started_at);
 """
 
 
@@ -328,6 +358,15 @@ def _migrate(conn: sqlite3.Connection) -> None:
                 continue
     if "done_at" not in req_cols:
         conn.execute("update mentor_requests set done_at = status_changed_at where status = 'done' and done_at is null")
+    # P23 (supabase/migrations/0011_quiz_runs.sql): a set's time limit; the run an answer belongs to (one answer per
+    # run and question).
+    if "time_limit_minutes" not in {r[1] for r in conn.execute("pragma table_info(quiz_sets)")}:
+        conn.execute("alter table quiz_sets add column time_limit_minutes integer"
+                     " check (time_limit_minutes is null or time_limit_minutes between 1 and 120)")
+    if "run_id" not in {r[1] for r in conn.execute("pragma table_info(quiz_attempts)")}:
+        conn.execute("alter table quiz_attempts add column run_id text")
+    conn.execute("create unique index if not exists quiz_attempts_run_question_uidx on quiz_attempts (run_id, question_id)"
+                 " where run_id is not null")
 
 
 def _jload(raw: Any) -> Any:
@@ -356,6 +395,7 @@ class LocalStore:
             conn.executescript(SCHEMA)
             conn.executescript(QUESTIONS_SCHEMA)  # P18.1
             conn.executescript(QUIZ_SCHEMA)  # P20
+            conn.executescript(RUNS_SCHEMA)  # P23
             _migrate(conn)
             conn.commit()
         except sqlite3.Error as exc:
@@ -1306,11 +1346,105 @@ class LocalStore:
             return []
 
         def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
-            q = ("select profile_id, question_id, correct, at from quiz_attempts"
+            q = ("select profile_id, question_id, correct, at, run_id from quiz_attempts"
                  f" where question_id in ({','.join('?' * len(qids))}) order by at, id")
             return [quiz_answer_row(dict(r)) for r in c.execute(q, qids)]
 
         return self._run("quiz_answers", None, op)
+
+    # Quiz runs (P23) -------------------------------------------------------------------------------
+
+    _RUN_SELECT = f"select {', '.join(QUIZ_RUN_COLUMNS)} from quiz_runs"
+
+    def quiz_runs(
+        self, *, ids: list[str] | None = None, profile_ids: list[str] | None = None,
+        intern_ids: list[str] | None = None, set_ids: list[str] | None = None,
+    ) -> list[dict[str, Any]] | None:
+        where: list[str] = []
+        args: list[Any] = []
+        for col, values in (("id", ids), ("profile_id", profile_ids), ("intern_id", intern_ids)):
+            if values is not None:
+                clean = [i for i in (valid_uuid(x) for x in values) if i]
+                if not clean:
+                    return []
+                where.append(f"{col} in ({','.join('?' * len(clean))})")
+                args += clean
+        if set_ids is not None:
+            sets = [s for s in set_ids if isinstance(s, str) and (s == "official" or valid_uuid(s) == s)]
+            if not sets:
+                return []
+            where.append(f"set_id in ({','.join('?' * len(sets))})")
+            args += sets
+        q = self._RUN_SELECT + (" where " + " and ".join(where) if where else "") + " order by started_at, rowid"
+
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            return [quiz_run_row(dict(r)) for r in c.execute(q, args)]
+
+        return self._run("quiz_runs", None, op)
+
+    def quiz_run_start(self, record: dict[str, Any]) -> dict[str, Any] | None:
+        rec = quiz_run_record(record)
+        if rec is None:
+            log_event("store_rejected", store="local", op="quiz_run_start", reason="invalid_input")
+            return None
+        cols = ", ".join(QUIZ_RUN_COLUMNS)
+        marks = ", ".join(f":{k}" for k in QUIZ_RUN_COLUMNS)
+        open_q = self._RUN_SELECT + " where profile_id = ? and set_id = ? and status = 'in_progress'"
+
+        def op(c: sqlite3.Connection) -> dict[str, Any]:
+            found = c.execute(open_q, (rec["profile_id"], rec["set_id"])).fetchone()
+            if found:
+                return quiz_run_row(dict(found))
+            c.execute(f"insert into quiz_runs ({cols}) values ({marks})", {**rec, "item_ids": json.dumps(rec["item_ids"])})
+            return quiz_run_row(rec)
+
+        return self._run("quiz_run_start", None, op)
+
+    def quiz_run_close(self, run_id: str, status: str, finished_at: str) -> dict[str, Any] | None:
+        rid = valid_uuid(run_id)
+        changes = quiz_run_close_changes(status, finished_at)
+        if rid is None:
+            return {}
+        if changes is None:
+            log_event("store_rejected", store="local", op="quiz_run_close", reason="invalid_input")
+            return None
+
+        def op(c: sqlite3.Connection) -> dict[str, Any]:
+            c.execute("update quiz_runs set status = :status, finished_at = :finished_at"
+                      " where id = :id and status = 'in_progress'", {**changes, "id": rid})
+            row = c.execute(self._RUN_SELECT + " where id = ?", (rid,)).fetchone()
+            return quiz_run_row(dict(row)) if row else {}
+
+        return self._run("quiz_run_close", None, op)
+
+    def quiz_run_answer(self, run: dict[str, Any], question_id: str, option: str, correct: bool) -> bool | None:
+        rec = quiz_run_attempt_record(run, question_id, option, correct)
+        if rec is None:
+            log_event("store_rejected", store="local", op="quiz_run_answer", reason="invalid_input")
+            return None
+
+        def op(c: sqlite3.Connection) -> bool:
+            try:
+                c.execute("insert into quiz_attempts (profile_id, question_id, option, correct, at, run_id)"
+                          " values (:profile_id, :question_id, :option, :correct, :at, :run_id)",
+                          {**rec, "correct": 1 if rec["correct"] else 0})
+            except sqlite3.IntegrityError:
+                return False  # this run already has an answer to this question
+            return True
+
+        return self._run("quiz_run_answer", None, op)
+
+    def quiz_run_attempts(self, run_ids: list[str]) -> list[dict[str, Any]] | None:
+        rids = [i for i in (valid_uuid(x) for x in run_ids) if i]
+        if not rids:
+            return []
+
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            q = ("select run_id, question_id, option, correct, at from quiz_attempts"
+                 f" where run_id in ({','.join('?' * len(rids))}) order by at, id")
+            return [quiz_run_attempt_row(dict(r)) for r in c.execute(q, rids)]
+
+        return self._run("quiz_run_attempts", None, op)
 
     # Used by tests and the integrator's smoke only.
     def table_rows(self, table: str) -> list[dict[str, Any]]:
@@ -1332,6 +1466,7 @@ class LocalStore:
             "mentor_questions",
             "quiz_sets",
             "quiz_set_items",
+            "quiz_runs",
         }
         if table not in allowed:
             return []

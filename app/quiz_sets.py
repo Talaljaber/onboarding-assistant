@@ -169,7 +169,7 @@ def admin_item(rec: Mapping[str, Any], kb_row: Callable[[str], schemas.Source | 
 
 
 def admin_set(rec: Mapping[str, Any], item_count: int, interns_practised: int) -> schemas.AdminQuizSet:
-    return schemas.AdminQuizSet(
+    return schemas.AdminQuizSet(time_limit_minutes=rec.get("time_limit_minutes"),
         id=rec["id"], title_ar=rec["title_ar"], title_en=rec.get("title_en"), audience=rec["audience"],
         track=rec.get("track"), intern_ids=list(rec.get("intern_ids") or []),
         opens_at_percent=int(rec.get("opens_at_percent") or 0), status=rec["status"],
@@ -223,20 +223,26 @@ def is_open(rec: Mapping[str, Any], percent: int) -> bool:
     return percent >= int(rec.get("opens_at_percent") or 0)
 
 
-def official_summary(item_count: int) -> schemas.QuizSetSummary:
+def official_summary(item_count: int, runs: Mapping[str, Any] | None = None) -> schemas.QuizSetSummary:
+    """`runs` (P23): {open_run_id, open_run_remaining_seconds, last_review_run_id} of this profile."""
     return schemas.QuizSetSummary(id=schemas.OFFICIAL_QUIZ_SET_ID, title_ar=schemas.OFFICIAL_QUIZ_TITLE_AR,
                                   title_en=schemas.OFFICIAL_QUIZ_TITLE_EN, item_count=item_count,
-                                  opens_at_percent=0, open=True, official=True, mode="practice")
+                                  opens_at_percent=0, open=True, official=True, mode="practice", **(runs or {}))
 
 
 def set_summary(rec: Mapping[str, Any], item_count: int, percent: int,
-                my_result: schemas.CheckpointMyResult | None = None) -> schemas.QuizSetSummary:
-    """`my_result` (P21.2): the intern's own shared result, kept only for a checkpoint set."""
+                my_result: schemas.CheckpointMyResult | None = None,
+                runs: Mapping[str, Any] | None = None) -> schemas.QuizSetSummary:
+    """`my_result` (P21.2): the intern's own shared result, kept only for a checkpoint set. `runs` (P23): as for
+    `official_summary`. A checkpoint or timed set is `locked` (the assistant closes while its run is open)."""
     mode: schemas.QuizMode = "checkpoint" if rec.get("mode") == "checkpoint" else "practice"
+    limit = rec.get("time_limit_minutes")
     return schemas.QuizSetSummary(id=rec["id"], title_ar=rec["title_ar"], title_en=rec.get("title_en"),
                                   item_count=item_count, opens_at_percent=int(rec.get("opens_at_percent") or 0),
                                   open=is_open(rec, percent), official=False, mode=mode,
-                                  my_result=my_result if mode == "checkpoint" else None)
+                                  my_result=my_result if mode == "checkpoint" else None,
+                                  time_limit_minutes=limit, locked=mode == "checkpoint" or limit is not None,
+                                  **(runs or {}))
 
 
 # ------------------------------------------------------------------ attempts: first answers, signals, checkpoints
@@ -297,14 +303,57 @@ def checkpoint_counts(intern_id: str, item_ids: Sequence[str],
     return len(mine), right, finished
 
 
+#: (answered, first_attempt_right, finished_at) per (intern id, set id).
+Outcomes = Mapping[tuple[str, str], tuple[int, int, str | None]]
+_GRACE_S = schemas.QUIZ_RUN_GRACE_S
+
+
+def checkpoint_outcomes(set_items: Mapping[str, Sequence[str]], answers: Iterable[Mapping[str, Any]],
+                        runs: Iterable[Mapping[str, Any]], intern_of: Mapping[str, str], now: datetime
+                        ) -> dict[tuple[str, str], tuple[int, int, str | None]]:
+    """P23 (D-P20-checkpoint): the shared result of each active intern in each CHECKPOINT set is their FIRST run of
+    it: that run's answers to the set's current items (unanswered = not right; later runs never change it);
+    `finished_at` = when that run closed (an open run past its deadline counts as closed at the deadline), null
+    while it is open. Compatibility: an intern with answers to the set from before runs existed (`run_id` null)
+    keeps the earliest-answer rule over all their answers (`checkpoint_counts`)."""
+    answers = list(answers)
+    item_set = {i: sid for sid, ids in set_items.items() for i in ids}
+    active = set(intern_of.values())
+    first_all = first_answers(answers, intern_of)
+    legacy = {(intern_of[str(a["profile_id"])], item_set[str(a["question_id"])]) for a in answers
+              if not a.get("run_id") and str(a.get("question_id")) in item_set and str(a.get("profile_id")) in intern_of}
+    out: dict[tuple[str, str], tuple[int, int, str | None]] = {
+        (iid, sid): checkpoint_counts(iid, set_items[sid], first_all) for iid, sid in legacy}
+    first_run: dict[tuple[str, str], Mapping[str, Any]] = {}
+    for r in sorted(runs, key=lambda r: _when(r.get("started_at"))):  # stable: the store order breaks ties
+        key = (str(r.get("intern_id")), str(r.get("set_id")))
+        if key[0] in active and key[1] in set_items:
+            first_run.setdefault(key, r)
+    by_run: dict[str, dict[str, bool]] = {}
+    for a in answers:
+        if a.get("run_id"):
+            by_run.setdefault(str(a["run_id"]), {}).setdefault(str(a["question_id"]), bool(a.get("correct")))
+    for key, run in first_run.items():
+        if key in out:
+            continue
+        mine = by_run.get(str(run["id"]), {})
+        ids = [i for i in set_items[key[1]] if i in mine]
+        deadline = run.get("deadline_at")
+        past = run.get("status") == "in_progress" and deadline is not None and (
+            now - _when(deadline)).total_seconds() > _GRACE_S
+        closed_at = run.get("finished_at") or (deadline if past else None)
+        out[key] = (len(ids), sum(1 for i in ids if mine[i]), iso(str(closed_at)) if closed_at else None)
+    return out
+
+
 def checkpoint_results(rec: Mapping[str, Any], item_ids: Sequence[str], interns: Iterable[Mapping[str, Any]],
-                       first: Mapping[tuple[str, str], tuple[bool, datetime]]) -> schemas.CheckpointResults:
+                       outcomes: Outcomes) -> schemas.CheckpointResults:
     """D-P20-checkpoint: every active intern of the set's audience (roster order), zeros when not started."""
     out = []
     for i in interns:
         if not i.get("active") or not in_audience(rec, i):
             continue
-        answered, right, finished = checkpoint_counts(str(i["id"]), item_ids, first)
+        answered, right, finished = outcomes.get((str(i["id"]), str(rec["id"])), (0, 0, None))
         out.append(schemas.CheckpointResult(intern_id=i["id"], name_ar=i["name_ar"], name_en=i.get("name_en"),
                                             track=i["role"], answered=answered, first_attempt_right=right,
                                             total=len(item_ids), finished_at=finished))
@@ -456,6 +505,7 @@ __all__ = [
     "admin_set",
     "check_item",
     "checkpoint_counts",
+    "checkpoint_outcomes",
     "checkpoint_results",
     "decode_csv",
     "draft_question",

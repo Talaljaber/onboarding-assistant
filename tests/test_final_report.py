@@ -83,6 +83,19 @@ def answer(env: Env, who: str, item_id: str, option: str) -> None:
     assert r.status_code == 200, r.text
 
 
+def run_quiz(env: Env, who: str, set_id: str, answers: dict[str, str]) -> None:
+    """P23: one run of a set (start, answer, finish). A checkpoint's shared result is the intern's FIRST run."""
+    pid = env.pid[who]
+    r = env.client.post("/api/quiz-runs", json={"profile_id": pid, "set_id": set_id})
+    assert r.status_code == 200, r.text
+    run_id = r.json()["id"]
+    for item, option in answers.items():
+        r = env.client.post(f"/api/quiz-runs/{run_id}/answer", json={"profile_id": pid, "item_id": item,
+                                                                     "option": option})
+        assert r.status_code == 200, r.text
+    assert env.client.post(f"/api/quiz-runs/{run_id}/finish", json={"profile_id": pid}).status_code == 200
+
+
 def task(env: Env, who: str, title: str, *, past_due: bool = False, done: bool = False) -> None:
     due = (datetime.now(UTC) + timedelta(days=2)).isoformat()
     r = env.a("POST", "/api/admin/requests", json={"intern_id": env.ids[who], "title": title, "kind": "do",
@@ -135,12 +148,11 @@ def test_report_rows_gather_plan_tasks_checkpoints_and_counts(env: Env) -> None:
     first = [a.id for a in plan.activities("Sales")][:3]
     assert env.client.put("/api/progress", json={"profile_id": env.pid[SARA], "activity_ids": first,
                                                  "completed": True}).status_code == 200
-    answer(env, SARA, c1.id, "B")  # first answer wrong
-    answer(env, SARA, c1.id, "A")  # a retry: practice, never shared
-    answer(env, SARA, c2.id, "B")
+    run_quiz(env, SARA, check.id, {c1.id: "B", c2.id: "B"})  # the first run: c1 wrong, c2 right
+    run_quiz(env, SARA, check.id, {c1.id: "A"})  # a retry run: practice, never shared
     answer(env, SARA, p1.id, "B")  # practice set: never shared
     answer(env, SARA, "Q02", "A")  # official quiz: never shared
-    answer(env, OMAR, c1.id, "A")
+    run_quiz(env, OMAR, check.id, {c1.id: "A"})
     task(env, SARA, "اقرأ سياسة الإجازات", past_due=True, done=True)  # done late
     task(env, SARA, "حضّر عرضاً قصيراً", done=True)  # done on time
     task(env, OMAR, "راجع خطوات التسليم", past_due=True)  # overdue
@@ -175,14 +187,14 @@ def test_report_rows_gather_plan_tasks_checkpoints_and_counts(env: Env) -> None:
     assert shared[SARA] == (2, 1) and shared[OMAR] == (1, 1)
     # Retries never move the report.
     for _ in range(3):
-        answer(env, SARA, c2.id, "B")
+        run_quiz(env, SARA, check.id, {c2.id: "B"})
     assert {r.name_en: r for r in env.report().interns}[SARA].checkpoints == sara.checkpoints
 
 
 def test_report_carries_no_score_rank_or_practice_correctness(env: Env) -> None:
     check, (c1, _) = checkpoint_set(env)
     _, (p1, _) = checkpoint_set(env, mode="practice", title_ar="تدريب")
-    answer(env, SARA, c1.id, "A")
+    run_quiz(env, SARA, check.id, {c1.id: "A"})
     answer(env, SARA, p1.id, "A")
     answer(env, LAYAN, "Q01", "A")
     body = env.a("GET", "/api/admin/report").json()
@@ -204,9 +216,8 @@ def test_my_result_matches_the_admin_and_stays_private(env: Env) -> None:
     before = mine(SARA)
     assert before["official"] is None and before[practice.id] is None
     assert before[check.id] is not None and (before[check.id].answered, before[check.id].total) == (0, 2)
-    answer(env, SARA, c1.id, "B")
-    answer(env, SARA, c1.id, "A")
-    answer(env, SARA, c2.id, "B")
+    run_quiz(env, SARA, check.id, {c1.id: "B", c2.id: "B"})
+    run_quiz(env, SARA, check.id, {c1.id: "A"})
     answer(env, SARA, p1.id, "A")
     got = mine(SARA)[check.id]
     results = CheckpointResults.model_validate(env.a("GET", f"/api/admin/quiz-sets/{check.id}/results").json())
@@ -214,7 +225,7 @@ def test_my_result_matches_the_admin_and_stays_private(env: Env) -> None:
     assert got is not None and (got.answered, got.first_attempt_right, got.total) == (
         admin.answered, admin.first_attempt_right, admin.total) == (2, 1, 2)
     for _ in range(3):  # retries are practice
-        answer(env, SARA, c1.id, "A")
+        run_quiz(env, SARA, check.id, {c1.id: "A"})
     assert mine(SARA)[check.id] == got
     assert mine(SARA)[practice.id] is None
     # Another intern sees only their own (zeros), never Sara's; no profile or an anonymous one: the official only.
