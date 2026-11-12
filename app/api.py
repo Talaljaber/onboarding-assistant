@@ -133,6 +133,15 @@ from app.schemas import (  # P20
     QuizSetPatch,
 )
 from app.schemas import FINAL_REPORT_NOTE_AR, CheckpointMyResult, FinalReport  # P21.2 final report
+from app import quiz_runs as runs_view  # P23 quiz runs
+from app.schemas import (  # P23
+    QUIZ_LOCK_TEXT_AR,
+    QUIZ_LOCK_TEXT_EN,
+    QuizLock,
+    QuizRunAnswer,
+    QuizRunFinish,
+    QuizRunStart,
+)
 
 KB_LOCK_WAIT_S = 2.0
 PROBE_MIN_INTERVAL_S = 10.0  # `/api/health?probe=1` re-probes the LLM at most this often
@@ -532,6 +541,10 @@ def build_router() -> APIRouter:
     # -------------------------------------------------------------------------- chat
     @r.post("/chat")
     def chat(body: ChatRequest, request: Request, background: BackgroundTasks) -> JSONResponse:
+        lock = quiz_lock(_store(request), body.profile_id)  # P23: before guards, retrieval, the model and the log
+        if lock is not None:
+            log_event("chat_quiz_lock", request_id=_rid(request))
+            return _json(lock_response(request, body, lock))
         agent = _agent(request)
         wait_for_reindex(agent)
         resp, result = agent.run_turn(body, request_id=_rid(request))
@@ -1020,6 +1033,8 @@ def build_router() -> APIRouter:
     @r.post("/check")
     def check(body: CheckRequest, request: Request) -> JSONResponse:
         """Each sentence of a pasted rumour against the KB. No store write and no turn log (no text is kept)."""
+        if quiz_lock(_store(request), body.profile_id) is not None:  # P23: not during a locked quiz run
+            raise ApiError("validation_error", 400, "reason:quiz_open", "profile_id")
         agent = _agent(request)
         wait_for_reindex(agent)
         use_llm = agent.settings.llm_check and agent.llm_on(body.force_offline)
@@ -1069,6 +1084,7 @@ def build_router() -> APIRouter:
 
     add_question_routes(r)  # P18.1 questions inbox
     add_quiz_set_routes(r)  # P20 practice quizzes
+    add_quiz_run_routes(r)  # P23 quiz runs
     return r
 
 
@@ -1293,16 +1309,27 @@ def check_set_answer(request: Request, item_id: str, option: str, profile_id: st
     row = _agent(request).kb.get(item["source_knowledge_id"])
     if item_id not in allowed or row is None:
         raise ApiError("not_found", 404, f"unknown quiz id {item_id}")
+    if runs_view.set_locks(next(iter(store.quiz_sets(ids=[item["set_id"]]) or []), None)):
+        raise ApiError("validation_error", 400, "reason:use_run", "id")  # P23: only a run answers these
     return QuizResult(correct=option == item["correct_option"], correct_option=item["correct_option"],
                       explanation_row=row).to_schema()
 
 
-#: (checkpoint sets newest first, item ids per set, first answer per (intern, item)) — read once per request.
-CheckpointContext = tuple[list[dict[str, Any]], dict[str, list[str]], dict[tuple[str, str], tuple[bool, datetime]]]
+#: (checkpoint sets newest first, item ids per set, (answered, right, finished_at) per (intern, set)) — read once.
+CheckpointContext = tuple[list[dict[str, Any]], dict[str, list[str]], dict[tuple[str, str], tuple[int, int, str | None]]]
+
+
+def _checkpoint_outcomes(store: Any, by_set: dict[str, list[str]], answers: list[dict[str, Any]],
+                         intern_id: str | None = None) -> dict[tuple[str, str], tuple[int, int, str | None]]:
+    """P23: the shared result per (intern, checkpoint set): the intern's first run (old answers: first answers)."""
+    ids = list(by_set)
+    runs = (store.quiz_runs(set_ids=ids, intern_ids=[intern_id]) if intern_id else store.quiz_runs(set_ids=ids)) \
+        if ids else []
+    return quiz_sets.checkpoint_outcomes(by_set, answers, runs or [], _intern_of(store, intern_id), runs_view.utcnow())
 
 
 def _checkpoint_context(store: Any, intern_id: str | None = None) -> CheckpointContext:
-    """Every CHECKPOINT set, its item ids and the first answers of active interns (of one intern when given).
+    """Every CHECKPOINT set, its item ids and the shared results of active interns (of one intern when given).
     Empty when there are none or the quiz tables are unavailable."""
     sets = [s for s in (store.quiz_sets() or []) if s.get("mode") == "checkpoint"]
     if not sets:
@@ -1312,7 +1339,7 @@ def _checkpoint_context(store: Any, intern_id: str | None = None) -> CheckpointC
     for i in items:
         by_set.setdefault(i["set_id"], []).append(i["id"])
     answers = (store.quiz_answers([i["id"] for i in items]) or []) if items else []
-    return sets, by_set, quiz_sets.first_answers(answers, _intern_of(store, intern_id))
+    return sets, by_set, _checkpoint_outcomes(store, by_set, answers, intern_id)
 
 
 def intern_checkpoints(store: Any, intern: dict[str, Any], ctx: CheckpointContext | None = None) -> list[DetailCheckpoint]:
@@ -1320,11 +1347,11 @@ def intern_checkpoints(store: Any, intern: dict[str, Any], ctx: CheckpointContex
     only. Practice sets and the official quiz never appear. [] when the quiz tables are unavailable. `ctx`: read
     once for many interns (the final report)."""
     iid = str(intern["id"])
-    sets, by_set, first = ctx if ctx is not None else _checkpoint_context(store, iid)
+    sets, by_set, outcomes = ctx if ctx is not None else _checkpoint_context(store, iid)
     out = []
     for s in reversed(sets):  # oldest first
         ids = by_set.get(s["id"], [])
-        answered, right, finished = quiz_sets.checkpoint_counts(iid, ids, first)
+        answered, right, finished = outcomes.get((iid, s["id"]), (0, 0, None))
         if answered or (s["status"] == "published" and quiz_sets.in_audience(s, intern)):
             out.append(DetailCheckpoint(set_id=s["id"], title_ar=s["title_ar"], title_en=s.get("title_en"),
                                         answered=answered, first_attempt_right=right, total=len(ids),
@@ -1339,11 +1366,11 @@ def _my_checkpoint_results(store: Any, intern: dict[str, Any], visible: list[dic
     ids = {s["id"] for s in visible if s.get("mode") == "checkpoint"}
     if not ids:
         return {}
-    sets, by_set, first = _checkpoint_context(store, str(intern["id"]))
+    sets, by_set, outcomes = _checkpoint_context(store, str(intern["id"]))
     out = {}
     for s in sets:
         if s["id"] in ids:
-            answered, right, _ = quiz_sets.checkpoint_counts(str(intern["id"]), by_set.get(s["id"], []), first)
+            answered, right, _ = outcomes.get((str(intern["id"]), s["id"]), (0, 0, None))
             out[s["id"]] = CheckpointMyResult(answered=answered, first_attempt_right=right,
                                               total=len(by_set.get(s["id"], [])))
     return out
@@ -1519,15 +1546,15 @@ def add_quiz_set_routes(r: APIRouter) -> None:
 
     @r.get("/admin/quiz-sets/{set_id}/results", dependencies=ADMIN_ONLY)
     def admin_checkpoint_results(set_id: str, request: Request) -> JSONResponse:
-        """D-P20-checkpoint: first answer per question for every intern in a CHECKPOINT set's audience."""
+        """D-P20-checkpoint (P23): each intern's FIRST run of a CHECKPOINT set (old answers: first answers)."""
         store = _store(request)
         rec = _quiz_set_or_404(store, set_id)
         if rec.get("mode") != "checkpoint":
             raise ApiError("validation_error", 400, "results are shared only for checkpoint quizzes", "mode")
         ids = [i["id"] for i in _set_items(store, set_id)]
         answers = _quiz_or_503(store.quiz_answers(ids)) if ids else []
-        first = quiz_sets.first_answers(answers, _intern_of(store))
-        return _json(quiz_sets.checkpoint_results(rec, ids, store.list_interns() or [], first))
+        outcomes = _checkpoint_outcomes(store, {set_id: ids}, answers)
+        return _json(quiz_sets.checkpoint_results(rec, ids, store.list_interns() or [], outcomes))
 
     # ---------------------------------------------------------------- intern
     @r.get("/quiz-sets")
@@ -1535,9 +1562,11 @@ def add_quiz_set_routes(r: APIRouter) -> None:
         """The official quiz, then the published sets for this intern (oldest first) with open/locked."""
         store = _store(request)
         intern, prof = _intern_for_profile(store, profile_id)
-        out = [quiz_sets.official_summary(len(_agent(request).features.quiz.ids()))]
+        visible = [s for s in reversed(store.quiz_sets() or []) if quiz_sets.visible_to(s, intern)] \
+            if intern is not None and profile_id else []
+        runs = _run_fields(store, profile_id, intern, [OFFICIAL_QUIZ_SET_ID, *(s["id"] for s in visible)])  # P23
+        out = [quiz_sets.official_summary(len(_agent(request).features.quiz.ids()), runs.get(OFFICIAL_QUIZ_SET_ID))]
         if intern is not None and profile_id:
-            visible = [s for s in reversed(store.quiz_sets() or []) if quiz_sets.visible_to(s, intern)]
             items = (store.quiz_items(set_ids=[s["id"] for s in visible]) or []) if visible else []
             items = _answerable(request, items)
             percent = _percent(request, store, profile_id, prof)
@@ -1545,7 +1574,7 @@ def add_quiz_set_routes(r: APIRouter) -> None:
             for s in visible:
                 count = sum(1 for i in items if i["set_id"] == s["id"])
                 if count:
-                    out.append(quiz_sets.set_summary(s, count, percent, mine.get(s["id"])))
+                    out.append(quiz_sets.set_summary(s, count, percent, mine.get(s["id"]), runs.get(s["id"])))
         return _json(QuizSetList(sets=out))
 
     @r.get("/quiz-sets/{set_id}")
@@ -1565,6 +1594,224 @@ def add_quiz_set_routes(r: APIRouter) -> None:
         return _json(QuizResponse(items=[quiz_sets.intern_item(i) for i in items], label_ar=QUIZ_LABEL_AR))
 
 
+# ======================================================================================= quiz runs (P23)
+def _own_runs(store: Any, profile_id: str, intern: dict[str, Any] | None,
+              set_ids: list[str] | None = None) -> list[dict[str, Any]] | None:
+    """The intern's runs (over all their profiles), or an anonymous profile's own runs."""
+    if intern is not None:
+        return store.quiz_runs(intern_ids=[str(intern["id"])], set_ids=set_ids)  # type: ignore[no-any-return]
+    return store.quiz_runs(profile_ids=[profile_id], set_ids=set_ids)  # type: ignore[no-any-return]
+
+
+def _run_fields(store: Any, profile_id: str | None, intern: dict[str, Any] | None,
+                set_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """Per set: this profile's open run (and its time left) and the intern's latest closed run. Empty without a
+    known profile or when the runs cannot be read (the list keeps working)."""
+    if not profile_id or (intern is None and not store.get_profile(profile_id)):
+        return {}
+    now = runs_view.utcnow()
+    runs = [runs_view.settle(store, r, now) for r in (_own_runs(store, profile_id, intern) or [])]
+    out: dict[str, dict[str, Any]] = {}
+    for sid in set_ids:
+        mine = [r for r in runs if r["set_id"] == sid]
+        current = next((r for r in mine if r["profile_id"] == profile_id and r["status"] == runs_view.OPEN), None)
+        last = runs_view.last_closed(mine)
+        out[sid] = {"open_run_id": current["id"] if current else None,
+                    "open_run_remaining_seconds": runs_view.remaining_seconds(current, now) if current else None,
+                    "last_review_run_id": last["id"] if last else None}
+    return out
+
+
+def quiz_lock(store: Any, profile_id: str | None) -> QuizLock | None:
+    """P23: the intern's open, not expired run of a checkpoint or timed set (over all their profiles), else None.
+    Anonymous profiles, the official quiz and untimed practice sets never lock; a store failure never locks."""
+    if not profile_id:
+        return None
+    try:
+        intern, _ = _intern_for_profile(store, profile_id)
+    except ApiError:
+        return None
+    if intern is None:
+        return None
+    open_runs = [r for r in store.quiz_runs(intern_ids=[str(intern["id"])]) or [] if r["status"] == runs_view.OPEN]
+    if not open_runs:
+        return None
+    set_ids = [r["set_id"] for r in open_runs if r["set_id"] != OFFICIAL_QUIZ_SET_ID]
+    sets = {s["id"]: s for s in (store.quiz_sets(ids=set_ids) or [] if set_ids else [])}
+    now = runs_view.utcnow()
+    for run in reversed(open_runs):
+        run = runs_view.settle(store, run, now)
+        if run["status"] == runs_view.OPEN and runs_view.run_locks(run, sets.get(run["set_id"])):
+            return QuizLock(run_id=run["id"], set_id=run["set_id"],
+                            remaining_seconds=runs_view.remaining_seconds(run, now))
+    return None
+
+
+def lock_response(request: Request, body: ChatRequest, lock: QuizLock) -> ChatResponse:
+    """The chat's only reply during a locked run: fixed text, no sources, no retrieval, no model call."""
+    return ChatResponse.model_validate({
+        "reply": {"kind": "text", "text_ar": QUIZ_LOCK_TEXT_AR, "text_en": QUIZ_LOCK_TEXT_EN},
+        "state": body.state.model_dump(), "mode": "offline",
+        "trace": {"request_id": _rid(request), "mode": "offline", "guards": {},
+                  "router": {"tool": "refuse", "confidence": 1.0, "reason": "quiz_open"},
+                  "agent": {"used": False}, "steps": ["quiz_lock", "render"], "latency_ms": 0},
+        "quiz_lock": lock.model_dump(),
+    })
+
+
+def _official_content(request: Request) -> dict[str, runs_view.RunItem]:
+    agent = _agent(request)
+    book = agent.features.quiz
+    out = {}
+    for item in book.quiz_for(None):
+        res = book.check(item.id, "A", kb=agent.kb).to_schema()
+        out[item.id] = runs_view.RunItem(item.to_schema(), res.correct_option, res.explanation)
+    return out
+
+
+def _set_content(request: Request, items: list[dict[str, Any]]) -> dict[str, runs_view.RunItem]:
+    """Set items whose cited row is still in the live KB (the explanation is that row)."""
+    kb_row = _kb_source(request)
+    out = {}
+    for rec in items:
+        src = kb_row(rec["source_knowledge_id"])
+        if src is not None:
+            out[rec["id"]] = runs_view.RunItem(quiz_sets.intern_item(rec), rec["correct_option"], src)
+    return out
+
+
+def _run_context(request: Request, store: Any, run: dict[str, Any]
+                 ) -> tuple[dict[str, runs_view.RunItem], str, dict[str, Any] | None]:
+    """(content, mode, set record) of a run's quiz; a deleted set keeps whatever items remain (none)."""
+    if run["set_id"] == OFFICIAL_QUIZ_SET_ID:
+        return _official_content(request), "practice", None
+    rec = next(iter(_quiz_or_503(store.quiz_sets(ids=[run["set_id"]]))), None)
+    items = list(_quiz_or_503(store.quiz_items(set_ids=[run["set_id"]])))
+    mode = "checkpoint" if rec is not None and rec.get("mode") == "checkpoint" else "practice"
+    return _set_content(request, items), mode, rec
+
+
+def _owned_run(store: Any, run_id: str, profile_id: str | None) -> dict[str, Any]:
+    """The run, when `profile_id` is its profile or another profile of the same active intern (else 404)."""
+    if not profile_id:
+        raise ApiError("validation_error", 400, "profile_id is required", "profile_id")
+    if not re.match(PROFILE_ID_RE, profile_id):
+        raise ApiError("validation_error", 400, "profile_id must be a lowercase UUID", "profile_id")
+    found = _quiz_or_503(store.quiz_runs(ids=[run_id])) if re.match(PROFILE_ID_RE, run_id) else []
+    run = found[0] if found else None
+    if run is not None and run["profile_id"] != profile_id:
+        intern, _ = _intern_for_profile(store, profile_id)
+        if intern is None or run.get("intern_id") != str(intern["id"]):
+            run = None
+    if run is None:
+        raise ApiError("not_found", 404, "unknown quiz run")
+    return run  # type: ignore[no-any-return]
+
+
+def _tick_quiz_activity(request: Request, store: Any, profile_id: str) -> None:
+    """Finishing the official quiz ticks the suggested plan's quiz activity (as the client did)."""
+    prof = store.get_profile(profile_id) or {}
+    role = prof.get("role") if prof.get("role") in ROLES else None
+    activity = next((a for a in _agent(request).features.plan.activities(role) if a.kind == "quiz"), None) \
+        if role else None
+    if activity is not None and not store.set_progress(profile_id, [activity.id]):
+        log_event("quiz_activity_not_saved", request_id=_rid(request))
+
+
+def add_quiz_run_routes(r: APIRouter) -> None:
+    """Intern: start or resume a run, answer (locked in), finish, read the review of a closed run (P23)."""
+
+    @r.post("/quiz-runs")
+    def quiz_run_start(body: QuizRunStart, request: Request) -> JSONResponse:
+        store = _store(request)
+        now = runs_view.utcnow()
+        pid, sid = body.profile_id, body.set_id
+        intern, prof = _intern_for_profile(store, pid)
+        if intern is None:
+            prof = store.get_profile(pid)
+            if not prof:
+                raise ApiError("not_found", 404, "unknown profile")
+        set_rec: dict[str, Any] | None = None
+        if sid == OFFICIAL_QUIZ_SET_ID:
+            role = prof.get("role") if prof and prof.get("role") in ROLES else None
+            f = _agent(request).features
+            first = ([ref for a in f.plan.activities_of(role, "Day 30") for ref in a.refs if ref.startswith("Q")]
+                     if role else None)
+            content, mode, limit = _official_content(request), "practice", None
+            base = [i.id for i in f.quiz.quiz_for(role, first_ids=first) if i.id in content]
+        else:
+            if intern is None:
+                raise ApiError("not_found", 404, "unknown quiz set")
+            items = _open_set_items(request, store, sid, pid)
+            set_rec = next(iter(store.quiz_sets(ids=[sid]) or []), None)
+            content = _set_content(request, items)
+            base = [i["id"] for i in items if i["id"] in content]
+            if not base or set_rec is None:
+                raise ApiError("not_found", 404, "unknown quiz set")
+            mode = "checkpoint" if set_rec.get("mode") == "checkpoint" else "practice"
+            limit = set_rec.get("time_limit_minutes")
+        own = [runs_view.settle(store, x, now) for x in _quiz_or_503(_own_runs(store, pid, intern, [sid]))]
+        run = next((x for x in own if x["profile_id"] == pid and x["status"] == runs_view.OPEN), None)
+        resumed = run is not None
+        if run is None:
+            last = runs_view.last_closed(own)
+            prev = _quiz_or_503(store.quiz_run_attempts([last["id"]])) if last else []
+            order = runs_view.adaptive_order(base, runs_view.missed_ids(last, prev))
+            run = _quiz_or_503(store.quiz_run_start(runs_view.new_record(
+                set_id=sid, profile_id=pid, intern_id=str(intern["id"]) if intern else None, item_ids=order,
+                time_limit_minutes=limit, now=now)))
+        attempts = _quiz_or_503(store.quiz_run_attempts([run["id"]]))
+        log_event("quiz_run_resumed" if resumed else "quiz_run_started", request_id=_rid(request),
+                  official=sid == OFFICIAL_QUIZ_SET_ID, timed=run.get("deadline_at") is not None)
+        return _json(runs_view.run_view(run, attempts, content, mode, runs_view.run_locks(run, set_rec), now))
+
+    @r.post("/quiz-runs/{run_id}/answer")
+    def quiz_run_answer(run_id: str, body: QuizRunAnswer, request: Request) -> JSONResponse:
+        store = _store(request)
+        now = runs_view.utcnow()
+        run = runs_view.settle(store, _owned_run(store, run_id, body.profile_id), now)
+        if run["status"] != runs_view.OPEN:
+            raise runs_view.closed_error(run)
+        content, _, _ = _run_context(request, store, run)
+        if body.item_id not in run["item_ids"] or body.item_id not in content:
+            raise ApiError("not_found", 404, f"unknown quiz id {body.item_id}")
+        stored = store.quiz_run_answer(run, body.item_id, body.option,
+                                       body.option == content[body.item_id].correct_option)
+        if stored is None:
+            raise ApiError("requests_unavailable", 503, "quiz runs are not available on this store now")
+        if not stored:
+            raise ApiError("validation_error", 400, "reason:answered", "item_id")
+        attempts = _quiz_or_503(store.quiz_run_attempts([run["id"]]))
+        return _json(runs_view.answered_view(run, attempts, content, now))
+
+    @r.post("/quiz-runs/{run_id}/finish")
+    def quiz_run_finish(run_id: str, body: QuizRunFinish, request: Request) -> JSONResponse:
+        store = _store(request)
+        now = runs_view.utcnow()
+        run = runs_view.settle(store, _owned_run(store, run_id, body.profile_id), now)
+        if run["status"] == runs_view.OPEN:
+            closed = _quiz_or_503(store.quiz_run_close(run["id"], "finished", runs_view.iso(now)))
+            if not closed:
+                raise ApiError("not_found", 404, "unknown quiz run")
+            if closed["status"] == "finished" and closed["set_id"] == OFFICIAL_QUIZ_SET_ID:
+                _tick_quiz_activity(request, store, closed["profile_id"])
+            run = closed
+            log_event("quiz_run_finished", request_id=_rid(request), status=run["status"])
+        content, mode, _ = _run_context(request, store, run)
+        attempts = _quiz_or_503(store.quiz_run_attempts([run["id"]]))
+        return _json(runs_view.review(run, attempts, content, mode))
+
+    @r.get("/quiz-runs/{run_id}/review")
+    def quiz_run_review(run_id: str, request: Request, profile_id: str | None = None) -> JSONResponse:
+        store = _store(request)
+        run = runs_view.settle(store, _owned_run(store, run_id, profile_id), runs_view.utcnow())
+        if run["status"] == runs_view.OPEN:
+            raise ApiError("validation_error", 400, "reason:in_progress", "status")
+        content, mode, _ = _run_context(request, store, run)
+        attempts = _quiz_or_503(store.quiz_run_attempts([run["id"]]))
+        return _json(runs_view.review(run, attempts, content, mode))
+
+
 def install_api(app: FastAPI) -> None:
     """Middleware, error handlers and every `/api` route (call before mounting the web client)."""
     app.add_middleware(RequestContextMiddleware)
@@ -1572,5 +1819,6 @@ def install_api(app: FastAPI) -> None:
     app.include_router(build_router())
 
 
-__all__ = ["COMMENT_PATH_RE", "QUIZ_IMPORT_PATH_RE", "add_quiz_set_routes", "CSP", "IMPORT_PATH", "KB_LOCK_WAIT_S", "SECURITY_HEADERS", "RequestContextMiddleware", "build_router", "error_body", "install_api",
+__all__ = ["COMMENT_PATH_RE", "QUIZ_IMPORT_PATH_RE", "add_quiz_run_routes", "add_quiz_set_routes", "lock_response",
+           "quiz_lock", "CSP", "IMPORT_PATH", "KB_LOCK_WAIT_S", "SECURITY_HEADERS", "RequestContextMiddleware", "build_router", "error_body", "install_api",
            "validation_field", "wait_for_reindex"]

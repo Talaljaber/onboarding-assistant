@@ -339,8 +339,38 @@ class Store(Protocol):
         ...
 
     def quiz_answers(self, question_ids: list[str]) -> list[dict[str, Any]] | None:
-        """Every stored attempt at these questions: {profile_id, question_id, correct, at}, oldest first. Used only
-        for the anonymous signals and the checkpoint first answers. None when unavailable."""
+        """Every stored attempt at these questions: {profile_id, question_id, correct, at, run_id}, oldest first.
+        Used only for the anonymous signals, the practice counts and the checkpoint results. None when unavailable."""
+        ...
+
+    # Quiz runs (P23) --------------------------------------------------------------------------------------------
+    # Same failure rule as the quiz sets (None -> 503, never flips the store), e.g. Supabase without 0011.
+
+    def quiz_runs(
+        self, *, ids: list[str] | None = None, profile_ids: list[str] | None = None,
+        intern_ids: list[str] | None = None, set_ids: list[str] | None = None,
+    ) -> list[dict[str, Any]] | None:
+        """Runs matching every given filter (QUIZ_RUN_COLUMNS), oldest first; None when unavailable."""
+        ...
+
+    def quiz_run_start(self, record: dict[str, Any]) -> dict[str, Any] | None:
+        """Insert a validated run (`quiz_run_record`), unless the profile already has an open run of that set: then
+        that run (one open run per profile and set, also under concurrent starts). None on failure."""
+        ...
+
+    def quiz_run_close(self, run_id: str, status: str, finished_at: str) -> dict[str, Any] | None:
+        """Close an OPEN run (finished or expired, `quiz_run_close_changes`). The run as stored afterwards (unchanged
+        when it was already closed: the first close wins); {} when unknown; None on failure."""
+        ...
+
+    def quiz_run_answer(self, run: dict[str, Any], question_id: str, option: str, correct: bool) -> bool | None:
+        """Store one answer of a run (`quiz_run_attempt_record`). False when the run already has an answer to that
+        question (one answer per run and question); None on failure."""
+        ...
+
+    def quiz_run_attempts(self, run_ids: list[str]) -> list[dict[str, Any]] | None:
+        """The answers of these runs: {run_id, question_id, option, correct, at}, oldest first; None when
+        unavailable."""
         ...
 
     def close(self) -> None: ...
@@ -1029,10 +1059,11 @@ def question_row(r: dict[str, Any]) -> dict[str, Any]:
 # (`app.quiz_sets.check_item`) before any write; these helpers only check shapes.
 
 QUIZ_SET_COLUMNS = ("id", "title_ar", "title_en", "audience", "track", "intern_ids", "opens_at_percent", "status",
-                    "mode", "created_at", "updated_at")
+                    "mode", "created_at", "updated_at", "time_limit_minutes")
 QUIZ_ITEM_COLUMNS = ("id", "set_id", "position", "question_ar", "option_a", "option_b", "option_c",
                      "correct_option", "source_knowledge_id", "origin", "created_at")
-QUIZ_SET_FIELDS = ("title_ar", "title_en", "audience", "track", "intern_ids", "opens_at_percent", "status", "mode")
+QUIZ_SET_FIELDS = ("title_ar", "title_en", "audience", "track", "intern_ids", "opens_at_percent", "status", "mode",
+                   "time_limit_minutes")
 QUIZ_ITEM_FIELDS = ("question_ar", "option_a", "option_b", "option_c", "correct_option", "source_knowledge_id",
                     "origin")
 QUIZ_ITEM_ID_RE = re.compile(r"^M\d{3}$")
@@ -1058,6 +1089,8 @@ def _quiz_set_field_ok(key: str, val: object) -> bool:
         return val in ("draft", "published")
     if key == "mode":
         return val in ("practice", "checkpoint")
+    if key == "time_limit_minutes":  # P23
+        return val is None or (isinstance(val, int) and not isinstance(val, bool) and 1 <= val <= 120)
     return False
 
 
@@ -1110,6 +1143,8 @@ def quiz_set_row(r: dict[str, Any]) -> dict[str, Any]:
     out["opens_at_percent"] = int(out["opens_at_percent"] or 0)
     out["mode"] = out["mode"] or "practice"
     out["created_at"], out["updated_at"] = str(out["created_at"]), str(out["updated_at"])
+    limit = out["time_limit_minutes"]
+    out["time_limit_minutes"] = int(limit) if limit is not None else None
     return out
 
 
@@ -1159,5 +1194,89 @@ def next_item_ids(used: list[object], count: int) -> list[str] | None:
 
 
 def quiz_answer_row(r: dict[str, Any]) -> dict[str, Any]:
+    """P23: `run_id` is the run the answer belongs to (None for answers outside a run)."""
+    run = r.get("run_id")
     return {"profile_id": str(r.get("profile_id")), "question_id": str(r.get("question_id")),
+            "correct": bool(r.get("correct")), "at": str(r.get("at")), "run_id": str(run) if run else None}
+
+
+# Quiz runs (P23) ---------------------------------------------------------------------------------------------
+# One sitting of one quiz by one profile (`app.quiz_runs` decides everything; these helpers only check shapes).
+
+QUIZ_RUN_COLUMNS = ("id", "set_id", "intern_id", "profile_id", "item_ids", "started_at", "deadline_at",
+                    "finished_at", "status")
+QUIZ_RUN_STATUSES = frozenset({"in_progress", "finished", "expired"})
+_RUN_SET_RE = re.compile(r"^(official|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
+_RUN_ITEMS_MAX = 40
+
+
+def _ts_ok(value: object) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return True
+
+
+def quiz_run_record(rec: object) -> dict[str, Any] | None:
+    """A new run to store (exactly QUIZ_RUN_COLUMNS, status in_progress), or None when invalid. An anonymous profile
+    (no intern) may only take the official quiz."""
+    if not isinstance(rec, dict):
+        return None
+    out = {k: rec.get(k) for k in QUIZ_RUN_COLUMNS}
+    out["id"] = valid_uuid(out["id"]) or str(uuid.uuid4())
+    out["profile_id"] = valid_uuid(out["profile_id"])
+    out["intern_id"] = valid_uuid(out["intern_id"]) if out["intern_id"] is not None else None
+    items = valid_item_ids(out["item_ids"])
+    if (out["profile_id"] is None or (rec.get("intern_id") is not None and out["intern_id"] is None)
+            or not isinstance(out["set_id"], str) or not _RUN_SET_RE.match(out["set_id"])
+            or not items or len(items) > _RUN_ITEMS_MAX or len(set(items)) != len(items)
+            or (out["intern_id"] is None and out["set_id"] != "official")):
+        return None
+    out["item_ids"] = items
+    out["started_at"] = out["started_at"] if _ts_ok(out["started_at"]) else now_iso()
+    if out["deadline_at"] is not None and not _ts_ok(out["deadline_at"]):
+        return None
+    out["finished_at"] = None
+    out["status"] = "in_progress"
+    return out
+
+
+def quiz_run_close_changes(status: object, finished_at: object) -> dict[str, Any] | None:
+    """The changes that close a run (finished or expired, with its closing time), or None when invalid."""
+    if status not in ("finished", "expired") or not _ts_ok(finished_at):
+        return None
+    return {"status": status, "finished_at": finished_at}
+
+
+def quiz_run_row(r: dict[str, Any]) -> dict[str, Any]:
+    out = {k: r.get(k) for k in QUIZ_RUN_COLUMNS}
+    out["id"], out["profile_id"] = str(out["id"]), str(out["profile_id"])
+    out["intern_id"] = str(out["intern_id"]) if out["intern_id"] else None
+    items = out["item_ids"]
+    if isinstance(items, str):  # LocalStore keeps the array as JSON text
+        try:
+            items = json.loads(items)
+        except ValueError:
+            items = []
+    out["item_ids"] = [str(i) for i in (items or [])]
+    for key in ("started_at", "deadline_at", "finished_at"):
+        out[key] = str(out[key]) if out[key] is not None else None
+    return out
+
+
+def quiz_run_attempt_record(run: dict[str, Any], question_id: object, option: object,
+                            correct: object) -> dict[str, Any] | None:
+    """An answer inside a run (the run's profile; `run_id` set), or None when invalid."""
+    rec = quiz_record(run.get("profile_id"), question_id, option, correct)
+    rid = valid_uuid(run.get("id"))
+    if rec is None or rid is None or option not in ("A", "B", "C"):
+        return None
+    return {**rec, "run_id": rid}
+
+
+def quiz_run_attempt_row(r: dict[str, Any]) -> dict[str, Any]:
+    return {"run_id": str(r.get("run_id")), "question_id": str(r.get("question_id")), "option": str(r.get("option")),
             "correct": bool(r.get("correct")), "at": str(r.get("at"))}

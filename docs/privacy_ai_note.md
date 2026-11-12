@@ -144,7 +144,8 @@ policies for anonymous or signed-in clients.
 | `interns` | a fictional demo intern's Arabic and optional English name, track, active flag, created/updated time (added and edited by the admin; names that look like an email or phone are rejected) |
 | `profiles` | one per intern and track: the intern link, a generated label such as «متدرب ١» and the track. Older anonymous profiles (no intern) are removed by `scripts/purge_demo_profiles.py` |
 | `progress` | profile id, activity id, time |
-| `quiz_attempts` | profile id, question id (official `Q01`–`Q05`, or a practice-set item `M001`…), option chosen, correct or not |
+| `quiz_attempts` | profile id, question id (official `Q01`–`Q05`, or a practice-set item `M001`…), option chosen, correct or not ; P23: the run it belongs to (if any) |
+| `quiz_runs` (P23) | one sitting of one quiz: quiz id, intern id (none for an anonymous profile), profile id, the questions served in order, start, deadline (only with a time limit), close time, status (in progress, finished, expired) (migration `0011_quiz_runs.sql`); `quiz_sets` also keeps the optional time limit |
 | `quiz_sets`, `quiz_set_items` (P20) | practice quizzes written by the admin: title (Arabic, optional English), audience (everyone, a track or chosen interns' ids), the plan progress at which it opens, draft/published, mode (practice or checkpoint); and per question the text, three options, the correct option, the cited K id and how it was written (typed, model draft, CSV line). No intern result is stored here (migration `0009_quiz_sets.sql`) |
 | `scenario_attempts` | profile id, scenario id, mode, option id, checklist ids met and missing, value label. **No free text** |
 | `turn_logs` | request id, profile id (if any), time, tool, mode, status, band, cited ids, verifier result and reason, latency, cached, model. **No message text, no answer text** |
@@ -313,3 +314,21 @@ invented a contact. The earlier held-out 1 run, before the panel, gave offline 2
 - **No new storage.** The report is read from what is already stored (plan ticks, quiz attempts, scenario practice,
   turn logs, mentor requests, questions inbox). Nothing in it reaches the assistant or a model. The interns are
   fictional demo personas and the tracks, scenarios and plan are fictional competition examples.
+
+## 10. Quiz runs, time limits and the review (P23)
+
+- **What a run stores** (`quiz_runs`, migration `0011_quiz_runs.sql`): which quiz (the official quiz or a set id), the
+  intern id (none for an anonymous demo profile) and profile id, which questions were served and in what order, when
+  it started, its deadline (only when the admin set a time limit), when it closed and whether it was finished or
+  expired. Each answer inside a run is the usual `quiz_attempts` row (profile id, question id, option, correct or
+  not, time) plus the run id; one answer per question per run. Times come from the server clock.
+- **The review is the intern's own.** At the end of a run the intern sees their result, the correct answers and the
+  cited rows; the review route answers only that intern's profiles (anyone else gets 404). The admin never receives a
+  run, a run id or a review: for practice sets and the official quiz the admin still sees counts only; for a
+  checkpoint set the shared result is now the intern's **first run** (unanswered questions count as not right; later
+  runs never change it; answers given before runs existed keep the first-answer rule).
+- **The quiz lock.** While an intern has an open run of a checkpoint or timed set, the chat answers only «لديك
+  اختبار مفتوح. أنهِه أولاً، ثم اسألني ما تريد.» and the Rumour Check is closed: no retrieval, no model call and no
+  turn log for those requests, so the assistant cannot be used to look answers up. Finishing the run (or its expiry)
+  ends the lock.
+- Nothing about runs reaches a model.

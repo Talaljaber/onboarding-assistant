@@ -116,6 +116,11 @@ def answer(env: Env, who: str, item_id: str, option: str) -> httpx.Response:
     return env.client.post("/api/quiz/check", json={"id": item_id, "option": option, "profile_id": env.pid[who]})
 
 
+def old_answer(env: Env, who: str, item_id: str, option: str, correct: bool) -> None:
+    """An answer stored before quiz runs existed (P23: `run_id` null)."""
+    assert env.store.add_quiz_attempt(env.pid[who], item_id, option, correct)
+
+
 def finish_plan(env: Env, who: str) -> None:
     ids = [a.id for a in env.agent.features.plan.activities(env.interns[who].role)]
     r = env.client.put("/api/progress", json={"profile_id": env.pid[who], "activity_ids": ids, "completed": True})
@@ -424,9 +429,12 @@ def test_checkpoint_shares_first_answers_only(env: Env) -> None:
         finish_plan(env, who)
     summaries = QuizSetList.model_validate(env.client.get(f"/api/quiz-sets?profile_id={env.pid[SARA]}").json()).sets
     assert {s.id: s.mode for s in summaries} == {"official": "practice", practice.id: "practice", check.id: "checkpoint"}
-    answer(env, SARA, c1.id, "B")  # first answer wrong
-    answer(env, SARA, c1.id, "A")  # later practice: right
-    answer(env, SARA, c2.id, "B")
+    # P23: a checkpoint item is answered only inside a run; these are answers stored before runs existed (run_id
+    # null), which keep the first-answer rule.
+    err(answer(env, SARA, c1.id, "B"), 400, "validation_error", "id", "reason:use_run")
+    old_answer(env, SARA, c1.id, "B", False)  # first answer wrong
+    old_answer(env, SARA, c1.id, "A", True)  # later practice: right
+    old_answer(env, SARA, c2.id, "B", True)
     answer(env, SARA, p_item.id, "B")  # practice set: never shared
     answer(env, SARA, "Q02", "A")  # official quiz: never shared
     answer(env, OMAR, p_item.id, "A")
@@ -438,7 +446,7 @@ def test_checkpoint_shares_first_answers_only(env: Env) -> None:
     assert (sara.answered, sara.first_attempt_right, sara.total) == (2, 1, 2) and sara.finished_at is not None
     assert (rows[LAYAN].answered, rows[LAYAN].first_attempt_right, rows[LAYAN].finished_at) == (0, 0, None)
     for _ in range(3):
-        answer(env, SARA, c1.id, "A")
+        old_answer(env, SARA, c1.id, "A", True)
     again = CheckpointResults.model_validate(env.a("GET", f"/api/admin/quiz-sets/{check.id}/results").json())
     assert {r.name_en: r for r in again.results}[SARA] == sara
 
