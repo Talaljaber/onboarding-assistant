@@ -228,3 +228,15 @@ private reply is illustrative and is never a K-row.
 
 The two `DELETE` routes (set, item) answer 204 with no body. Set titles, question texts, ids, counts and times
 are illustrative; the cited rows are official rows verbatim. No fixture carries a per-intern result.
+
+### Checkpoint quizzes (D-P20-checkpoint)
+
+| File | Endpoint | Model |
+|---|---|---|
+| `checkpoint_results.json` | `GET /api/admin/quiz-sets/{id}/results` (Sara finished: 2 of 3 right at the first attempt; Layan not started) | `CheckpointResults` |
+| `error_400_quiz_mode.json` | 400 `field: "mode"`: results of a practice set (or a mode change after answers) | `ErrorBody` |
+
+`admin_quiz_sets.json`, `admin_quiz_set*.json`, `quiz_set_*_request.json` and `quiz_sets.json` carry `mode` (the
+Sales set is a checkpoint, the draft and the official quiz are practice); `intern_detail.json` carries
+`checkpoints` (Sara's result in that set). Owner-approved: shared only for checkpoint quizzes the intern was told
+about, first attempt only; practice results are never shared.

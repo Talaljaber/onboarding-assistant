@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "validation_error",
+    "message": "results are shared only for checkpoint quizzes",
+    "request_id": "7f3a9c2e41b0",
+    "field": "mode"
+  }
+}

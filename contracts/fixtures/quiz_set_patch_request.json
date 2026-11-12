@@ -5,5 +5,6 @@
   "track": "Sales",
   "intern_ids": [],
   "opens_at_percent": 30,
-  "status": "published"
+  "status": "published",
+  "mode": "checkpoint"
 }

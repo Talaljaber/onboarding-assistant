@@ -1209,6 +1209,20 @@ class TimelineEvent(_Model):
     ids: list[str]
 
 
+class DetailCheckpoint(_Model):
+    """P20 (D-P20-checkpoint): one CHECKPOINT quiz of this intern. Owner-approved: shared only for checkpoint sets
+    the intern was told about before starting; the FIRST answer per question only (later answers are practice
+    and never change it); practice sets and the official quiz are never shared."""
+
+    set_id: UuidStr
+    title_ar: str
+    title_en: str | None = None
+    answered: NonNeg
+    first_attempt_right: NonNeg
+    total: NonNeg
+    finished_at: str | None
+
+
 class InternDetail(_Model):
     intern: InternOut
     last_active: str | None
@@ -1218,6 +1232,8 @@ class InternDetail(_Model):
     chat: DetailChat
     timeline: list[TimelineEvent]
     label_ar: str
+    #: P20: checkpoint quizzes only (empty when none); see DetailCheckpoint.
+    checkpoints: list[DetailCheckpoint] = Field(default_factory=list)
 
 
 # --------------------------------------------------------------------------------------
@@ -1777,6 +1793,9 @@ class QuestionAnswered(_Model):
 # --------------------------------------------------------------------------------------
 
 QuizSetStatus = Literal["draft", "published"]
+#: P20 (D-P20-checkpoint): "practice" results stay with the intern; a "checkpoint" set shares each intern's FIRST
+#: answer per question with the admin (the intern is told before starting). The official quiz is always practice.
+QuizMode = Literal["practice", "checkpoint"]
 #: Who sees a published set: everyone, one track, or chosen interns.
 QuizAudience = Literal["all", "track", "interns"]
 #: How an item was written: typed by the admin, a model draft the admin approved, or a CSV line.
@@ -1787,6 +1806,7 @@ QuizOrigin = Literal["manual", "model", "csv"]
 QuizReason = Literal["unknown_row", "length", "duplicate_options", "contact", "number_not_in_row",
                      "answer_not_in_row", "ambiguous", "invalid", "set_full"]
 QUIZ_SET_STATUSES: tuple[str, ...] = get_args(QuizSetStatus)
+QUIZ_MODES: tuple[str, ...] = get_args(QuizMode)
 QUIZ_AUDIENCES: tuple[str, ...] = get_args(QuizAudience)
 QUIZ_ORIGINS: tuple[str, ...] = get_args(QuizOrigin)
 QUIZ_REASONS: tuple[str, ...] = get_args(QuizReason)
@@ -1851,6 +1871,7 @@ class AdminQuizSet(_Model):
     interns_practised: NonNeg
     created_at: str
     updated_at: str
+    mode: QuizMode = "practice"
 
     @model_validator(mode="after")
     def _audience_shape(self) -> AdminQuizSet:
@@ -1888,6 +1909,7 @@ class QuizSetCreate(_Model):
     track: Role | None = None
     intern_ids: Annotated[list[InternId], Field(max_length=QUIZ_SET_INTERNS_MAX)] = Field(default_factory=list)
     opens_at_percent: Percent = 0
+    mode: QuizMode = "practice"
 
     @field_validator("title_en")
     @classmethod
@@ -1912,6 +1934,9 @@ class QuizSetPatch(_Model):
     intern_ids: Annotated[list[InternId], Field(max_length=QUIZ_SET_INTERNS_MAX)] | None = None
     opens_at_percent: Percent | None = None
     status: QuizSetStatus | None = None
+    #: P20: changing the mode is 400 `field: "mode"` once anyone has answered one of the set's questions (a
+    #: practice answer never becomes a shared result).
+    mode: QuizMode | None = None
 
     @field_validator("title_en")
     @classmethod
@@ -1922,7 +1947,7 @@ class QuizSetPatch(_Model):
     def _some_change(self) -> QuizSetPatch:
         if not self.model_fields_set:
             raise ValueError("send at least one field")
-        for key in ("title_ar", "audience", "intern_ids", "opens_at_percent", "status"):
+        for key in ("title_ar", "audience", "intern_ids", "opens_at_percent", "status", "mode"):
             if key in self.model_fields_set and getattr(self, key) is None:
                 raise ValueError(f"{key} cannot be null")
         return self
@@ -2087,6 +2112,8 @@ class QuizSetSummary(_Model):
     opens_at_percent: Percent
     open: bool
     official: bool
+    #: P20: "checkpoint" = the first answer per question is shared with the mentor (shown before starting).
+    mode: QuizMode = "practice"
 
     @model_validator(mode="after")
     def _official(self) -> QuizSetSummary:
@@ -2094,7 +2121,31 @@ class QuizSetSummary(_Model):
             raise ValueError("official is true exactly for the set 'official'")
         if self.official and not self.open:
             raise ValueError("the official quiz is always open")
+        if self.official and self.mode != "practice":
+            raise ValueError("the official quiz is always practice")
         return self
+
+
+class CheckpointResult(_Model):
+    """P20 (D-P20-checkpoint): one intern of a CHECKPOINT set's audience. `answered` / `first_attempt_right`
+    count the intern's FIRST answer to each current question (later answers never change them); `finished_at` is
+    when the last question got its first answer (null until every question is answered). Zeros and null when
+    the intern has not started."""
+
+    intern_id: InternId
+    name_ar: str
+    name_en: str | None
+    track: Role
+    answered: NonNeg
+    first_attempt_right: NonNeg
+    total: NonNeg
+    finished_at: str | None
+
+
+class CheckpointResults(_Model):
+    """`GET /api/admin/quiz-sets/{id}/results` (checkpoint sets only; a practice set is 400 `field: "mode"`)."""
+
+    results: list[CheckpointResult]
 
 
 class QuizSetList(_Model):
@@ -2266,6 +2317,11 @@ __all__ = [
     "QuestionScope",
     "QuestionSuggestion",
     # P20 practice quizzes
+    "QUIZ_MODES",
+    "QuizMode",
+    "CheckpointResult",
+    "CheckpointResults",
+    "DetailCheckpoint",
     "OFFICIAL_QUIZ_SET_ID",
     "OFFICIAL_QUIZ_TITLE_AR",
     "OFFICIAL_QUIZ_TITLE_EN",

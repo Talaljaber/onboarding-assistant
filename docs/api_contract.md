@@ -745,25 +745,34 @@ distractor found in the row while the correct one is not). A failure is 400 `val
 (`QuizReason`): `unknown_row`, `length`, `duplicate_options`, `contact`, `number_not_in_row`, `answer_not_in_row`,
 `ambiguous`, `invalid` (a missing or malformed field: CSV lines), `set_full` (the set already has 20 items).
 
+**Checkpoint quizzes (D-P20-checkpoint, owner-approved).** A set has `mode` `practice` (default) or
+`checkpoint`. For a checkpoint set the intern's **first** answer to each question (the earliest stored attempt per
+intern and item, over all their profiles) is shared with the admin; later answers are practice and never change
+it. The intern is told before starting (`QuizSetSummary.mode`). Practice sets and the official quiz (always
+`practice`) are never shared. The mode cannot change once anyone has answered one of the set's questions (400
+`field: "mode"`), so a practice answer never becomes a shared result.
+
 ### GET /api/admin/quiz-sets (admin)
 
 → `AdminQuizSetList` `{sets: AdminQuizSet[] (newest first), official: {id: "official", title_ar, title_en,
 item_count, interns_practised}}`. `AdminQuizSet` = `{id, title_ar, title_en, audience, track, intern_ids,
-opens_at_percent, status, item_count, interns_practised, created_at, updated_at}`; `track` is set exactly for
+opens_at_percent, status, item_count, interns_practised, created_at, updated_at, mode}`; `track` is set exactly for
 audience `track`, `intern_ids` is non-empty exactly for audience `interns`; `interns_practised` counts active
 interns who answered at least one of the set's questions.
 
 ### POST /api/admin/quiz-sets (admin)
 
 Body `QuizSetCreate` `{title_ar (1–80), title_en? (≤ 80; "" = null), audience, track? (required for "track"),
-intern_ids? (active interns; required for "interns"), opens_at_percent? (0–100, default 0)}` → 201 `AdminQuizSet`
+intern_ids? (active interns; required for "interns"), opens_at_percent? (0–100, default 0), mode? (default
+"practice")}` → 201 `AdminQuizSet`
 (draft). The field the audience does not use is ignored. 400 `field: "intern_ids"` for an unknown or deactivated
 intern; 400 with `field` when a title holds an email, a link or a phone number.
 
 ### PATCH /api/admin/quiz-sets/{id} (admin)
 
 Body `QuizSetPatch` (any create field and `status`; at least one) → `AdminQuizSet`. The audience rule is checked
-on the merged set. Publishing a set with no items → 400 `field: "status"`. 404 unknown set.
+on the merged set. Publishing a set with no items → 400 `field: "status"`. Changing `mode` after anyone answered
+one of its questions → 400 `field: "mode"`. 404 unknown set.
 
 ### DELETE /api/admin/quiz-sets/{id} (admin)
 
@@ -823,11 +832,22 @@ their profiles) who answered the question; `retry_share`: the share of them whos
 decimals), `null` when fewer than 3 tried it. No names, no profile ids, no per-intern data. For `official` the
 items are Q01–Q05.
 
+### GET /api/admin/quiz-sets/{id}/results (admin; checkpoint sets only)
+
+→ `CheckpointResults` `{results: [{intern_id, name_ar, name_en, track, answered, first_attempt_right, total,
+finished_at}]}`: every active intern in the set's audience (roster order), zeros and `finished_at: null` when not
+started. `answered` / `first_attempt_right` count the FIRST answer to each current question; `total` = the set's
+items; `finished_at` = when the last question got its first answer (null until all are answered). 400 `field:
+"mode"` for a practice set (`error_400_quiz_mode.json`); 404 unknown set or `official`. The admin intern detail
+(`GET /api/admin/interns/{id}`) also carries `checkpoints: [{set_id, title_ar, title_en, answered,
+first_attempt_right, total, finished_at}]`: the published checkpoint sets for that intern and any checkpoint set
+they answered (empty list when none). These are the only admin shapes with a correctness count.
+
 ### GET /api/quiz-sets?profile_id=…
 
 → `QuizSetList` `{sets: QuizSetSummary[]}`: the official quiz first (always open), then the published sets whose
 audience includes the signed-in intern (everyone, their track, or chosen), oldest first. `QuizSetSummary` = `{id,
-title_ar, title_en, item_count, opens_at_percent, open, official}`; `open` = the intern's suggested-plan progress
+title_ar, title_en, item_count, opens_at_percent, open, official, mode}`; `open` = the intern's suggested-plan progress
 (`GET /api/progress`'s `percent`) ≥ `opens_at_percent`. Without `profile_id`, or with a profile that is not an
 active intern's, only the official quiz is listed. 400 malformed `profile_id`. Sets whose items all cite rows no
 longer in the KB are not listed; `item_count` counts the items the intern can answer.
@@ -904,7 +924,7 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
   `quiz_draft_request.json`, `quiz_draft.json`, `quiz_import_request.json`, `quiz_import_result.json`,
   `quiz_signals.json`, `quiz_sets.json`, `quiz_set.json`, `quiz_check_set_request.json`, `quiz_check_set.json`,
   `question_create_quiz_request.json`, `error_400_quiz_grounding.json`, `error_400_quiz_locked.json`,
-  `error_503_quiz_draft.json`;
+  `error_503_quiz_draft.json`; checkpoint quizzes: `checkpoint_results.json`, `error_400_quiz_mode.json`;
 - request threads (P15): `request_thread.json`, `request_comment.json`, `request_comment_create_request.json`,
   `request_comment_admin_create_request.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,
@@ -913,5 +933,5 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
 
 `tests/test_contract.py` checks that every fixture validates and is canonical, that every reply kind and
 refusal reason is covered, the request rules and limits, that no quiz GET carries the correct option, that
-the admin intern views have no correctness or score field, and that `types.ts` names every enum value.
+the admin intern views have no correctness or score field (except the checkpoint counts, D-P20-checkpoint), and that `types.ts` names every enum value.
 W3-A's `tests/test_api.py` should validate real responses with the same models.

@@ -790,6 +790,9 @@ export interface InternDetail {
   /** Newest first. */
   timeline: { at: string; kind: TimelineKind; role: Role; ids: string[] }[];
   label_ar: string;
+  /** P20 (D-P20-checkpoint): checkpoint quizzes only, first answer per question; the server always sends it
+   *  (empty when none). Practice sets and the official quiz never appear here. */
+  checkpoints?: DetailCheckpoint[];
 }
 
 // ---------------------------------------------------------------- health and errors
@@ -1237,7 +1240,8 @@ export function isInternDetail(x: unknown): x is InternDetail {
     isObj(x.quiz) &&
     isObj(x.chat) &&
     Array.isArray(x.timeline) &&
-    isStr(x.label_ar)
+    isStr(x.label_ar) &&
+    (x.checkpoints === undefined || isArrayOf(x.checkpoints, isDetailCheckpoint))
   );
 }
 
@@ -1777,6 +1781,10 @@ export function isQuestionAnswered(x: unknown): x is QuestionAnswered {
 
 export const QUIZ_SET_STATUSES = ["draft", "published"] as const;
 export type QuizSetStatus = (typeof QUIZ_SET_STATUSES)[number];
+/** D-P20-checkpoint: "practice" results stay with the intern; a "checkpoint" set shares each intern's FIRST answer
+ *  per question with the admin (the intern is told before starting). The official quiz is always practice. */
+export const QUIZ_MODES = ["practice", "checkpoint"] as const;
+export type QuizMode = (typeof QUIZ_MODES)[number];
 export const QUIZ_AUDIENCES = ["all", "track", "interns"] as const;
 export type QuizAudience = (typeof QUIZ_AUDIENCES)[number];
 export const QUIZ_ORIGINS = ["manual", "model", "csv"] as const;
@@ -1830,6 +1838,7 @@ export interface AdminQuizSet {
   interns_practised: number;
   created_at: string;
   updated_at: string;
+  mode: QuizMode;
 }
 
 /** The built-in official sample quiz (read-only, always open, everyone). */
@@ -1855,6 +1864,7 @@ export interface QuizSetCreate {
   track?: Role | null;
   intern_ids?: string[];
   opens_at_percent?: number;
+  mode?: QuizMode;
 }
 
 /** `PATCH /api/admin/quiz-sets/{id}`: any field (at least one); publishing an empty set is 400 field "status". */
@@ -1866,6 +1876,8 @@ export interface QuizSetPatch {
   intern_ids?: string[];
   opens_at_percent?: number;
   status?: QuizSetStatus;
+  /** 400 field "mode" once anyone has answered one of the set's questions. */
+  mode?: QuizMode;
 }
 
 /** A stored question (admin only): `correct_option` is the item's own answer key; `row` is the cited row
@@ -1948,6 +1960,8 @@ export interface QuizSetSummary {
   opens_at_percent: number;
   open: boolean;
   official: boolean;
+  /** "checkpoint": tell the intern before starting that the first answer to each question is shared. */
+  mode: QuizMode;
 }
 
 export interface QuizSetList {
@@ -1980,7 +1994,8 @@ export function isAdminQuizSet(x: unknown): x is AdminQuizSet {
     isNum(x.item_count) &&
     isNum(x.interns_practised) &&
     isStr(x.created_at) &&
-    isStr(x.updated_at)
+    isStr(x.updated_at) &&
+    isOneOf(QUIZ_MODES, x.mode)
   );
 }
 
@@ -2059,10 +2074,74 @@ function isQuizSetSummary(x: unknown): x is QuizSetSummary {
     isNum(x.item_count) &&
     isNum(x.opens_at_percent) &&
     isBool(x.open) &&
-    isBool(x.official)
+    isBool(x.official) &&
+    isOneOf(QUIZ_MODES, x.mode)
   );
 }
 
 export function isQuizSetList(x: unknown): x is QuizSetList {
   return isObj(x) && isArrayOf(x.sets, isQuizSetSummary);
+}
+
+// ---- D-P20-checkpoint: owner-approved; shared only for checkpoint quizzes the intern was told about; first
+// attempt only; practice results never shared.
+
+/** One intern of a checkpoint set's audience (zeros and null when not started). */
+export interface CheckpointResult {
+  intern_id: string;
+  name_ar: string;
+  name_en: string | null;
+  track: Role;
+  answered: number;
+  first_attempt_right: number;
+  total: number;
+  /** When the last question got its first answer; null until all are answered. */
+  finished_at: string | null;
+}
+
+/** `GET /api/admin/quiz-sets/{id}/results` (checkpoint sets only; a practice set is 400 field "mode"). */
+export interface CheckpointResults {
+  results: CheckpointResult[];
+}
+
+/** One checkpoint set on the admin's intern detail. */
+export interface DetailCheckpoint {
+  set_id: string;
+  title_ar: string;
+  title_en: string | null;
+  answered: number;
+  first_attempt_right: number;
+  total: number;
+  finished_at: string | null;
+}
+
+function isCheckpointResult(x: unknown): x is CheckpointResult {
+  return (
+    isObj(x) &&
+    isStr(x.intern_id) &&
+    isStr(x.name_ar) &&
+    isStrOrNull(x.name_en) &&
+    isOneOf(ROLES, x.track) &&
+    isNum(x.answered) &&
+    isNum(x.first_attempt_right) &&
+    isNum(x.total) &&
+    isStrOrNull(x.finished_at)
+  );
+}
+
+export function isCheckpointResults(x: unknown): x is CheckpointResults {
+  return isObj(x) && isArrayOf(x.results, isCheckpointResult);
+}
+
+function isDetailCheckpoint(x: unknown): x is DetailCheckpoint {
+  return (
+    isObj(x) &&
+    isStr(x.set_id) &&
+    isStr(x.title_ar) &&
+    isStrOrNull(x.title_en) &&
+    isNum(x.answered) &&
+    isNum(x.first_attempt_right) &&
+    isNum(x.total) &&
+    isStrOrNull(x.finished_at)
+  );
 }

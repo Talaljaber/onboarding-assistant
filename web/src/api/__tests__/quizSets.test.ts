@@ -9,7 +9,11 @@ import signals from "@fixtures/quiz_signals.json";
 import internSets from "@fixtures/quiz_sets.json";
 import setQuiz from "@fixtures/quiz_set.json";
 import grounding from "@fixtures/error_400_quiz_grounding.json";
+import checkpoints from "@fixtures/checkpoint_results.json";
+import internDetail from "@fixtures/intern_detail.json";
 import {
+  isCheckpointResults,
+  isInternDetail,
   isAdminQuizItem,
   isAdminQuizSet,
   isAdminQuizSetDetail,
@@ -39,6 +43,9 @@ describe("practice quiz contract (P20)", () => {
     expect(isQuizSignals(signals)).toBe(true);
     expect(isQuizSetList(internSets)).toBe(true);
     expect(isQuizResponse(setQuiz)).toBe(true);
+    expect(isCheckpointResults(checkpoints)).toBe(true);
+    expect(isInternDetail(internDetail)).toBe(true);
+    expect(isInternDetail({ ...internDetail, checkpoints: [{ set_id: "x" }] })).toBe(false);
   });
 
   it("the intern's set items never carry the correct option", () => {

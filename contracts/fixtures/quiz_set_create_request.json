@@ -4,5 +4,6 @@
   "audience": "track",
   "track": "Sales",
   "intern_ids": [],
-  "opens_at_percent": 30
+  "opens_at_percent": 30,
+  "mode": "checkpoint"
 }

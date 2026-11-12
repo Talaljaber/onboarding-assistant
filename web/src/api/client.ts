@@ -641,3 +641,15 @@ export const importQuizItems = (setId: string, body: QuizImportRequest, signal?:
 /** Anonymous content signals per question (`setId` may be "official"). */
 export const getQuizSignals = (setId: string, signal?: AbortSignal) =>
   request<QuizSignals>(`/api/admin/quiz-sets/${q(setId)}/signals`, { guard: isQuizSignals, signal, admin: true });
+
+// ---- checkpoint results (D-P20-checkpoint, admin only)
+
+import { isCheckpointResults, type CheckpointResults } from "./types";
+
+/** First answer per question for every intern in a checkpoint set's audience (practice sets: 400 field "mode"). */
+export const getCheckpointResults = (setId: string, signal?: AbortSignal) =>
+  request<CheckpointResults>(`/api/admin/quiz-sets/${q(setId)}/results`, {
+    guard: isCheckpointResults,
+    signal,
+    admin: true,
+  });

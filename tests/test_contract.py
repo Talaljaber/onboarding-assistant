@@ -147,6 +147,9 @@ FIXTURES: dict[str, type[BaseModel]] = {
     "error_400_quiz_grounding.json": s.ErrorBody,
     "error_400_quiz_locked.json": s.ErrorBody,
     "error_503_quiz_draft.json": s.ErrorBody,
+    # P20 checkpoint quizzes (D-P20-checkpoint)
+    "checkpoint_results.json": s.CheckpointResults,
+    "error_400_quiz_mode.json": s.ErrorBody,
 }
 
 # One response fixture per endpoint (the request fixtures are listed in FIXTURES above).
@@ -215,6 +218,7 @@ ENDPOINT_FIXTURES = {
     "GET /api/admin/quiz-sets/{id}/signals": "quiz_signals.json",
     "GET /api/quiz-sets": "quiz_sets.json",
     "GET /api/quiz-sets/{id}": "quiz_set.json",
+    "GET /api/admin/quiz-sets/{id}/results": "checkpoint_results.json",  # D-P20-checkpoint
 }
 
 REQUEST_MODELS: dict[type[BaseModel], str] = {
@@ -365,13 +369,25 @@ def test_quiz_get_never_has_the_correct_option() -> None:
         )
 
 
+#: D-P20-checkpoint: owner-approved; shared only for checkpoint quizzes the intern was told about; first attempt
+#: only; practice results never shared. The ONLY correctness key an admin shape may carry, and only in
+#: `CheckpointResult` (GET /api/admin/quiz-sets/{id}/results) and the intern detail's `checkpoints` entries.
+CHECKPOINT_ALLOWED = frozenset({"first_attempt_right"})
+CHECKPOINT_MODELS = (s.CheckpointResult, s.CheckpointResults, s.DetailCheckpoint)
+
+
 def test_admin_intern_views_have_no_correctness_or_score() -> None:
-    banned = re.compile(r"correct|score|grade|accuracy|rating")
+    banned = re.compile(r"correct|score|grade|accuracy|rating|right|wrong")
     models = (s.InternSummary, s.InternDetail, s.DetailProgress, s.DetailScenario, s.DetailQuiz, s.DetailQuizDay,
               s.DetailChat, s.TimelineEvent)
-    keys = all_keys(load("admin_interns.json")) | all_keys(load("intern_detail.json"))
+    detail = load("intern_detail.json")
+    keys = all_keys(load("admin_interns.json")) | all_keys({k: v for k, v in detail.items() if k != "checkpoints"})
     keys |= {f for m in models for f in m.model_fields}
     assert not [k for k in keys if banned.search(k)]
+    # The checkpoint shapes: nothing banned except the allow-listed first-attempt count (D-P20-checkpoint).
+    cp_keys = {f for m in CHECKPOINT_MODELS for f in m.model_fields}
+    cp_keys |= all_keys(detail["checkpoints"]) | all_keys(load("checkpoint_results.json"))
+    assert {k for k in cp_keys if banned.search(k)} == CHECKPOINT_ALLOWED
     # P20: the admin's practice-quiz shapes. `AdminQuizItem.correct_option` is the item's own answer (metadata the
     # admin wrote), not anyone's result; signals are anonymous cohort shares, never per intern.
     quiz_models = (s.AdminQuizSet, s.AdminOfficialQuiz, s.AdminQuizSetList, s.AdminQuizSetDetail, s.QuizImportResult,
@@ -935,3 +951,27 @@ def test_practice_quiz_contract() -> None:
     assert "6l. Practice quizzes" in doc
     for route in ("DELETE /api/admin/quiz-sets/{id}", "DELETE /api/admin/quiz-sets/{id}/items/{item_id}"):
         assert route in doc, route
+
+
+def test_checkpoint_contract() -> None:
+    """D-P20-checkpoint: a set's `mode` is practice (default) or checkpoint; the official quiz is always practice;
+    the intern list names the mode; results are per checkpoint set only."""
+    assert s.QUIZ_MODES == ("practice", "checkpoint")
+    assert s.QuizSetCreate.model_validate({"title_ar": "س", "audience": "all"}).mode == "practice"
+    sets = load("quiz_sets.json")["sets"]
+    assert sets[0]["official"] and sets[0]["mode"] == "practice"
+    with pytest.raises(ValidationError):
+        s.QuizSetSummary.model_validate({**sets[0], "mode": "checkpoint"})
+    with pytest.raises(ValidationError):
+        s.QuizSetPatch.model_validate({"mode": None})
+    for r in load("checkpoint_results.json")["results"]:
+        assert r["first_attempt_right"] <= r["answered"] <= r["total"]
+        assert (r["finished_at"] is not None) == (r["answered"] == r["total"] > 0)
+    assert load("error_400_quiz_mode.json")["error"]["field"] == "mode"
+    for cp in load("intern_detail.json")["checkpoints"]:
+        assert cp["first_attempt_right"] <= cp["answered"] <= cp["total"]
+    ts = TYPES_TS.read_text(encoding="utf-8")
+    for needle in ('"practice"', '"checkpoint"', "export function isCheckpointResults", "first_attempt_right",
+                   "checkpoints"):
+        assert needle in ts, needle
+    assert "GET /api/admin/quiz-sets/{id}/results" in CONTRACT_MD.read_text(encoding="utf-8")
