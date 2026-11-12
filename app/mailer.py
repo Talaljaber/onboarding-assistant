@@ -43,8 +43,8 @@ FOOTER_AR = "رسالة آلية من مساعد التهيئة — بيانات
 FOOTER_EN = "An automatic message from the onboarding assistant — fictional training data."
 KIND_AR = {"learn": "تعلّم", "do": "نفّذ", "read": "اقرأ"}
 KIND_EN = {"learn": "Learn", "do": "Do", "read": "Read"}
-SOURCE_AR = {"check": "من «افحص ما سمعت»", "chat": "من المحادثة"}
-SOURCE_EN = {"check": "from \"Check a rumour\"", "chat": "from the chat"}
+SOURCE_AR = {"check": "من «افحص ما سمعت»", "chat": "من المحادثة", "quiz": "من اختبار تدريبي"}
+SOURCE_EN = {"check": "from \"Check a rumour\"", "chat": "from the chat", "quiz": "from a practice quiz"}
 
 
 @dataclass(frozen=True)
@@ -333,9 +333,11 @@ def question_submitted_mail(intern: dict[str, Any], text: str, source: str, to_a
     where_en = f" {SOURCE_EN[source]}" if source in SOURCE_EN else ""
     return compose(
         "question_submitted", to_addr, f"سؤال جديد من {name_ar}", f"New question from {name_en}",
-        [f"أرسل {name_ar} سؤالاً لم يجد المساعد إجابته{where_ar}.",
+        [f"أرسل {name_ar} سؤالاً {SOURCE_AR['quiz']} ليراجعه معك." if source == "quiz"  # P20
+         else f"أرسل {name_ar} سؤالاً لم يجد المساعد إجابته{where_ar}.",
          "أجب عنه من «أسئلة المتدربين» في منطقة المشرف: أضف إجابتك إلى قاعدة المعرفة، أو ردّ على المتدرب وحده."],
-        [f"{name_en} sent a question the assistant could not answer{where_en}.",
+        [f"{name_en} sent a question {SOURCE_EN['quiz']} to go over with you." if source == "quiz"  # P20
+         else f"{name_en} sent a question the assistant could not answer{where_en}.",
          "Answer it under Interns' questions in the admin area: add your answer to the knowledge base, or reply "
          "to this intern only."],
         [("السؤال · Question", text)],
@@ -406,7 +408,7 @@ def question_submitted(mailer: Mailer | None, *, intern_id: str, text: str, sour
     """P18.1 hook (wired by the integrator): an intern sent a question to their mentor → ADMIN_EMAIL.
 
     `intern_id`: the sender's intern id; `text`: the question exactly as sent (1-600 characters, already checked
-    by the route); `source`: "check" (Rumour Check) or "chat". Call after the store write succeeds."""
+    by the route); `source`: "check" (Rumour Check), "chat" or "quiz" (a practice quiz question, P20). Call after the store write succeeds."""
     if mailer is None:
         return
     mailer.submit(lambda: [question_submitted_mail(mailer.intern(intern_id), text, source, mailer.admin_email or "")])

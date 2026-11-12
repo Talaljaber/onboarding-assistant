@@ -57,6 +57,20 @@ from app.store.base import (
     mail_row,
 )
 from app.store.base import QUESTION_COLUMNS, question_changes, question_record, question_row  # P18.1
+from app.store.base import (  # P20 practice quizzes
+    ITEM_ID_RE,
+    QUIZ_ITEM_COLUMNS,
+    QUIZ_ITEM_ID_RE,
+    QUIZ_SET_COLUMNS,
+    next_item_ids,
+    quiz_answer_row,
+    quiz_item_changes,
+    quiz_item_input,
+    quiz_item_row,
+    quiz_set_changes,
+    quiz_set_record,
+    quiz_set_row,
+)
 
 T = TypeVar("T")
 
@@ -221,7 +235,7 @@ QUESTIONS_SCHEMA = """
 create table if not exists mentor_questions (
     id text primary key,
     intern_id text not null references interns (id) on delete cascade,
-    source text not null check (source in ('check', 'chat')),
+    source text not null check (source in ('check', 'chat', 'quiz')),
     text text not null check (length(trim(text)) between 1 and 600),
     status text not null default 'open' check (status in ('open', 'answered', 'dismissed')),
     answer_row_id text,
@@ -232,6 +246,53 @@ create table if not exists mentor_questions (
 create index if not exists mentor_questions_intern_idx on mentor_questions (intern_id, created_at);
 create index if not exists mentor_questions_status_idx on mentor_questions (status);
 """
+
+# P20 practice quizzes (the same tables as supabase/migrations/0009_quiz_sets.sql; intern_ids as JSON text).
+QUIZ_SCHEMA = """
+create table if not exists quiz_sets (
+    id text primary key,
+    title_ar text not null check (length(trim(title_ar)) between 1 and 80),
+    title_en text check (title_en is null or length(trim(title_en)) between 1 and 80),
+    audience text not null check (audience in ('all', 'track', 'interns')),
+    track text check (track is null or track in ('Sales', 'Delivery')),
+    intern_ids text not null default '[]',
+    opens_at_percent integer not null default 0 check (opens_at_percent between 0 and 100),
+    status text not null default 'draft' check (status in ('draft', 'published')),
+    mode text not null default 'practice' check (mode in ('practice', 'checkpoint')),
+    created_at text not null,
+    updated_at text not null
+);
+create table if not exists quiz_set_items (
+    id text primary key check (id glob 'M[0-9][0-9][0-9]'),
+    set_id text not null references quiz_sets (id) on delete cascade,
+    position integer not null check (position >= 0),
+    question_ar text not null,
+    option_a text not null,
+    option_b text not null,
+    option_c text not null,
+    correct_option text not null check (correct_option in ('A', 'B', 'C')),
+    source_knowledge_id text not null,
+    origin text not null default 'manual' check (origin in ('manual', 'model', 'csv')),
+    created_at text not null
+);
+create index if not exists quiz_set_items_set_idx on quiz_set_items (set_id, position);
+create index if not exists quiz_attempts_question_idx on quiz_attempts (question_id);
+"""
+
+
+def _allow_quiz_questions(conn: sqlite3.Connection) -> None:
+    """P20: rebuild `mentor_questions` when its source check predates "quiz" (SQLite cannot alter a check)."""
+    row = conn.execute("select sql from sqlite_master where type = 'table' and name = 'mentor_questions'").fetchone()
+    if row is None or "'quiz'" in str(row[0]):
+        return
+    cols = ", ".join(QUESTION_COLUMNS)
+    conn.execute("alter table mentor_questions rename to mentor_questions_p18")
+    conn.execute("drop index if exists mentor_questions_intern_idx")
+    conn.execute("drop index if exists mentor_questions_status_idx")
+    conn.executescript(QUESTIONS_SCHEMA)
+    conn.execute(f"insert into mentor_questions ({cols}) select {cols} from mentor_questions_p18")
+    conn.execute("drop table mentor_questions_p18")
+
 
 # Applied on open after SCHEMA (the same change as supabase/migrations/0002_interns.sql).
 def _migrate(conn: sqlite3.Connection) -> None:
@@ -248,6 +309,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
     # P18.5 (supabase/migrations/0008_private_answers.sql): the mentor's private reply on a question.
     if "answer_text" not in {r[1] for r in conn.execute("pragma table_info(mentor_questions)")}:
         conn.execute("alter table mentor_questions add column answer_text text")
+    _allow_quiz_questions(conn)  # P20
 
 
 def _jload(raw: Any) -> Any:
@@ -275,6 +337,7 @@ class LocalStore:
             conn.execute("pragma foreign_keys = on")
             conn.executescript(SCHEMA)
             conn.executescript(QUESTIONS_SCHEMA)  # P18.1
+            conn.executescript(QUIZ_SCHEMA)  # P20
             _migrate(conn)
             conn.commit()
         except sqlite3.Error as exc:
@@ -1034,6 +1097,180 @@ class LocalStore:
 
         return self._run("mentor_question_update", None, op)
 
+    # Practice quizzes (P20) ------------------------------------------------------------------------
+
+    def quiz_sets(self, ids: list[str] | None = None) -> list[dict[str, Any]] | None:
+        q = f"select {', '.join(QUIZ_SET_COLUMNS)} from quiz_sets"
+        args: list[Any] = []
+        if ids is not None:
+            clean = [i for i in (valid_uuid(x) for x in ids) if i]
+            if not clean:
+                return []
+            q += f" where id in ({','.join('?' * len(clean))})"
+            args = clean
+
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            return [quiz_set_row(dict(r)) for r in c.execute(q + " order by created_at desc, rowid desc", args)]
+
+        return self._run("quiz_sets", None, op)
+
+    @staticmethod
+    def _set_params(rec: dict[str, Any]) -> dict[str, Any]:
+        return {**rec, "intern_ids": json.dumps(rec["intern_ids"])} if "intern_ids" in rec else dict(rec)
+
+    def quiz_set_create(self, record: dict[str, Any]) -> dict[str, Any] | None:
+        rec = quiz_set_record(record)
+        if rec is None:
+            log_event("store_rejected", store="local", op="quiz_set_create", reason="invalid_input")
+            return None
+        cols = ", ".join(QUIZ_SET_COLUMNS)
+        marks = ", ".join(f":{k}" for k in QUIZ_SET_COLUMNS)
+
+        def op(c: sqlite3.Connection) -> dict[str, Any]:
+            c.execute(f"insert into quiz_sets ({cols}) values ({marks})", self._set_params(rec))
+            return quiz_set_row(rec)
+
+        return self._run("quiz_set_create", None, op)
+
+    def quiz_set_update(self, set_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        sid = valid_uuid(set_id)
+        if sid is None:
+            return {}
+        sel = f"select {', '.join(QUIZ_SET_COLUMNS)} from quiz_sets where id = ?"
+
+        def op(c: sqlite3.Connection) -> dict[str, Any] | None:
+            cur = c.execute(sel, (sid,)).fetchone()
+            if not cur:
+                return {}
+            clean = quiz_set_changes(changes, quiz_set_row(dict(cur)))
+            if clean is None:
+                log_event("store_rejected", store="local", op="quiz_set_update", reason="invalid_input")
+                return None
+            sets = ", ".join(f"{k} = :{k}" for k in clean)
+            c.execute(f"update quiz_sets set {sets} where id = :id", {**self._set_params(clean), "id": sid})
+            return quiz_set_row(dict(c.execute(sel, (sid,)).fetchone()))
+
+        return self._run("quiz_set_update", None, op)
+
+    def quiz_set_delete(self, set_id: str) -> bool | None:
+        sid = valid_uuid(set_id)
+        if sid is None:
+            return False
+        return self._run("quiz_set_delete", None,
+                         lambda c: c.execute("delete from quiz_sets where id = ?", (sid,)).rowcount > 0)
+
+    def quiz_items(
+        self, *, set_ids: list[str] | None = None, ids: list[str] | None = None
+    ) -> list[dict[str, Any]] | None:
+        where: list[str] = []
+        args: list[Any] = []
+        if set_ids is not None:
+            clean = [i for i in (valid_uuid(x) for x in set_ids) if i]
+            if not clean:
+                return []
+            where.append(f"set_id in ({','.join('?' * len(clean))})")
+            args += clean
+        if ids is not None:
+            item_ids = [i for i in ids if isinstance(i, str) and QUIZ_ITEM_ID_RE.match(i)]
+            if not item_ids:
+                return []
+            where.append(f"id in ({','.join('?' * len(item_ids))})")
+            args += item_ids
+        q = f"select {', '.join(QUIZ_ITEM_COLUMNS)} from quiz_set_items" + (
+            " where " + " and ".join(where) if where else "")
+
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            return [quiz_item_row(dict(r)) for r in c.execute(q + " order by set_id, position, id", args)]
+
+        return self._run("quiz_items", None, op)
+
+    def quiz_items_add(self, set_id: str, records: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+        sid = valid_uuid(set_id)
+        fields = [quiz_item_input(r) for r in records]
+        if sid is None or not fields or any(f is None for f in fields):
+            log_event("store_rejected", store="local", op="quiz_items_add", reason="invalid_input")
+            return None
+        cols = ", ".join(QUIZ_ITEM_COLUMNS)
+        marks = ", ".join(f":{k}" for k in QUIZ_ITEM_COLUMNS)
+
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]] | None:
+            if not c.execute("select 1 from quiz_sets where id = ?", (sid,)).fetchone():
+                return None
+            used = [r[0] for r in c.execute("select id from quiz_set_items")]
+            used += [r[0] for r in c.execute("select distinct question_id from quiz_attempts where question_id like 'M%'")]
+            new_ids = next_item_ids(used, len(fields))
+            if new_ids is None:
+                return None
+            top = c.execute("select max(position) from quiz_set_items where set_id = ?", (sid,)).fetchone()[0]
+            start = -1 if top is None else int(top)
+            at = now_iso()
+            rows = [{**f, "id": new_ids[n], "set_id": sid, "position": start + 1 + n, "created_at": at}
+                    for n, f in enumerate(fields) if f is not None]
+            c.executemany(f"insert into quiz_set_items ({cols}) values ({marks})", rows)
+            return [quiz_item_row(r) for r in rows]
+
+        return self._run("quiz_items_add", None, op)
+
+    def quiz_item_update(self, item_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        if not QUIZ_ITEM_ID_RE.match(item_id or ""):
+            return {}
+        clean = quiz_item_changes(changes)
+        if clean is None:
+            log_event("store_rejected", store="local", op="quiz_item_update", reason="invalid_input")
+            return None
+        sel = f"select {', '.join(QUIZ_ITEM_COLUMNS)} from quiz_set_items where id = ?"
+
+        def op(c: sqlite3.Connection) -> dict[str, Any] | None:
+            if not c.execute(sel, (item_id,)).fetchone():
+                return {}
+            sets = ", ".join(f"{k} = :{k}" for k in clean)
+            c.execute(f"update quiz_set_items set {sets} where id = :id", {**clean, "id": item_id})
+            return quiz_item_row(dict(c.execute(sel, (item_id,)).fetchone()))
+
+        return self._run("quiz_item_update", None, op)
+
+    def quiz_item_delete(self, item_id: str) -> bool | None:
+        if not QUIZ_ITEM_ID_RE.match(item_id or ""):
+            return False
+
+        def op(c: sqlite3.Connection) -> bool:
+            cur = c.execute("select set_id from quiz_set_items where id = ?", (item_id,)).fetchone()
+            if not cur:
+                return False
+            c.execute("delete from quiz_set_items where id = ?", (item_id,))
+            rest = [r[0] for r in c.execute(
+                "select id from quiz_set_items where set_id = ? order by position, id", (cur[0],))]
+            c.executemany("update quiz_set_items set position = ? where id = ?", [(n, i) for n, i in enumerate(rest)])
+            return True
+
+        return self._run("quiz_item_delete", None, op)
+
+    def quiz_items_order(self, set_id: str, ids: list[str]) -> bool | None:
+        sid = valid_uuid(set_id)
+        if sid is None:
+            return False
+
+        def op(c: sqlite3.Connection) -> bool:
+            have = [r[0] for r in c.execute("select id from quiz_set_items where set_id = ?", (sid,))]
+            if sorted(have) != sorted(ids) or len(set(ids)) != len(ids):
+                return False
+            c.executemany("update quiz_set_items set position = ? where id = ?", [(n, i) for n, i in enumerate(ids)])
+            return True
+
+        return self._run("quiz_items_order", None, op)
+
+    def quiz_answers(self, question_ids: list[str]) -> list[dict[str, Any]] | None:
+        qids = [q for q in question_ids if isinstance(q, str) and ITEM_ID_RE.match(q)]
+        if not qids:
+            return []
+
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            q = ("select profile_id, question_id, correct, at from quiz_attempts"
+                 f" where question_id in ({','.join('?' * len(qids))}) order by at, id")
+            return [quiz_answer_row(dict(r)) for r in c.execute(q, qids)]
+
+        return self._run("quiz_answers", None, op)
+
     # Used by tests and the integrator's smoke only.
     def table_rows(self, table: str) -> list[dict[str, Any]]:
         allowed = {
@@ -1051,6 +1288,9 @@ class LocalStore:
             "mentor_request_comments",
             "mentor_request_files",
             "mail_log",
+            "mentor_questions",
+            "quiz_sets",
+            "quiz_set_items",
         }
         if table not in allowed:
             return []

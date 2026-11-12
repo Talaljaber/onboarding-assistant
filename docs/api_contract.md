@@ -725,14 +725,16 @@ Named practice sets written by the admin, each question grounded in one K-row: t
 the admin approved, or a CSV line. The intern sees the official sample quiz (the built-in set `official`, Q01–Q05,
 always open, never edited) and the **published** sets for them; a set opens when the intern's suggested-plan
 progress reaches `opens_at_percent`. Attempts are recorded exactly as for the official quiz (`quiz_attempts`,
-`question_id` `M\d{3}` for set items). **The admin never receives a per-intern result**: practice counts (who
-practised, how many questions answered) and anonymous content signals per question (only when ≥ 3 interns tried
-it) — "the quiz checks the knowledge base, never the employee". Every route answers 503 `requests_unavailable`
+`question_id` `M\d{3}` for set items). **For practice sets and the official quiz the admin never receives a
+per-intern result**: practice counts (who practised, how many questions answered) and anonymous content signals per
+question (only when ≥ 3 interns tried it) — "the quiz checks the knowledge base, never the employee". The only
+exception is a checkpoint set (below): the first answer per question, which the intern is told about before starting. Every route answers 503 `requests_unavailable`
 when the store cannot serve the tables (Supabase before migration `0009_quiz_sets.sql`).
 
 Ids: a set is a lowercase UUID (or `official`); a set item is `^M\d{3}$` (the next free number across all sets and
-past attempts, never reused); `QUIZ_ID_RE` is now `^(Q\d{2}|M\d{3})$`. Enums: audience `all | track | interns`;
-status `draft | published`; origin `manual | model | csv`.
+past attempts: an id held by an item or a stored attempt is never handed out again); `QUIZ_ID_RE` is now
+`^(Q\d{2}|M\d{3})$`. Enums: audience `all | track | interns`; status `draft | published`; origin `manual | model |
+csv`; mode `practice | checkpoint`.
 
 **Grounding rules** (`app/quiz_sets.py::check_item`, one function for every path): the cited row exists in the
 live KB; question 5–300 characters, each option 1–120, the three options distinct after normalisation; no email,
