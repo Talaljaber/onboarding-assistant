@@ -79,7 +79,7 @@ describe.each([
 /**
  * Named foreground/background pairs of the shell. Each is checked in the
  * light palette against its WCAG 2.2 AA minimum: 4.5 for text, 3 for large text, icons and borders.
- * Orange itself is decorative; the pairs below are the only ways orange appears with text.
+ * The yellow itself is decorative; the pairs below are the only ways yellow appears with text.
  */
 const PAIRS: { name: string; fg: string; bg: string; min: number }[] = [
   { name: "dark text on the white header band", fg: "--da-on-band", bg: "--da-band", min: 4.5 },
@@ -87,7 +87,7 @@ const PAIRS: { name: string; fg: string; bg: string; min: number }[] = [
   { name: "accent text (labels, links) on the pale input tint", fg: "--da-accent", bg: "--da-input", min: 4.5 },
   { name: "body text on the pale input tint", fg: "--da-text-1", bg: "--da-input", min: 4.5 },
   { name: "muted text on the pale input tint", fg: "--da-text-3", bg: "--da-input", min: 4.5 },
-  { name: "white text on the accent teal (buttons, user bubble)", fg: "--da-on-accent", bg: "--da-accent", min: 4.5 },
+  { name: "white text on the Dada blue accent (buttons, user bubble)", fg: "--da-on-accent", bg: "--da-accent", min: 4.5 },
   { name: "accent text (links) on the page card", fg: "--da-accent", bg: "--da-surface-0", min: 4.5 },
   { name: "accent text on the inactive tab", fg: "--da-accent", bg: "--da-surface-2", min: 4.5 },
   { name: "accent text on a panel", fg: "--da-accent", bg: "--da-surface-1", min: 4.5 },
@@ -99,16 +99,17 @@ const PAIRS: { name: string; fg: string; bg: string; min: number }[] = [
   { name: "body text on the page background", fg: "--da-text-1", bg: "--da-page", min: 4.5 },
   { name: "secondary text on the page background", fg: "--da-text-2", bg: "--da-page", min: 4.5 },
   { name: "muted text on the page background", fg: "--da-text-3", bg: "--da-page", min: 4.5 },
-  { name: "brand teal (graphics) on the page background", fg: "--da-brand", bg: "--da-page", min: 3 },
-  { name: "brand teal (graphics) on the card", fg: "--da-brand", bg: "--da-surface-0", min: 3 },
-  { name: "dark text on amber (highlights)", fg: "--da-on-amber", bg: "--da-amber", min: 4.5 },
-  { name: "amber ink (text) on the card", fg: "--da-amber-ink", bg: "--da-surface-0", min: 4.5 },
-  { name: "amber ink (text) on a panel", fg: "--da-amber-ink", bg: "--da-surface-1", min: 4.5 },
-  { name: "amber ink (text) on the page background", fg: "--da-amber-ink", bg: "--da-page", min: 4.5 },
+  { name: "brand blue (graphics) on the page background", fg: "--da-brand", bg: "--da-page", min: 3 },
+  { name: "brand blue (graphics) on the card", fg: "--da-brand", bg: "--da-surface-0", min: 3 },
+  { name: "dark text on the yellow (highlights)", fg: "--da-on-amber", bg: "--da-amber", min: 4.5 },
+  { name: "yellow ink (text) on the card", fg: "--da-amber-ink", bg: "--da-surface-0", min: 4.5 },
+  { name: "yellow ink (text) on a panel", fg: "--da-amber-ink", bg: "--da-surface-1", min: 4.5 },
+  { name: "yellow ink (text) on the page background", fg: "--da-amber-ink", bg: "--da-page", min: 4.5 },
   { name: "warn text on the card", fg: "--da-warn", bg: "--da-surface-0", min: 4.5 },
   { name: "danger text on the card", fg: "--da-danger", bg: "--da-surface-0", min: 4.5 },
   { name: "ok text on the card", fg: "--da-ok", bg: "--da-surface-0", min: 4.5 },
   { name: "value badge text on the card", fg: "--da-value", bg: "--da-surface-0", min: 4.5 },
+  { name: "muted text on the warm sand panel and footer strip", fg: "--da-text-3", bg: "--da-surface-1", min: 4.5 },
   { name: "footer text on the footer", fg: "--da-on-footer", bg: "--da-footer", min: 4.5 },
   { name: "footer link on the footer", fg: "--da-footer-link", bg: "--da-footer", min: 4.5 },
   { name: "focus ring on the card", fg: "--da-focus", bg: "--da-surface-0", min: 3 },
@@ -142,6 +143,7 @@ describe("structure", () => {
       "--da-input",
       "--da-border",
       "--da-focus",
+      "--da-sand-line",
       ...Array.from({ length: 8 }, (_, i) => `--da-space-${i + 1}`),
       "--da-radius-sm",
       "--da-radius-md",
@@ -160,5 +162,35 @@ describe("structure", () => {
   it("has a Tailwind @theme mapping and no physical-direction properties", () => {
     expect(css).toMatch(/@theme inline\s*\{/);
     expect(css).not.toMatch(/\b(margin|padding)-(left|right)\b/);
+  });
+});
+
+/** Every component source under src/ (tests excluded) and the base stylesheet. */
+function sources(): { file: string; text: string }[] {
+  const code = import.meta.glob<string>(["/src/**/*.{ts,tsx}", "!/src/**/__tests__/**", "!/src/**/*.d.ts"], {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  });
+  const out = Object.entries(code).map(([file, text]) => ({ file, text }));
+  out.push({ file: "src/index.css", text: readFileSync(new URL("../../index.css", import.meta.url), "utf8") });
+  return out;
+}
+
+describe("palette use (P19.4)", () => {
+  const files = sources();
+
+  it("never sets the Dada yellow as a text colour (about 1.5:1 on white): text uses amber-ink", () => {
+    expect(files.length).toBeGreaterThan(20);
+    for (const { file, text } of files) expect(text, file).not.toMatch(/\btext-amber(?![-\w])/);
+  });
+
+  it("never uses the warm sand neutral as a text colour", () => {
+    for (const { file, text } of files) expect(text, file).not.toMatch(/\btext-sand/);
+  });
+
+  it("uses no Tailwind stock colour scale (e.g. teal-600): every colour comes from the tokens", () => {
+    const stock = /(?<![\w:-])(?:bg|text|border|ring|fill|stroke|outline|from|to)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/;
+    for (const { file, text } of files) expect(text, file).not.toMatch(stock);
   });
 });

@@ -8,6 +8,7 @@ import App from "@/App";
 import { setAdminToken } from "@/api/adminToken";
 import { RtlProvider } from "@/components/ui/RtlProvider";
 import { translate } from "@/i18n";
+import { BrandMark, DadaLogo } from "@/components/shell/BrandMark";
 import { STORAGE_KEY, defaultState, type StoredState } from "@/state/storage";
 
 const json = (body: unknown, status = 200) =>
@@ -195,5 +196,42 @@ describe("shell and role choice", () => {
     const current = document.querySelectorAll('nav [aria-current="page"]');
     expect(current.length).toBeGreaterThan(0);
     current.forEach((e) => expect(e.getAttribute("href")).toBe("#/plan"));
+  });
+});
+
+describe("brand marks (P19.4)", () => {
+  it("the leaf avatar crops the logo without element ids, so a thread of avatars repeats no id", () => {
+    const { container } = render(
+      <>
+        <BrandMark size={30} />
+        <BrandMark size={30} />
+      </>,
+    );
+    expect(container.querySelectorAll("svg image")).toHaveLength(2);
+    expect(container.querySelectorAll("[id]")).toHaveLength(0);
+    expect(container.querySelector("clipPath")).toBeNull();
+  });
+
+  it("the full logo keeps its aspect ratio (1000 x 396) and is decorative beside the wordmark", () => {
+    const { container } = render(<DadaLogo height={28} />);
+    const img = container.querySelector("img")!;
+    expect(img.getAttribute("alt")).toBe("");
+    expect(img.getAttribute("width")).toBe("71");
+    expect(img.style.width).toBe("auto");
+  });
+});
+
+describe("admin header (P19.4)", () => {
+  it("keeps the three admin links in a tab row below lg: at 768 px they do not fit beside the brand", async () => {
+    setAdminToken("4102444800.sig");
+    setHash("#/admin/interns");
+    renderApp();
+    await act(async () => {});
+    const navs = document.querySelectorAll("[data-admin-shell] header nav");
+    expect(navs).toHaveLength(2);
+    expect(navs[0]!.className).toMatch(/\bhidden\b.*\blg:block\b/);
+    expect(navs[1]!.className).toMatch(/\blg:hidden\b/);
+    expect(navs[1]!.className).not.toMatch(/\bmd:hidden\b/);
+    setAdminToken(null);
   });
 });

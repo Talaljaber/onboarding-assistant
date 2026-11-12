@@ -19,7 +19,7 @@ const PROMISES: { key: DictKey; icon: IconName }[] = [
 ];
 
 // A native radio, visually hidden, inside a label drawn as a tile: arrow keys, Space and screen readers
-// work as for any radio group. The checked tile gets a teal ring and a check mark (not colour alone);
+// work as for any radio group. The checked tile gets a blue ring and a check mark (not colour alone);
 // the keyboard focus ring is drawn on the tile (`.da-radio-tile` in index.css).
 const tile =
   "da-radio-tile group relative flex w-full cursor-pointer items-center rounded-lg border border-line bg-surface-0 text-start shadow-card " +
@@ -222,7 +222,7 @@ export default function WelcomeScreen() {
           <h2 className="mb-3 text-sm font-semibold text-fg-3">{t("uiShell.welcomeWhat")}</h2>
           <ul className="grid gap-3">
             {PROMISES.map(({ key, icon }) => (
-              <li key={key} className="flex items-center gap-4 rounded-lg border border-line bg-surface-0/70 p-4">
+              <li key={key} className="flex items-center gap-4 rounded-lg border border-sand-line bg-surface-1 p-4">
                 <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-md bg-accent-soft text-accent">
                   <Icon name={icon} size={22} strokeWidth={1.75} />
                 </span>

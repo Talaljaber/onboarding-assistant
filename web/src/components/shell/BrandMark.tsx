@@ -11,19 +11,15 @@ const LEAF = { w: 113, h: 115 };
  */
 export function BrandMark({ size = 36, className }: { size?: number; className?: string }) {
   const leaf = 23; // leaf height inside the 40-unit tile
-  const s = leaf / LEAF.h;
-  const x = (40 - LEAF.w * s) / 2;
-  const y = (40 - leaf) / 2;
-  const clip = `da-leaf-${size}`;
+  const w = (LEAF.w * leaf) / LEAF.h;
+  // The inner <svg> is a viewport onto the leaf's corner of the logo: it crops without a clipPath, so
+  // the many avatars of a thread share no element id (a fixed id was repeated once per avatar).
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" focusable="false" className={className}>
-      <defs>
-        <clipPath id={clip}>
-          <rect x={x} y={y} width={LEAF.w * s} height={leaf} />
-        </clipPath>
-      </defs>
       <rect width="40" height="40" rx="11" fill="var(--da-accent)" />
-      <image href={logoUrl} x={x} y={y} width={LOGO_W * s} height={LOGO_H * s} clipPath={`url(#${clip})`} />
+      <svg x={(40 - w) / 2} y={(40 - leaf) / 2} width={w} height={leaf} viewBox={`0 0 ${LEAF.w} ${LEAF.h}`} overflow="hidden">
+        <image href={logoUrl} width={LOGO_W} height={LOGO_H} />
+      </svg>
     </svg>
   );
 }

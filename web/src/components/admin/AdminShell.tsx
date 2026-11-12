@@ -47,7 +47,8 @@ const roundBtn =
 
 /**
  * The admin's own frame (P11.2): brand with an "Admin" label, the admin navigation (Interns, Knowledge
- * base) in the header from md and as a tab row under it on phones, the language toggle and sign out.
+ * base, questions) in the header from lg and as a tab row under it below lg (the three items and the
+ * open-questions badge do not fit beside the brand at 768 px), the language toggle and sign out.
  * No intern bottom bar, no intern chip. Shell parts carry `data-shell` so print hides them.
  */
 export function AdminShell({ children }: { children: ReactNode }) {
@@ -67,7 +68,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     ITEMS.map((i) => {
       const current = i.current(path);
       return (
-        <li key={i.href} className="flex flex-1 md:flex-none">
+        <li key={i.href} className="flex flex-1 lg:flex-none">
           <a href={i.href} aria-current={current ? "page" : undefined} className={cn(cls, current ? on : off)}>
             <Icon name={i.icon} size={18} className="shrink-0 max-sm:hidden" />
             {t(i.key)}
@@ -100,7 +101,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
               <span className="text-xs font-semibold text-accent">{t("uiIntern.adminArea")}</span>
             </span>
           </a>
-          <nav aria-label={t("uiIntern.adminNav")} className="ms-4 hidden md:block">
+          <nav aria-label={t("uiIntern.adminNav")} className="ms-4 hidden lg:block">
             <ul className="m-0 flex list-none gap-1 p-0">
               {links(
                 "inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors",
@@ -130,10 +131,11 @@ export function AdminShell({ children }: { children: ReactNode }) {
             </button>
           </div>
         </div>
-        <nav aria-label={t("uiIntern.adminNav")} className="border-t border-line md:hidden">
+        <nav aria-label={t("uiIntern.adminNav")} className="border-t border-line lg:hidden">
           <ul className="m-0 flex list-none p-0">
             {links(
-              "flex min-h-12 flex-1 items-center justify-center gap-2 border-b-2 px-3 text-sm font-semibold",
+              // Two-line labels (English at 360 px) stay centred under each other.
+              "flex min-h-12 flex-1 items-center justify-center gap-2 border-b-2 px-2 py-1 text-center text-sm leading-tight font-semibold sm:px-3",
               "border-accent text-accent",
               "border-transparent text-fg-2",
             )}
@@ -143,7 +145,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       <main id="main" tabIndex={-1} className="flex-1 outline-none">
         {children}
       </main>
-      <footer data-shell className="border-t border-line px-6 py-4 text-center text-xs text-fg-3">
+      <footer data-shell className="border-t border-sand-line bg-surface-1 px-6 py-4 text-center text-xs text-fg-3">
         {t("uiIntern.fictional")}
       </footer>
     </div>

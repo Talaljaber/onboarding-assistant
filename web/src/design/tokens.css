@@ -2,7 +2,9 @@
  * Dada Academy design tokens. Every component styles against these variables. Light theme only.
  * Palette: Dada Group's own colours (owner's request, Thu 12 Nov 2026; taken from dadagroup.jo and its logo):
  * Dada blue #0b5696 for trust and action, the logo's yellow #e8d60e as the highlight, navy #1f2e3f for text
- * and the footer, the site's pale blue-grey #f2f7fa as the page.
+ * and the footer, the site's pale blue-grey #f2f7fa as the page. One warm sand neutral (owner, same day)
+ * keeps the blue-grey from feeling cold: --da-surface-1 (panels, K-row quotes, table heads, neutral notices,
+ * the shell's footer strip) with --da-sand-line as its hairline. Never a text colour.
  *
  * The yellow (--da-amber) fails contrast against white, so it is for borders and fills behind dark text
  * only; text that needs it uses --da-amber-ink. --da-brand is for graphics only.
@@ -18,9 +20,9 @@
   /* Light only: native controls and scrollbars stay light even on a dark OS. */
   color-scheme: light;
 
-  /* surfaces + text + lines (Dada blue-grey neutrals) */
+  /* surfaces + text + lines (Dada blue-grey neutrals; surface-1 is the warm sand) */
   --da-surface-0: #ffffff;
-  --da-surface-1: #f7fafc;
+  --da-surface-1: #f7f2e8; /* warm sand panel */
   --da-surface-2: #e7eef4;
   --da-surface-raised: #ffffff;
   --da-surface-soft: #eaf2f9;
@@ -29,6 +31,7 @@
   --da-text-3: #536276;
   --da-border: #dde5ec;
   --da-border-strong: #6f7f90;
+  --da-sand-line: #e6dccb;
   --da-focus: #0b5696;
   --da-on-accent: #ffffff;
   --da-accent: #0b5696;
@@ -120,6 +123,7 @@
   --color-fg-3: var(--da-text-3);
   --color-line: var(--da-border);
   --color-line-strong: var(--da-border-strong);
+  --color-sand-line: var(--da-sand-line);
   --color-focus: var(--da-focus);
   --color-accent: var(--da-accent);
   --color-accent-hover: var(--da-accent-hover);
