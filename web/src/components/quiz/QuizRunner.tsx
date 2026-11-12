@@ -3,8 +3,9 @@
 // official quiz records a practice attempt in this browser (counts only, never a score) and ticks the role's
 // Day 30 quiz activity. "Retry" puts the questions missed last time first (the adaptive retry).
 //
-// Hand-offs after a wrong answer: "ask the assistant" links to `#/chat?ask=<encoded question>`, and «اسأل مشرفي
-// عن هذا» opens the questions-inbox sheet (source "quiz", the question and its K-id prefilled, editable).
+// Hand-offs after a wrong answer: "ask the assistant" links to `#/chat?ask=<encoded text>`, and «اسأل مشرفي
+// عن هذا» opens the questions-inbox sheet (source "quiz", editable). P22: both carry the question, its three
+// options and the intern's pick (the mentor's text also the K-id), at most 600 characters.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getQuiz, postQuizCheck } from "@/api/client";
 import type { QuizCheckResponse, QuizItem, QuizOptionKey } from "@/api/types";
@@ -27,16 +28,36 @@ import { useT } from "@/i18n";
 import { pct } from "@/lib/format";
 import { useAppState } from "@/state/useAppState";
 import { getQuizSet, getQuizSets } from "@/api/client";
-import { quizErrorReason, type CheckpointMyResult, type QuizSetSummary } from "@/api/types";
+import { QUESTION_LIMITS, quizErrorReason, type CheckpointMyResult, type QuizSetSummary } from "@/api/types";
 import { QuizExplanation } from "./QuizExplanation";
-import { BackToQuizzes, PrivacyNote } from "./QuizList";
+import { BackToQuizzes, PrivacyNote, SharedResultLine } from "./QuizList";
 
 type Status = "loading" | "ready" | "error" | "locked" | "missing";
 type Shared = { right: number; total: number };
 const KEYS: QuizOptionKey[] = ["A", "B", "C"];
 
-/** The text sent to the mentor: the question and its K-id, e.g. "… (K07)". The intern may edit it. */
-export const mentorText = (q: Pick<QuizItem, "question_ar" | "source_knowledge_id">) => `${q.question_ar} (${q.source_knowledge_id})`;
+type Translate = ReturnType<typeof useT>;
+const QUESTION_MAX = QUESTION_LIMITS.textMax;
+
+/** P22 (owner): the hand-off text for the chat and the mentor: the question WITH its three options and the
+ *  intern's pick («سؤال من الاختبار: … الخيارات: أ) … ب) … ج) … — اخترتُ: أ»), then ` (K07)` for the mentor.
+ *  At most 600 characters: a long question is shortened (the options and the pick always stay). */
+export function quizContextText(
+  t: Translate,
+  question: string,
+  options: Record<QuizOptionKey, string>,
+  chosen: QuizOptionKey | null | undefined,
+  kid?: string,
+): string {
+  const letter = (k: QuizOptionKey) => t(`p22Intern.opt${k}`);
+  const build = (q: string) =>
+    t("p22Intern.quizAskText", { question: q, a: options.A, b: options.B, c: options.C, pick: chosen ? letter(chosen) : "—" }) +
+    (kid ? ` (${kid})` : "");
+  const full = build(question);
+  if (full.length <= QUESTION_MAX) return full;
+  const room = Math.max(10, question.length - (full.length - QUESTION_MAX) - 1);
+  return build(`${question.slice(0, room).trimEnd()}…`).slice(0, QUESTION_MAX);
+}
 
 /** P21.2: the intern's own shared checkpoint result from the server (first answer per question, the admin's rule);
  *  null for practice sets, without an intern profile or from an older server (then the first finished attempt of
@@ -68,7 +89,8 @@ export function QuizRunner({ setId }: { setId: string }) {
   const [checking, setChecking] = useState(false);
   const [checkFailed, setCheckFailed] = useState(false);
   const [correct, setCorrect] = useState(0);
-  const [wrong, setWrong] = useState<QuizItem[]>([]);
+  // P22: each missed question keeps the intern's pick for the hand-off texts
+  const [wrong, setWrong] = useState<(QuizItem & { picked?: QuizOptionKey })[]>([]);
   const [finished, setFinished] = useState(false);
   // Checkpoint sets: the intern acknowledges that the first answers are shared before the first question;
   // `runs` counts finished attempts in this visit and `prior` the answers given before it (from the list entry).
@@ -160,7 +182,7 @@ export function QuizRunner({ setId }: { setId: string }) {
     }
     setResult(r.value);
     if (r.value.correct) setCorrect((n) => n + 1);
-    else setWrong((w) => [...w, item]);
+    else setWrong((w) => [...w, { ...item, picked }]);
   }, [item, picked, profileId]);
 
   const finish = useCallback(() => {
@@ -203,13 +225,21 @@ export function QuizRunner({ setId }: { setId: string }) {
     setFinished(false);
   };
 
-  const ask = (q: QuizItem) => (
-    <a href={`#/chat?ask=${encodeURIComponent(q.question_ar)}`} className={cn(linkButton("secondary"), "self-start")}>
+  // The question and options in the language they are shown in (P16.3: both, or neither, in English).
+  const contextOf = (q: QuizItem, chosen: QuizOptionKey | null | undefined, kid?: string) => {
+    const shown = pick(q.question_ar, q.options_en ? q.question_en : null);
+    const opts = shown.lang === "en" && q.options_en ? q.options_en : q.options;
+    return quizContextText(t, shown.text, opts, chosen, kid);
+  };
+  const ask = (q: QuizItem, chosen: QuizOptionKey | null | undefined) => (
+    <a href={`#/chat?ask=${encodeURIComponent(contextOf(q, chosen))}`} className={cn(linkButton("secondary"), "self-start")}>
       <Icon name="chat" size={18} className="shrink-0" />
       {t("quiz.askAssistant")}
     </a>
   );
-  const askMentor = (q: QuizItem) => <SendClaimButton text={mentorText(q)} source="quiz" label={t("quizSets.askMentor")} />;
+  const askMentor = (q: QuizItem, chosen: QuizOptionKey | null | undefined) => (
+    <SendClaimButton text={contextOf(q, chosen, q.source_knowledge_id)} source="quiz" label={t("quizSets.askMentor")} />
+  );
 
   // Phones: the actions stick above the bottom bar (toasts sit above them, useToastDock).
   const actionBar =
@@ -289,8 +319,8 @@ export function QuizRunner({ setId }: { setId: string }) {
                           <ContentText ar={q.question_ar} en={q.options_en ? q.question_en : null} />
                         </span>
                         <div className="flex flex-wrap gap-2">
-                          {ask(q)}
-                          {askMentor(q)}
+                          {ask(q, q.picked)}
+                          {askMentor(q, q.picked)}
                         </div>
                       </li>
                     ))}
@@ -309,6 +339,18 @@ export function QuizRunner({ setId }: { setId: string }) {
                 </Button>
               </div>
             ) : item ? (
+              <>
+              {/* P22: a checkpoint answered before (this visit, a reload or another device) shows its shared result
+                  from the server above the question; a fully answered one says this attempt is practice */}
+              {checkpoint && mine && mine.answered > 0 && (
+                <div data-checkpoint-status className={cn(surface.panel, "flex items-start gap-3 p-4")}>
+                  <Icon name="eye" size={18} className="mt-0.5 shrink-0 text-accent" />
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <SharedResultLine mine={mine} className="text-base" />
+                    {mine.answered >= mine.total && <p className="m-0 text-sm text-fg-2">{t("quizSets.checkpointPracticeRun")}</p>}
+                  </div>
+                </div>
+              )}
               <div
                 data-quiz="question"
                 data-question-id={item.id}
@@ -355,7 +397,7 @@ export function QuizRunner({ setId }: { setId: string }) {
                   <div ref={verdictRef} data-quiz-verdict className="da-fade-in flex flex-col gap-4">
                     <Notice role="status" tone={result.correct ? "ok" : "warn"} title={t(result.correct ? "quiz.correct" : "quiz.incorrect")} />
                     <QuizExplanation source={result.explanation} />
-                    {!result.correct && <div data-quiz-ask-mentor>{askMentor(item)}</div>}
+                    {!result.correct && <div data-quiz-ask-mentor>{askMentor(item, picked)}</div>}
                   </div>
                 )}
                 <div ref={barRef} className={actionBar}>
@@ -369,11 +411,12 @@ export function QuizRunner({ setId }: { setId: string }) {
                         {t("common.next")}
                         <Icon name="arrow-end" size={18} className="shrink-0" />
                       </Button>
-                      {!result.correct && ask(item)}
+                      {!result.correct && ask(item, picked)}
                     </>
                   )}
                 </div>
               </div>
+              </>
             ) : null}
           </Loadable>
         )}

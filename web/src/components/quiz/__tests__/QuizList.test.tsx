@@ -9,7 +9,8 @@ import quizCheckSet from "@fixtures/quiz_check_set.json";
 import quizSets from "@fixtures/quiz_sets.json";
 import { json, renderScreen, stubApi } from "@/components/plan/__tests__/harness";
 import { resetMyQuestions } from "@/components/questions/myQuestions";
-import { missedFirst, QuizRunner } from "../QuizRunner";
+import { questionCount } from "@/lib/format";
+import { missedFirst, QuizRunner, quizContextText } from "../QuizRunner";
 import QuizScreen from "../QuizScreen";
 
 const PID = "6f1c2b9e-0000-4000-8000-000000000001";
@@ -210,12 +211,124 @@ describe("taking an assigned set", () => {
     await userEvent.click(screen.getByRole("button", { name: "تحقق" }));
     await userEvent.click(await screen.findByRole("button", { name: "اسأل مشرفي عن هذا" }));
     const box = await screen.findByRole("textbox", { name: "سؤالك" });
-    expect(box).toHaveValue(`${items[0]!.question_ar} (K02)`);
+    // P22 (owner): the question with its options and the pick, then the K-id
+    const sent = `سؤال من الاختبار: ${items[0]!.question_ar} الخيارات: أ) ${items[0]!.options.A} ب) ${items[0]!.options.B} ج) ${items[0]!.options.C} — اخترتُ: أ (K02)`;
+    expect(box).toHaveValue(sent);
     await userEvent.click(screen.getByTestId("question-send"));
     await waitFor(() => expect(spy.mock.calls.some(([u, i]) => u === "/api/questions" && (i as RequestInit)?.method === "POST")).toBe(true));
     const post = spy.mock.calls.find(([u, i]) => u === "/api/questions" && (i as RequestInit)?.method === "POST")!;
-    expect(JSON.parse(String((post[1] as RequestInit).body))).toEqual({ profile_id: PID, source: "quiz", text: `${items[0]!.question_ar} (K02)` });
+    expect(JSON.parse(String((post[1] as RequestInit).body))).toEqual({ profile_id: PID, source: "quiz", text: sent });
     expect(await screen.findByText("أُرسل إلى مشرفك. سيظهر جوابه في «أسئلتك لمشرفك».")).toBeInTheDocument();
+  });
+});
+
+describe("P22: the shared checkpoint result stays visible", () => {
+  const withMine = (mine: unknown) => ({ sets: [quizSets.sets[0], { ...SET, open: true, mode: "checkpoint", my_result: mine }] });
+
+  it("the list card shows the server's shared result, or how many are answered so far, and nothing before the first answer", async () => {
+    stubApi({ "/api/quiz-sets": sets(withMine({ answered: 3, first_attempt_right: 2, total: 3 })) });
+    const { unmount } = renderScreen(<QuizScreen />, { data: { profile_id: PID } });
+    const cards = await screen.findAllByRole("listitem");
+    expect(cards[1]!.querySelector("[data-shared-result=complete]")).toHaveTextContent("نتيجتك المُشارَكة مع مشرفك: 2 / 3");
+    unmount();
+    vi.unstubAllGlobals();
+    stubApi({ "/api/quiz-sets": sets(withMine({ answered: 1, first_attempt_right: 0, total: 3 })) });
+    const second = renderScreen(<QuizScreen />, { data: { profile_id: PID } });
+    const partial = await screen.findAllByRole("listitem");
+    expect(partial[1]!.querySelector("[data-shared-result=partial]")).toHaveTextContent("أجبت حتى الآن عن 1 من 3.");
+    second.unmount();
+    vi.unstubAllGlobals();
+    stubApi({ "/api/quiz-sets": sets(withMine({ answered: 0, first_attempt_right: 0, total: 3 })) });
+    renderScreen(<QuizScreen />, { data: { profile_id: PID } });
+    await screen.findAllByRole("listitem");
+    expect(document.querySelector("[data-shared-result]")).toBeNull();
+  });
+
+  it("a checkpoint answered before (reload or another device) shows its shared result above the question, as practice", async () => {
+    stubApi({ "/api/quiz-sets": sets(withMine({ answered: 3, first_attempt_right: 2, total: 3 })), "/api/quiz/check": () => json(quizCheckSet) });
+    renderScreen(<QuizRunner setId={SET.id} />, { data: { profile_id: PID } });
+    expect(await screen.findByText(items[0]!.question_ar)).toBeInTheDocument();
+    const status = document.querySelector("[data-checkpoint-status]")!;
+    expect(status).toHaveTextContent("نتيجتك المُشارَكة مع مشرفك: 2 / 3");
+    expect(status).toHaveTextContent("هذه المحاولة للتدرّب: النتيجة المُشارَكة هي إجاباتك الأولى.");
+  });
+
+  it("a checkpoint started before shows how many are answered after the notice; a new one shows nothing", async () => {
+    stubApi({ "/api/quiz-sets": sets(withMine({ answered: 1, first_attempt_right: 1, total: 3 })) });
+    const { unmount } = renderScreen(<QuizRunner setId={SET.id} />, { data: { profile_id: PID } });
+    await userEvent.click(await screen.findByRole("button", { name: "ابدأ" }));
+    expect(await screen.findByText(items[0]!.question_ar)).toBeInTheDocument();
+    expect(document.querySelector("[data-checkpoint-status]")).toHaveTextContent("أجبت حتى الآن عن 1 من 3.");
+    expect(document.querySelector("[data-checkpoint-status]")).not.toHaveTextContent("هذه المحاولة للتدرّب");
+    unmount();
+    vi.unstubAllGlobals();
+    stubApi({ "/api/quiz-sets": sets(withMine({ answered: 0, first_attempt_right: 0, total: 3 })) });
+    renderScreen(<QuizRunner setId={SET.id} />, { data: { profile_id: PID } });
+    await userEvent.click(await screen.findByRole("button", { name: "ابدأ" }));
+    expect(await screen.findByText(items[0]!.question_ar)).toBeInTheDocument();
+    expect(document.querySelector("[data-checkpoint-status]")).toBeNull();
+  });
+
+  it("«اسأل مشرفي عن هذا» on a question the mentor already answered says it was answered", async () => {
+    const answered = { ...question, source: "quiz", text: `سؤال من الاختبار: ${items[0]!.question_ar} الخيارات: أ) ${items[0]!.options.A} ب) ${items[0]!.options.B} ج) ${items[0]!.options.C} — اخترتُ: أ (K02)`, status: "answered", answered_at: question.created_at, answer_text: "ردّ خاص" };
+    stubApi({
+      "/api/quiz-sets": sets(openSet("practice")),
+      "/api/quiz/check": () => json({ ...quizCheckSet, correct: false }),
+      "/api/questions": () => json({ questions: [answered], counts: { open: 0, answered: 1, dismissed: 0 } }),
+    });
+    renderScreen(<QuizRunner setId={SET.id} />, { data: { profile_id: PID } });
+    // the questions are read by a screen that loads them (the chat panel); here load them directly
+    const { loadMyQuestions } = await import("@/components/questions/myQuestions");
+    await act(async () => loadMyQuestions(PID));
+    await userEvent.click((await screen.findAllByRole("radio"))[0]!);
+    await userEvent.click(screen.getByRole("button", { name: "تحقق" }));
+    const line = await screen.findByText("أجاب مشرفك عن هذا السؤال. تجد الجواب في «أسئلتك لمشرفك».");
+    expect(line.closest("[data-question-sent]")).toHaveAttribute("data-question-sent", "answered");
+    expect(screen.queryByRole("button", { name: "اسأل مشرفي عن هذا" })).toBeNull();
+  });
+});
+
+describe("P22: quiz hand-off texts and question counts", () => {
+  const en = (k: string, v?: Record<string, string | number>) =>
+    k === "p22Intern.quizAskText"
+      ? `Quiz question: ${v!.question} Options: A) ${v!.a} B) ${v!.b} C) ${v!.c} — I chose: ${v!.pick}`
+      : k === "p22Intern.countZero"
+        ? "No questions"
+        : k.startsWith("p22Intern.opt")
+          ? k.slice(-1)
+          : k;
+  const opts = { A: "30 days", B: "60 days", C: "90 days" };
+
+  it("puts the options and the pick in the text, the K-id last for the mentor, and stays within 600 characters", () => {
+    expect(quizContextText(en as never, "How long is probation?", opts, "A")).toBe(
+      "Quiz question: How long is probation? Options: A) 30 days B) 60 days C) 90 days — I chose: A",
+    );
+    expect(quizContextText(en as never, "How long is probation?", opts, "C", "K14")).toMatch(/I chose: C \(K14\)$/);
+    const long = "q".repeat(300);
+    const big = { A: "a".repeat(120), B: "b".repeat(120), C: "c".repeat(120) };
+    const out = quizContextText(en as never, long, big, "B", "K14");
+    expect(out.length).toBeLessThanOrEqual(600);
+    expect(out).toContain(big.C);
+    expect(out).toMatch(/I chose: B \(K14\)$/);
+    expect(out).toContain("…");
+  });
+
+  it("the ask-the-assistant link in the English UI carries the English options and the pick", async () => {
+    stubApi({ "/api/quiz-sets": sets(openSet("practice")), "/api/quiz/check": () => json({ ...quizCheckSet, correct: false }) });
+    renderScreen(<QuizRunner setId={SET.id} />, { data: { profile_id: PID }, lang: "en" });
+    await userEvent.click((await screen.findAllByRole("radio"))[1]!);
+    await userEvent.click(screen.getByRole("button", { name: "Check" }));
+    const link = await screen.findByRole("link", { name: "Ask the assistant about this question" });
+    const text = decodeURIComponent(link.getAttribute("href")!.split("ask=")[1]!);
+    expect(text).toMatch(/^Quiz question: .+ Options: A\) .+ B\) .+ C\) .+ — I chose: B$/);
+  });
+
+  it("zero questions reads «لا أسئلة» / “No questions”, not «0 سؤالاً»", () => {
+    const ar = (k: string, v?: Record<string, string | number>) => (k === "p22Intern.countZero" ? "لا أسئلة" : `${k}:${v?.n}`);
+    expect(questionCount(0, "ar", ar as never)).toBe("لا أسئلة");
+    expect(questionCount(0, "en", en as never)).toBe("No questions");
+    expect(questionCount(11, "ar", ar as never)).toBe("quizSets.countMany:11");
+    expect(questionCount(1, "ar", ar as never)).toBe("quizSets.countOne:1");
   });
 });
 

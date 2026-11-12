@@ -119,7 +119,8 @@ export function MyQuestionsPanel({ busy, onReask }: { busy: boolean; onReask: (t
         </button>
       </h2>
       {open && (
-        <div className="max-h-[45dvh] overflow-y-auto overscroll-contain">
+        // P22: `relative` keeps any visually hidden (absolute) text inside this scroll box, not below the page
+        <div className="relative max-h-[45dvh] overflow-y-auto overscroll-contain">
           <ul id={listId} className="m-0 flex list-none flex-col gap-3 px-3 sm:px-4">
             {items.map((q) => (
               <QuestionItem

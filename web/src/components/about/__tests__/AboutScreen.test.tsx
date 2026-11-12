@@ -37,7 +37,11 @@ describe("AboutScreen", () => {
     stubApi();
     renderScreen(<AboutScreen />, { role: null });
     const text = document.querySelector("[data-screen=about]")!.textContent ?? "";
-    expect(text).toContain("تقدمك وعلامات الاختبار والتدريب تُحفظ على الخادم ليراها مشرفك");
+    // P22: practice answers and results are not shown to the mentor (counts only); a checkpoint shares first answers
+    expect(text).toContain("تقدمك في الخطة المقترحة يُحفظ على الخادم ليراه مشرفك");
+    expect(text).toContain("لا إجاباتك ولا نتيجتك");
+    expect(text).toContain("تُشارَك إجابتك الأولى على كل سؤال");
+    expect(text).not.toContain("وعلامات الاختبار والتدريب تُحفظ على الخادم ليراها مشرفك");
     expect(text).toContain("ردود طلبات المشرف ومرفقاتها تُحفظ على الخادم");
     expect(text).toContain("نص المحادثة لا يُحفظ على الخادم");
     expect(text).toContain("استيراد المعرفة يحفظ المقاطع المعتمدة فقط");

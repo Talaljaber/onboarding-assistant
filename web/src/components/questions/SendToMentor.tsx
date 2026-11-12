@@ -13,12 +13,13 @@ import { SendQuestionDialog } from "./SendQuestionDialog";
 /** Chat prompts the intern answered "No thanks" to (this page load only). */
 const declined = new Set<string>();
 
-function SentLine() {
+/** P22: a question the mentor already answered says so (not "the answer will appear"). */
+function SentLine({ answered = false }: { answered?: boolean }) {
   const t = useT();
   return (
-    <p data-question-sent className="m-0 flex items-start gap-2 text-sm font-medium text-fg-2">
+    <p data-question-sent={answered ? "answered" : "sent"} className="m-0 flex items-start gap-2 text-sm font-medium text-fg-2">
       <Icon name="check" size={16} className="mt-0.5 shrink-0 text-ok" />
-      {t("questions.sentLine")}
+      {t(answered ? "p22Intern.answeredLine" : "questions.sentLine")}
     </p>
   );
 }
@@ -32,7 +33,8 @@ export function SendQuestionPrompt({ itemId, question }: { itemId: string; quest
   const [sent, setSent] = useState(false);
   const [, setNo] = useState(0);
   if (!profileId || !question || declined.has(itemId)) return null;
-  if (sent || sentQuestion(items, question)) return <SentLine />;
+  const before = sentQuestion(items, question);
+  if (sent || before) return <SentLine answered={!sent && before?.status === "answered"} />;
   return (
     <div data-question-prompt className="flex flex-wrap items-center gap-x-3 gap-y-2">
       <p className="m-0 flex min-w-0 flex-[1_1_12rem] items-center gap-2 text-sm font-semibold text-fg-1">
@@ -70,7 +72,8 @@ export function SendClaimButton({ text, source = "check", label }: { text: strin
   const [open, setOpen] = useState(false);
   const [sent, setSent] = useState(false);
   if (!profileId) return null;
-  if (sent || sentQuestion(items, text)) return <SentLine />;
+  const before = sentQuestion(items, text);
+  if (sent || before) return <SentLine answered={!sent && before?.status === "answered"} />;
   return (
     <div>
       <Button variant="secondary" size="md" icon="send" onClick={() => setOpen(true)} data-question-open>

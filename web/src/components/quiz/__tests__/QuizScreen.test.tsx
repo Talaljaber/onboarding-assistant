@@ -75,7 +75,10 @@ describe("QuizRunner: the official sample quiz", () => {
         expect(await screen.findByText("إجابة غير صحيحة")).toBeInTheDocument();
         expect(screen.getByRole("link", { name: "اسأل المساعد عن هذا السؤال" })).toHaveAttribute(
           "href",
-          `#/chat?ask=${encodeURIComponent(first.question_ar)}`,
+          // P22 (owner): the question with its three options and the intern's pick
+          `#/chat?ask=${encodeURIComponent(
+            `سؤال من الاختبار: ${first.question_ar} الخيارات: أ) ${first.options.A} ب) ${first.options.B} ج) ${first.options.C} — اخترتُ: أ`,
+          )}`,
         );
       } else await screen.findByText("إجابة صحيحة");
       await userEvent.click(screen.getByRole("button", { name: "التالي" }));

@@ -1317,4 +1317,15 @@ export const en: Dict = {
     notes: "Mentor's notes",
     notesHint: "For handwriting on the printout.",
   },
+  p22Intern: {
+    // P22 intern-side QA fixes
+    answeredLine: "Your mentor answered this question. The answer is under “Your questions”.",
+    sharedSoFar: "So far you answered {n} of {total}. Your first answer to each question is shared with your mentor.",
+    storedText: "Your suggested-plan progress is saved on the server so your mentor can see it, with how many quiz questions and scenarios you practised, never your answers or results. In a quiz marked “Result shared with your mentor”, your first answer to each question is shared, and you are told before you start. Mentor-request replies and their attachments are stored on the server. Chat text is not stored on the server: it stays in this browser with your track and language, and the turn log keeps metadata only, no message or answer text. Knowledge imports keep only the approved passages. The clear button clears this browser only.",
+    countZero: "No questions",
+    quizAskText: "Quiz question: {question} Options: A) {a} B) {b} C) {c} — I chose: {pick}",
+    optA: "A",
+    optB: "B",
+    optC: "C",
+  },
 };
