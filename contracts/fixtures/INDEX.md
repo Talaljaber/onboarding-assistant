@@ -162,7 +162,7 @@ Server output for the sample on the official KB; rows verbatim.
 | `error_429.json` | 429 | `too_many_requests` (5 wrong admin passwords inside 60 s) |
 | `error_500.json` | 500 | `internal_error` |
 | `error_503.json` | 503 | `imports_unavailable` (document import only: the store has no import tables or failed) |
-| `error_503_requests.json` | 503 | `requests_unavailable` (mentor requests only: no `mentor_requests` table, migration 0004) |
+| `error_503_requests.json` | 503 | `requests_unavailable` (mentor requests only: no `mentor_requests` table, migration 0004; P18.2: also the email log without `mail_log`, migration 0007) |
 
 ## KB impact (P14.1, admin only)
 
@@ -171,3 +171,13 @@ Server output for the sample on the official KB; rows verbatim.
 | `kb_impact.json` | `GET /api/admin/kb/{id}/impact` (K02: Sara's answers cited it; two plan activities; no quiz item) | `KbImpact` |
 
 The intern is the seeded fictional demo persona. Ids only, from turn logs: no chat text, no count per intern.
+
+## Email notifications (P18.2, admin only)
+
+| File | Endpoint | Model |
+|---|---|---|
+| `mail_log.json` | `GET /api/admin/mail/log` (newest first: a sent reply notice, a request notice skipped because the intern has no email, a failed test) | `MailLogResponse` |
+| `mail_test.json` | `POST /api/admin/mail/test` (202: queued to ADMIN_EMAIL) | `MailTestResponse` |
+
+`intern.json`, `intern_create_request.json` and `intern_patch_request.json` carry the optional `email` (P18.2);
+`intern_detail.json` shows an intern without one (`null`). Addresses use the reserved `example.com` domain.

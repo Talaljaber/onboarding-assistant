@@ -719,20 +719,25 @@ export interface InternOut extends InternPublic {
   active: boolean;
   created_at: string;
   updated_at: string;
+  /** P18.2: where this intern's notifications go (admin views only). */
+  email: string | null;
 }
 
 export interface InternCreate {
   name_ar: string;
   name_en: string | null;
   role: Role;
+  /** P18.2: optional; null = none. */
+  email?: string | null;
 }
 
-/** Partial update: absent = unchanged; `name_en: null` clears it. */
+/** Partial update: absent = unchanged; `name_en: null` clears it (`email: null` clears the email). */
 export interface InternPatch {
   name_ar?: string;
   name_en?: string | null;
   role?: Role;
   active?: boolean;
+  email?: string | null;
 }
 
 /** One row of the admin's interns list. Completion and practice counts only: no correctness, no scores. */
@@ -1192,7 +1197,14 @@ export function isInternSession(x: unknown): x is InternSession {
 }
 
 export function isInternOut(x: unknown): x is InternOut {
-  return isInternPublic(x) && isObj(x) && isBool(x.active) && isStr(x.created_at) && isStr(x.updated_at);
+  return (
+    isInternPublic(x) &&
+    isObj(x) &&
+    isBool(x.active) &&
+    isStr(x.created_at) &&
+    isStr(x.updated_at) &&
+    (x.email === undefined || isStrOrNull(x.email))
+  );
 }
 
 function isInternSummary(x: unknown): x is InternSummary {
@@ -1564,4 +1576,66 @@ export function isRequestComment(x: unknown): x is RequestComment {
 
 export function isRequestThread(x: unknown): x is RequestThread {
   return isObj(x) && isStr(x.request_id) && isArrayOf(x.comments, isRequestComment);
+}
+
+// ---------------------------------------------------------------- P18.2 email notifications (admin only)
+
+export const MAIL_EVENTS = [
+  "request_created",
+  "admin_comment",
+  "intern_comment",
+  "request_done",
+  "question_submitted",
+  "question_answered",
+  "test",
+] as const;
+export type MailEvent = (typeof MAIL_EVENTS)[number];
+export const MAIL_STATUSES = ["sent", "failed", "skipped"] as const;
+export type MailStatus = (typeof MAIL_STATUSES)[number];
+
+/** One email the server sent, failed to send or skipped; `to_addr` is "" when there was no address. */
+export interface MailLogEntry {
+  id: string;
+  event: MailEvent;
+  to_addr: string;
+  subject: string;
+  status: MailStatus;
+  /** A short code (`auth_failed`, `no_recipient`, …), never an SMTP reply. */
+  error: string | null;
+  created_at: string;
+}
+
+/** `GET /api/admin/mail/log`: newest first, at most 50. */
+export interface MailLogResponse {
+  entries: MailLogEntry[];
+  /** SMTP user and password are set and the app is not offline. */
+  configured: boolean;
+  admin_email_set: boolean;
+}
+
+/** `POST /api/admin/mail/test` (202). */
+export interface MailTestResponse {
+  status: "queued" | "skipped";
+  error: string | null;
+}
+
+function isMailLogEntry(x: unknown): x is MailLogEntry {
+  return (
+    isObj(x) &&
+    isStr(x.id) &&
+    isOneOf(MAIL_EVENTS, x.event) &&
+    isStr(x.to_addr) &&
+    isStr(x.subject) &&
+    isOneOf(MAIL_STATUSES, x.status) &&
+    isStrOrNull(x.error) &&
+    isStr(x.created_at)
+  );
+}
+
+export function isMailLogResponse(x: unknown): x is MailLogResponse {
+  return isObj(x) && isArrayOf(x.entries, isMailLogEntry) && isBool(x.configured) && isBool(x.admin_email_set);
+}
+
+export function isMailTestResponse(x: unknown): x is MailTestResponse {
+  return isObj(x) && (x.status === "queued" || x.status === "skipped") && isStrOrNull(x.error);
 }

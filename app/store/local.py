@@ -1,6 +1,6 @@
 """LocalStore: the Store on a SQLite file (default `data/live/local.sqlite`).
 
-What it does: keeps the same tables as `supabase/migrations/0001`–`0005` (SQLite types; arrays and
+What it does: keeps the same tables as `supabase/migrations/0001`–`0005` and `0007` (SQLite types; arrays and
 jsonb as JSON text) behind one lock, so the server works with no network and no Supabase. Files on mentor
 request comments (P15) are kept under `data/live/mentor_files/{request_id}/{file_id}` (git-ignored).
 What it must never do: raise to the caller (every failure is logged and returns a safe default),
@@ -51,6 +51,10 @@ from app.store.base import (
     comment_input,
     file_row,
     thread_rows,
+    MAIL_COLUMNS,
+    clean_email,
+    mail_record,
+    mail_row,
 )
 
 T = TypeVar("T")
@@ -199,6 +203,16 @@ create table if not exists mentor_request_files (
     created_at text not null
 );
 create index if not exists mentor_request_files_comment_idx on mentor_request_files (comment_id);
+create table if not exists mail_log (
+    id text primary key,
+    event text not null,
+    to_addr text not null default '',
+    subject text not null,
+    status text not null check (status in ('sent', 'failed', 'skipped')),
+    error text,
+    created_at text not null
+);
+create index if not exists mail_log_created_idx on mail_log (created_at);
 """
 
 # Applied on open after SCHEMA (the same change as supabase/migrations/0002_interns.sql).
@@ -210,6 +224,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
         "create unique index if not exists profiles_intern_role_uidx on profiles (intern_id, role)"
         " where intern_id is not null"
     )
+    # P18.2 (supabase/migrations/0007_email.sql): the admin-entered intern email.
+    if "email" not in {r[1] for r in conn.execute("pragma table_info(interns)")}:
+        conn.execute("alter table interns add column email text")
 
 
 def _jload(raw: Any) -> Any:
@@ -891,6 +908,49 @@ class LocalStore:
             return None
         return {**rec, "data": data}
 
+    # Email notifications (P18.2) ---------------------------------------------------------------------
+
+    def intern_email(self, intern_id: str) -> str | None:
+        iid = valid_uuid(intern_id)
+        if iid is None:
+            return None
+
+        def op(c: sqlite3.Connection) -> str | None:
+            r = c.execute("select email from interns where id = ?", (iid,)).fetchone()
+            return str(r["email"]) if r and r["email"] else None
+
+        return self._run("intern_email", None, op)
+
+    def set_intern_email(self, intern_id: str, email: str | None) -> bool | None:
+        iid = valid_uuid(intern_id)
+        clean = None if email is None else clean_email(email)
+        if iid is None or (email is not None and clean is None):
+            return False
+        return self._run("set_intern_email", None, lambda c: c.execute(
+            "update interns set email = ? where id = ?", (clean, iid)).rowcount > 0)
+
+    def mail_log_add(self, record: dict[str, Any]) -> bool:
+        rec = mail_record(record)
+        if rec is None:
+            log_event("store_rejected", store="local", op="mail_log_add", reason="invalid_input")
+            return False
+
+        def op(c: sqlite3.Connection) -> bool:
+            c.execute(f"insert into mail_log ({', '.join(MAIL_COLUMNS)}) values "
+                      f"({', '.join(':' + k for k in MAIL_COLUMNS)})", rec)
+            return True
+
+        return self._run("mail_log_add", False, op)
+
+    def mail_log(self, limit: int = 50) -> list[dict[str, Any]] | None:
+        n = max(1, min(int(limit), 500))
+
+        def op(c: sqlite3.Connection) -> list[dict[str, Any]]:
+            q = f"select {', '.join(MAIL_COLUMNS)} from mail_log order by created_at desc, rowid desc limit ?"
+            return [mail_row(dict(r)) for r in c.execute(q, (n,))]
+
+        return self._run("mail_log", None, op)
+
     # Used by tests and the integrator's smoke only.
     def table_rows(self, table: str) -> list[dict[str, Any]]:
         allowed = {
@@ -907,6 +967,7 @@ class LocalStore:
             "mentor_requests",
             "mentor_request_comments",
             "mentor_request_files",
+            "mail_log",
         }
         if table not in allowed:
             return []

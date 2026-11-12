@@ -67,6 +67,7 @@ repository.
 | Header switch «بلا اتصال» | **nothing** to any AI service for that request | — |
 | Key present, mode «تلقائي» | see below | OpenRouter |
 | Supabase variables present | store records (section 4) | the project's Supabase database (Supabase-hosted project; region: to be confirmed) |
+| `SMTP_USER` and `SMTP_PASSWORD` set, not offline (P18.2) | notification emails: a new mentor request's title and note, request replies with their attachments, a "request done" notice, questions sent to the mentor and their answers (the K-row text) | the configured SMTP server (Gmail by default) and the addresses the admin entered: the intern's email, and `ADMIN_EMAIL` |
 
 With a key, per message, at most:
 - **tool choice:** the message, the previous message (only for short follow-ups), the six scenario
@@ -140,6 +141,7 @@ policies for anonymous or signed-in clients.
 | `scenario_attempts` | profile id, scenario id, mode, option id, checklist ids met and missing, value label. **No free text** |
 | `turn_logs` | request id, profile id (if any), time, tool, mode, status, band, cited ids, verifier result and reason, latency, cached, model. **No message text, no answer text** |
 | `mentor_request_comments`, `mentor_request_files` (P15) | replies on a mentor request, both ways: author (intern or admin), text, time; and per attached file its name, type (PDF, Word, PNG or JPEG), size, sha256 and storage key (migration `0005_request_comments.sql`) |
+| `interns.email`, `mail_log` (P18.2) | the intern's email address (optional, entered by the admin; shown in the admin views only); per email sent, failed or skipped: event, recipient address, subject, status, a short error code and time. **No email body, no password** (migration `0007_email.sql`) |
 | Storage bucket `mentor-files` (P15, **private**) | the bytes of files attached to those replies (at most 3 per reply, 5 MB each), at `requests/{request id}/{file id}` |
 
 The store code refuses any turn log with a message, answer, text, prompt or reply field.
@@ -174,6 +176,11 @@ chat thread. «امسح بيانات هذا المتصفح» on the «حول و�
   demo (a demo limitation), so anyone at the device can act as any listed intern, including reading that
   intern's mentor requests, replying and downloading their files; a production version would use real
   authentication.
+- Email notifications (P18.2) are sent only when SMTP is configured in `.env` and the app is not offline.
+  They send request text, replies, attachments and answered questions to the addresses the admin entered;
+  intern email addresses are stored on the server and shown to the admin only. The SMTP password stays in
+  `.env`: it is never logged, stored, shown or returned, and the email log keeps a short error code, never the
+  server's reply.
 - An intern's name is shown in the intern's header and the admin interface only. It never reaches the AI
   service, a chat request (which carries the profile id only), a turn log or generated text.
 - The admin's interns list and detail page show completion, activities with their completion dates,

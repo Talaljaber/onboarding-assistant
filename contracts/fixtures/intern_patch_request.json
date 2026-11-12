@@ -2,5 +2,6 @@
   "name_ar": "رنا الحسن",
   "name_en": "Rana Al-Hassan",
   "role": "Sales",
-  "active": true
+  "active": true,
+  "email": "rana.alhassan@example.com"
 }

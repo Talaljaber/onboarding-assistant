@@ -178,6 +178,13 @@ OOS_ID_RE = r"^OOS\d{2,3}$"
 REF_ID_RE = r"^(K\d{2,3}|S0[1-6]|Q\d{2})$"
 PROFILE_ID_RE = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 INTERN_ID_RE = PROFILE_ID_RE
+#: P18.2: an email address (settings and the admin-entered intern email). ASCII only, no spaces, no header
+#: characters; at most EMAIL_MAX characters.
+EMAIL_RE = re.compile(
+    r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+"
+)
+EMAIL_MAX = 254
 
 _CONTROL_EXCEPT_NL = re.compile(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]")
 _HSPACE = re.compile(r"[^\S\n]+")
@@ -1049,15 +1056,31 @@ class InternOut(_Model):
     active: bool
     created_at: str
     updated_at: str
+    #: P18.2: where this intern's notifications go (admin-entered, optional; admin views only).
+    email: str | None = None
 
 
 InternName = Annotated[Line, Field(min_length=2, max_length=40)]
+
+
+def _email_or_none(v: Any) -> Any:
+    """P18.2: "" (a cleared field) is no email; anything else must be one address."""
+    v = clean_line(v)
+    if v is None or v == "":
+        return None
+    if not isinstance(v, str) or len(v) > EMAIL_MAX or not EMAIL_RE.fullmatch(v):
+        raise ValueError("enter one email address such as name@example.com")
+    return v
+
+
+InternEmail = Annotated[str | None, BeforeValidator(_email_or_none)]
 
 
 class InternCreate(_Model):
     name_ar: InternName
     name_en: InternName | None = None
     role: Role
+    email: InternEmail = None  # P18.2
 
     @field_validator("name_ar", "name_en")
     @classmethod
@@ -1066,12 +1089,14 @@ class InternCreate(_Model):
 
 
 class InternPatch(_Model):
-    """Partial update: absent = unchanged; `name_en: null` clears the English name. At least one field."""
+    """Partial update: absent = unchanged; `name_en: null` clears the English name (`email: null` the email).
+    At least one field."""
 
     name_ar: InternName | None = None
     name_en: InternName | None = None
     role: Role | None = None
     active: bool | None = None
+    email: InternEmail = None  # P18.2
 
     @field_validator("name_ar", "name_en")
     @classmethod
@@ -1572,6 +1597,58 @@ class RequestCommentCreate(AdminCommentCreate):
     profile_id: ProfileId
 
 
+# --------------------------------------------------------------------------------------
+# Email notifications (P18.2): the admin's email log and test email
+# --------------------------------------------------------------------------------------
+
+MailEvent = Literal[
+    "request_created",
+    "admin_comment",
+    "intern_comment",
+    "request_done",
+    "question_submitted",
+    "question_answered",
+    "test",
+]
+MailStatus = Literal["sent", "failed", "skipped"]
+MAIL_EVENTS: tuple[str, ...] = get_args(MailEvent)
+MAIL_STATUSES: tuple[str, ...] = get_args(MailStatus)
+#: Rows `GET /api/admin/mail/log` returns (newest first).
+MAIL_LOG_LIMIT = 50
+MAIL_SUBJECT_MAX = 200
+#: Error codes are short labels (never an SMTP reply, an address or a secret), e.g. `auth_failed`.
+MAIL_ERROR_RE = r"^[a-z_]{1,40}$"
+
+
+class MailLogEntry(_Model):
+    """One email the server sent, failed to send or skipped. `to_addr` is "" when there was no address."""
+
+    id: UuidStr
+    event: MailEvent
+    to_addr: Annotated[str, Field(max_length=EMAIL_MAX)]
+    subject: Annotated[str, Field(max_length=MAIL_SUBJECT_MAX)]
+    status: MailStatus
+    error: Annotated[str, Field(pattern=MAIL_ERROR_RE)] | None
+    created_at: str
+
+
+class MailLogResponse(_Model):
+    """`GET /api/admin/mail/log`. `configured`: SMTP user and password are set and the app is not offline;
+    `admin_email_set`: ADMIN_EMAIL is set. Never a password, a host or a user name."""
+
+    entries: Annotated[list[MailLogEntry], Field(max_length=MAIL_LOG_LIMIT)]
+    configured: bool
+    admin_email_set: bool
+
+
+class MailTestResponse(_Model):
+    """`POST /api/admin/mail/test` (202): `queued` = sending to ADMIN_EMAIL in the background (the result
+    appears in the log); `skipped` = not sent, `error` says why (`offline`, `not_configured`, `no_recipient`)."""
+
+    status: Literal["queued", "skipped"]
+    error: Annotated[str, Field(pattern=MAIL_ERROR_RE)] | None
+
+
 __all__ = [
     "CHECK_CLAIMS_MAX",
     "CHECK_LABELS",
@@ -1708,4 +1785,14 @@ __all__ = [
     "RequestThread",
     # P16.5 premise correction
     "Premise",
+    # P18.2 email notifications
+    "EMAIL_MAX",
+    "EMAIL_RE",
+    "MAIL_EVENTS",
+    "MAIL_LOG_LIMIT",
+    "MAIL_STATUSES",
+    "MAIL_SUBJECT_MAX",
+    "MailLogEntry",
+    "MailLogResponse",
+    "MailTestResponse",
 ]

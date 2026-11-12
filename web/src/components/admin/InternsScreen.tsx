@@ -23,6 +23,7 @@ import { useToast } from "../ui/Toast";
 import { RequestsOverview } from "../requests/RequestsOverview";
 import { InternDialog } from "./InternDialog";
 import { KbCoverageCard } from "./KbCoverageCard";
+import { MailLogCard } from "./MailLogCard";
 
 const STATUS: Record<InternStatus, { key: DictKey; tone: "ok" | "neutral" | "warn" }> = {
   active: { key: "uiIntern.statusActive", tone: "ok" },
@@ -212,6 +213,7 @@ export default function InternsScreen() {
           )}
         </Loadable>
         <KbCoverageCard />
+        <MailLogCard />
       </Page>
       {adding && (
         <InternDialog

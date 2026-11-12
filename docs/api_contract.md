@@ -356,14 +356,16 @@ counts only — no correctness, no scores.**
 
 ### POST /api/admin/interns (admin)
 
-Body `InternCreate` `{name_ar, name_en = null, role}` → **201** `InternOut` `{id, name_ar, name_en, role,
-active, created_at, updated_at}`. Names: 2–40 characters after whitespace collapse, refused when they look like
+Body `InternCreate` `{name_ar, name_en = null, role, email = null}` → **201** `InternOut` `{id, name_ar,
+name_en, role, active, created_at, updated_at, email}`. P18.2: `email` is optional (one address, ≤ 254 characters,
+`""` = none; 400 `field: "email"` otherwise); it is where the intern's notifications go and appears only in the
+admin views (`InternOut`), never in `InternPublic`. Names: 2–40 characters after whitespace collapse, refused when they look like
 an email or a phone number (`field: "name_ar"` / `"name_en"`).
 
 ### PATCH /api/admin/interns/{id} (admin)
 
-Body `InternPatch` `{name_ar?, name_en?, role?, active?}`: absent = unchanged, at least one field,
-`name_en: null` clears the English name, `name_ar`/`role`/`active` may not be null. → `InternOut`.
+Body `InternPatch` `{name_ar?, name_en?, role?, active?, email?}`: absent = unchanged, at least one field,
+`name_en: null` clears the English name, `email: null` (or `""`) clears the email, `name_ar`/`role`/`active` may not be null. → `InternOut`.
 `active: false` deactivates (soft delete: the intern leaves the sign-in picker, all records are kept;
 `active: true` restores). 404 unknown intern.
 
@@ -631,6 +633,31 @@ Not translated: `tip_ar` (model-written; the English UI labels it once "Arabic o
 is the official `company_value` / `value` key itself. Feedback English is matched sentence by sentence to
 the checklist or option row it came from, so a reworded or deduplicated Arabic sentence without a row
 leaves the whole list Arabic, never half translated.
+
+## 6j. Email notifications (P18.2, admin only)
+
+The server emails through SMTP (`smtplib`; port 465 = implicit TLS, any other port = STARTTLS, default 587) when
+`SMTP_USER` and `SMTP_PASSWORD` are set and `OFFLINE` is off. Events: a new request → the intern; an admin comment
+→ the intern and an intern comment → `ADMIN_EMAIL` (the comment's files attached); a request marked done →
+`ADMIN_EMAIL`; (P18.1, wired by the integrator) a question sent → `ADMIN_EMAIL`, a question answered → the intern.
+Each email is sent in a background thread after the store write succeeded (no route waits on SMTP or fails
+because of it) and recorded in `mail_log`. Emails carry no links.
+
+### GET /api/admin/mail/log (admin)
+
+→ `MailLogResponse` `{entries: [MailLogEntry], configured, admin_email_set}`; `MailLogEntry` = `{id, event, to_addr,
+subject, status, error, created_at}`, newest first, at most 50. `event` ∈ `request_created`, `admin_comment`,
+`intern_comment`, `request_done`, `question_submitted`, `question_answered`, `test`; `status` ∈ `sent`, `failed`,
+`skipped`; `error` is a short code (`offline`, `not_configured`, `no_recipient`, `auth_failed`, `timeout`,
+`connect_failed`, `tls_failed`, `recipient_refused`, `sender_refused`, `smtp_error`, `error`) or `null`; `to_addr` is
+`""` when there was no address. `configured`: SMTP user and password set and not offline. Never a password, host,
+user name or SMTP reply. 503 `requests_unavailable` when the store has no `mail_log` (migration 0007).
+
+### POST /api/admin/mail/test (admin)
+
+No body → **202** `MailTestResponse` `{status: "queued" | "skipped", error}`: a test email to `ADMIN_EMAIL`, sent in
+the background (the result appears in the log); `skipped` with `error` `offline`, `not_configured` or
+`no_recipient` when nothing can be sent (the log records it too).
 
 ## 7. Fixed labels
 

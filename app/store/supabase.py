@@ -55,6 +55,10 @@ from app.store.base import (
     comment_input,
     file_row,
     thread_rows,
+    MAIL_COLUMNS,
+    clean_email,
+    mail_record,
+    mail_row,
 )
 from app.store.local import LocalStore
 
@@ -75,6 +79,7 @@ _METRICS_MAX_PAGES = 100  # KB coverage reads at most 100k turn logs
 _REQUEST_SELECT = ",".join(REQUEST_COLUMNS)
 _COMMENT_SELECT = ",".join(COMMENT_COLUMNS)
 _FILE_SELECT = ",".join(FILE_COLUMNS)
+_MAIL_SELECT = ",".join(MAIL_COLUMNS)
 STORAGE_PATH = "/storage/v1"
 BUCKET = "mentor-files"
 STORAGE_TIMEOUT_S = 30.0  # a 5 MiB upload or download; table calls keep CALL_TIMEOUT_S
@@ -903,3 +908,54 @@ class SupabaseStore:
             return {**rec, "data": data}
 
         return self._imports("request_file", remote, lambda s: s.request_file(rid, fid), None)
+
+    # Email notifications (P18.2) ---------------------------------------------------------------------
+    # Like the requests tables: never flips to the LocalStore. Without migration 0007 (PostgREST 400/404 on the
+    # `email` column or the `mail_log` table) only email features are unavailable; everything else keeps Supabase.
+
+    def intern_email(self, intern_id: str) -> str | None:
+        iid = valid_uuid(intern_id)
+        if iid is None:
+            return None
+
+        def remote() -> str | None:
+            rows = self._list("interns", {"select": "email", "id": f"eq.{iid}"})
+            return str(rows[0]["email"]) if rows and rows[0].get("email") else None
+
+        return self._imports("intern_email", remote, lambda s: s.intern_email(iid), None)
+
+    def set_intern_email(self, intern_id: str, email: str | None) -> bool | None:
+        iid = valid_uuid(intern_id)
+        clean = None if email is None else clean_email(email)
+        if iid is None or (email is not None and clean is None):
+            return False
+
+        def remote() -> bool | None:
+            data = self._req("PATCH", "interns", params={"select": "id", "id": f"eq.{iid}"}, json={"email": clean},
+                             prefer="return=representation")
+            if not isinstance(data, list):
+                raise TypeError("interns: expected a list")
+            return bool(data)
+
+        return self._imports("set_intern_email", remote, lambda s: s.set_intern_email(iid, email), None)
+
+    def mail_log_add(self, record: dict[str, Any]) -> bool:
+        rec = mail_record(record)
+        if rec is None:
+            log_event("store_rejected", store="supabase", op="mail_log_add", reason="invalid_input")
+            return False
+
+        def remote() -> bool:
+            self._req("POST", "mail_log", json=rec, prefer="return=minimal")
+            return True
+
+        return self._imports("mail_log_add", remote, lambda s: s.mail_log_add(rec), False)
+
+    def mail_log(self, limit: int = 50) -> list[dict[str, Any]] | None:
+        n = max(1, min(int(limit), 500))
+
+        def remote() -> list[dict[str, Any]] | None:
+            rows = self._list("mail_log", {"select": _MAIL_SELECT, "order": "created_at.desc", "limit": str(n)})
+            return [mail_row(r) for r in rows]
+
+        return self._imports("mail_log", remote, lambda s: s.mail_log(n), None)

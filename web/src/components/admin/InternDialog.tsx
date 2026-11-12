@@ -17,44 +17,56 @@ export function nameOk(value: string, optional = false): boolean {
   return v.length >= 2 && v.length <= 40 && !v.includes("@") && digits < 7;
 }
 
+/** P18.2: same rule as the server: empty, or one address (no spaces, one @, a dotted domain), ≤ 254 characters. */
+export function emailOk(value: string): boolean {
+  const v = value.trim();
+  if (!v) return true;
+  return v.length <= 254 && /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/.test(v);
+}
+
 export interface InternDialogProps {
   /** The intern to edit, or null to add one. */
-  intern: Pick<InternOut, "id" | "name_ar" | "name_en" | "role"> | null;
+  intern: (Pick<InternOut, "id" | "name_ar" | "name_en" | "role"> & { email?: string | null }) | null;
   onClose: () => void;
   onSaved: (saved: InternOut) => void;
 }
 
-/** Add or edit an intern: Arabic name (required), English name (optional), track. */
+/** Add or edit an intern: Arabic name (required), English name (optional), email (optional, P18.2), track. */
 export function InternDialog({ intern, onClose, onSaved }: InternDialogProps) {
   const t = useT();
   const uid = useId();
   const [nameAr, setNameAr] = useState(intern?.name_ar ?? "");
   const [nameEn, setNameEn] = useState(intern?.name_en ?? "");
   const [role, setRole] = useState<Role>(intern?.role ?? "Sales");
+  const [email, setEmail] = useState(intern?.email ?? "");
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const arRef = useRef<HTMLInputElement>(null);
   const enRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
   const arBad = !nameOk(nameAr);
   const enBad = !nameOk(nameEn, true);
+  const emailBad = !emailOk(email);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setTouched(true);
-    if (arBad || enBad) {
-      (arBad ? arRef : enRef).current?.focus();
+    if (arBad || enBad || emailBad) {
+      (arBad ? arRef : enBad ? enRef : emailRef).current?.focus();
       return;
     }
     setBusy(true);
     setFailed(false);
     const en = nameEn.trim() ? nameEn.trim() : null;
+    const mail = email.trim() ? email.trim() : null;
     let r;
     if (intern) {
       const patch: InternPatch = {};
       if (nameAr.trim() !== intern.name_ar) patch.name_ar = nameAr.trim();
       if (en !== intern.name_en) patch.name_en = en;
       if (role !== intern.role) patch.role = role;
+      if (mail !== (intern.email ?? null)) patch.email = mail;
       if (Object.keys(patch).length === 0) {
         setBusy(false);
         onClose();
@@ -62,7 +74,7 @@ export function InternDialog({ intern, onClose, onSaved }: InternDialogProps) {
       }
       r = await patchIntern(intern.id, patch);
     } else {
-      r = await addIntern({ name_ar: nameAr.trim(), name_en: en, role });
+      r = await addIntern({ name_ar: nameAr.trim(), name_en: en, role, ...(mail ? { email: mail } : {}) });
     }
     setBusy(false);
     if (!r.ok) {
@@ -100,6 +112,22 @@ export function InternDialog({ intern, onClose, onSaved }: InternDialogProps) {
           onChange={(e) => setNameEn(e.target.value)}
           aria-invalid={(touched && enBad) || undefined}
           description={touched && enBad ? t("uiIntern.errName") : undefined}
+          disabled={busy}
+        />
+        <TextField
+          ref={emailRef}
+          label={t("mail.emailLabel")}
+          name="email"
+          type="email"
+          inputMode="email"
+          autoComplete="off"
+          lang="en"
+          dir="ltr"
+          maxLength={254}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          aria-invalid={(touched && emailBad) || undefined}
+          description={touched && emailBad ? t("mail.errEmail") : t("mail.emailHint")}
           disabled={busy}
         />
         <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">

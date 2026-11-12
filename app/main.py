@@ -28,6 +28,7 @@ from app.api import error_body, install_api
 from app.config import ROOT, Settings, get_settings, validate_startup
 from app.errors import StartupError
 from app.logging_setup import log_event, setup_logging
+from app.mailer import Mailer
 from app.interns import SEED as SEED_INTERNS
 from app.store import get_store
 
@@ -73,6 +74,7 @@ def create_app(settings: Settings | None = None, *, agent: Agent | None = None, 
     app.state.store_checked_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     app.state.encoder = {"model_id": meta["model_id"], "dim": meta["dim"], "sha_ok": True}
     app.state.admin = AdminAuth(s.admin_password.get_secret_value(), s.admin_session_hours * 3600)
+    app.state.mailer = Mailer(s, st)  # P18.2: email notifications (skipped while OFFLINE or unconfigured)
 
     install_api(app)
     # Every API router is included above this line: the catch-all and the web mount must stay last.
