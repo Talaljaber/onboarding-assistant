@@ -11,7 +11,7 @@
       "scenario_id": "S02",
       "option_id": "S02-O1",
       "strengths_ar": [
-        "اخترت ألا تخترع مواصفات، وأن تتحقق من مصدر موثوق ثم تعود للزبون. هذا يعكس قيمة النزاهة."
+        "هذا يجسد النزاهة: لم تخترع مواصفات، وتحققت من مصدر موثوق، ووعدت الزبون بمعلومة مؤكدة."
       ],
       "improve_ar": null,
       "value": "Integrity",
@@ -20,7 +20,13 @@
       "suggested_good_response_ar": "لا تخترع مواصفات؛ تحقق من مصدر موثوق أو اسأل المسؤول.",
       "mode": "offline",
       "label_ar": "ملاحظات تدريبية، ليست تقييماً",
-      "customer_ar": "أكيد؟ رح أشتريها عشانها بالذات، فاحكيلي آه أو لأ هلّق."
+      "customer_ar": "أكيد؟ رح أشتريها عشانها بالذات، فاحكيلي آه أو لأ هلّق.",
+      "strengths_en": [
+        "This reflects Integrity: you did not invent specifications, you checked a reliable source, and you promised the customer confirmed information."
+      ],
+      "improve_en": null,
+      "suggested_good_response_en": "Do not invent specifications; check a reliable source or ask the person in charge.",
+      "customer_en": "Are you sure? I'm buying it for that feature, so tell me yes or no right now."
     },
     "proposal": null,
     "progress": null,

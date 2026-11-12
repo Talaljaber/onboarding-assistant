@@ -11,10 +11,12 @@ import { formatDay, formatWhen, internName, internNameLang } from "@/lib/intern"
 import { pluralForm } from "@/lib/plural";
 import { topicLabel } from "@/lib/topic";
 import { usePath } from "@/router";
+import { MILESTONE_TITLE } from "../plan/shared";
 import { ProgressRing } from "../progress/ProgressRing";
 import { AdminRequestsSection } from "../requests/AdminRequestsSection";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
+import { ContentText } from "../ui/ContentText";
 import { Dialog } from "../ui/Dialog";
 import { Icon, type IconName } from "../ui/Icon";
 import { Loadable } from "../ui/Loadable";
@@ -193,7 +195,7 @@ export default function InternDetailScreen() {
                     {d.progress.milestones.map((m) => (
                       <li key={m.name} className="flex flex-col gap-2">
                         <h3 className="m-0 flex items-baseline justify-between gap-2 text-base font-bold text-fg-1">
-                          <span lang="ar">{m.name_ar}</span>
+                          {lang === "en" ? <span>{t(MILESTONE_TITLE[m.name])}</span> : <span lang="ar">{m.name_ar}</span>}
                           <span className="font-id text-sm text-fg-2" dir="ltr">
                             {m.done}/{m.total}
                           </span>
@@ -211,8 +213,8 @@ export default function InternDetailScreen() {
                                 {a.completed_at && <Icon name="check" size={14} strokeWidth={3} />}
                               </span>
                               <span className="flex min-w-0 flex-1 flex-col">
-                                <span lang="ar" dir="rtl" className="text-sm leading-snug text-fg-1">
-                                  {a.title_ar}
+                                <span className="text-start text-sm leading-snug text-fg-1">
+                                  <ContentText ar={a.title_ar} en={a.title_en} />
                                 </span>
                                 <span className={cn("text-xs", a.completed_at ? "text-fg-2" : "text-fg-3")}>
                                   {a.completed_at ? t("uiIntern.doneOn", { date: formatWhen(a.completed_at, lang) }) : t("uiIntern.notDone")}

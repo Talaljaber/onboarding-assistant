@@ -125,6 +125,8 @@ export interface Source {
 export interface Option {
   id: string;
   text_ar: string;
+  /** P16.3: authored English helper text; null/absent → show the Arabic. */
+  text_en?: string | null;
 }
 
 export interface ScenarioOut {
@@ -135,6 +137,8 @@ export interface ScenarioOut {
   scenario_ar: string;
   data_status: string;
   options: Option[] | null;
+  /** P16.3: authored English of `scenario_ar` (helper only). */
+  scenario_en?: string | null;
 }
 
 /** Practice feedback. Never a score, count, grade or percentage. */
@@ -151,6 +155,11 @@ export interface Feedback {
   label_ar: string;
   /** P14.3: the scenario's authored customer pressure line; the client shows it once per practice run. */
   customer_ar?: string | null;
+  /** P16.3: authored English of the fixed sentences (null when any is missing). `tip_ar` is never translated. */
+  strengths_en?: string[] | null;
+  improve_en?: string | null;
+  suggested_good_response_en?: string | null;
+  customer_en?: string | null;
 }
 
 export interface Proposal {
@@ -159,6 +168,8 @@ export interface Proposal {
   titles_ar: string[];
   current_percent: number;
   proposed_percent: number;
+  /** P16.3: authored English titles aligned with `activity_ids` (null when any is missing). */
+  titles_en?: string[] | null;
 }
 
 export interface ProgressSummary {
@@ -174,6 +185,8 @@ export interface Activity {
   kind: ActivityKind;
   title_ar: string;
   refs: string[];
+  /** P16.3: authored English title (helper only). */
+  title_en?: string | null;
 }
 
 export interface Milestone {
@@ -181,6 +194,8 @@ export interface Milestone {
   name_ar: string;
   learning_goal_ar: string;
   activities: Activity[];
+  /** P16.3: authored English of the official goal (helper only). */
+  learning_goal_en?: string | null;
 }
 
 export interface PlanOut {
@@ -199,6 +214,9 @@ export interface QuizItem {
   question_ar: string;
   options: Record<QuizOptionKey, string>;
   source_knowledge_id: string;
+  /** P16.3: authored English question and options, set together (one direction for both). */
+  question_en?: string | null;
+  options_en?: Record<QuizOptionKey, string> | null;
 }
 
 // ---------------------------------------------------------------- trace
@@ -341,7 +359,8 @@ export interface ChatRequest {
 export interface ReplyBase {
   kind: ReplyKind;
   text_ar: string;
-  /** Answers: a verified English helper translation. `text` replies (P12.2 small talk): the reply itself in English, shown instead of `text_ar`. */
+  /** Answers: a verified English helper translation. `text` replies (P12.2 small talk): the reply itself in English, shown instead of `text_ar`.
+   *  P16.3: `scenario_end`, `plan` and `quiz` replies carry the authored English of their fixed text (shown in the English UI only). */
   text_en: string | null;
   status: AnswerStatus | null;
   band: Band | null;
@@ -739,6 +758,8 @@ export interface DetailActivity {
   kind: ActivityKind;
   title_ar: string;
   completed_at: string | null;
+  /** P16.3: authored English title (helper only). */
+  title_en?: string | null;
 }
 
 export interface DetailMilestone {

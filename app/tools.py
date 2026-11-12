@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from app import answer as ans
+from app import content_en
 from app import scenarios as scen_mod
 from app.errors import ApiError
 from app.kb import KnowledgeBase
@@ -491,7 +492,8 @@ def give_scenario_feedback(scenario_id: str, *, features: Features, user_text: s
         "scenario_id": scenario_id, "mode": fb.mode, "option_id": option_id, "met": met,
         "missing": [i for i in checklist_ids if i not in met] if fb.mode == "llm" else [], "value": fb.value,
     }
-    reply = _reply("scenario_feedback", text, feedback=fb.to_schema().model_dump(), label_ar=FEEDBACK_LABEL_AR)
+    fb_out = content_en.feedback(fb.to_schema(), sc)  # P16.3: English helper fields; Arabic unchanged
+    reply = _reply("scenario_feedback", text, feedback=fb_out.model_dump(), label_ar=FEEDBACK_LABEL_AR)
     return ToolResult(reply, ClientState(active_scenario=scenario_id), ["state:active_scenario", *steps, "render"],
                       feedback=trace_fb, mode=mode, attempt=attempt)
 
@@ -517,7 +519,8 @@ def propose_progress(milestone: str, *, role: str, completed_ids: list[str], fea
     proposed = features.plan.percent(role, [*completed_ids, *(a.id for a in acts)])
     proposal = Proposal(milestone=milestone, activity_ids=[a.id for a in acts],  # type: ignore[arg-type]
                         titles_ar=[a.title_ar for a in acts], current_percent=current.percent,
-                        proposed_percent=proposed.percent)
+                        proposed_percent=proposed.percent,
+                        titles_en=content_en.en_all([f"activity:{a.id}" for a in acts]))
     reply = _reply("progress_proposal", f"هل تريد تسجيل أنشطة «{m_ar}» كمكتملة؟",
                    proposal=proposal.model_dump(), progress=current.to_schema().model_dump())
     return ToolResult(reply, state, steps)
@@ -546,7 +549,8 @@ def show_plan(milestone: str | None, *, role: str, features: Features, state: Cl
     else:
         text = "هذه خطة التعلم المقترحة لأيامك التسعين الأولى. هي خطة مقترحة وليست جدول تقييم."
         steps = ["render"]
-    reply = _reply("plan", text, plan=plan.model_dump(), label_ar=PLAN_DISCLAIMER_AR)
+    reply = _reply("plan", text, plan=plan.model_dump(), label_ar=PLAN_DISCLAIMER_AR,
+                   text_en=content_en.plan_reply_en(milestone))
     return ToolResult(reply, state, steps)
 
 
@@ -554,7 +558,9 @@ def start_quiz(*, role: str, features: Features, state: ClientState) -> ToolResu
     day30 = [ref for a in features.plan.activities_of(role, "Day 30") for ref in a.refs if ref.startswith("Q")]
     items = features.quiz.quiz_for(role, first_ids=day30)
     text = QUIZ_INTRO_FIVE_AR if len(items) == 5 else QUIZ_INTRO_AR
-    reply = _reply("quiz", text, quiz=[i.to_schema().model_dump() for i in items], label_ar=QUIZ_LABEL_AR)
+    text_en = content_en.en("reply:quiz_intro_five" if len(items) == 5 else "reply:quiz_intro")
+    reply = _reply("quiz", text, quiz=[i.to_schema().model_dump() for i in items], label_ar=QUIZ_LABEL_AR,
+                   text_en=text_en)
     return ToolResult(reply, state, ["render"])
 
 

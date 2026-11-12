@@ -16,17 +16,21 @@
       "options": [
         {
           "id": "S02-O1",
-          "text_ar": "أقول له إنني لست متأكداً، وسأتحقق من الكتالوج أو أسأل المسؤول ثم أعود إليه."
+          "text_ar": "أقول للزبون إنني غير متأكد، وأتحقق من الكتالوج الرسمي أو أسأل المسؤول، ثم أعود إليه بالمعلومة المؤكدة.",
+          "text_en": "I tell the customer I'm not sure, check the official catalogue or ask the person in charge, then come back to them with the confirmed information."
         },
         {
           "id": "S02-O2",
-          "text_ar": "أؤكد له أن الميزة موجودة حتى لا يذهب إلى منافس."
+          "text_ar": "أقول له إن الميزة موجودة غالباً حتى لا أخسر البيعة.",
+          "text_en": "I tell them the feature is probably there so I don't lose the sale."
         },
         {
           "id": "S02-O3",
-          "text_ar": "أخبره أن هذا ليس من اختصاصي."
+          "text_ar": "أحيله إلى زميل آخر وأنتقل إلى زبون غيره دون متابعة.",
+          "text_en": "I pass them to another colleague and move on to another customer without following up."
         }
-      ]
+      ],
+      "scenario_en": "The customer asks about an unconfirmed feature of a product."
     },
     "feedback": null,
     "proposal": null,

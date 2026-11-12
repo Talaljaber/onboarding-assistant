@@ -1,8 +1,8 @@
 {
   "reply": {
     "kind": "scenario_end",
-    "text_ar": "انتهى التدريب. أحسنت بالمحاولة، ويمكنك العودة لأي موقف في أي وقت.",
-    "text_en": null,
+    "text_ar": "انتهى التدريب على هذا الموقف. يمكنك البدء بموقف آخر متى شئت.",
+    "text_en": "Practice on this scenario has ended. You can start another scenario whenever you like.",
     "status": null,
     "band": null,
     "sources": [],

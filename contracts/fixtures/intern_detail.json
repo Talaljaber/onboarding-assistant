@@ -25,19 +25,22 @@
             "id": "SA-D1-read-company",
             "kind": "read",
             "title_ar": "تعرّف على الشركة: التأسيس والمعارض والرؤية والرسالة والعلامات التجارية",
-            "completed_at": "2026-11-10T09:02:00.000+00:00"
+            "completed_at": "2026-11-10T09:02:00.000+00:00",
+            "title_en": "Get to know the company: founding, showrooms, vision, mission and brands"
           },
           {
             "id": "SA-D1-read-values",
             "kind": "read",
             "title_ar": "اقرأ القيم المشتركة الخمس",
-            "completed_at": "2026-11-10T09:02:00.000+00:00"
+            "completed_at": "2026-11-10T09:02:00.000+00:00",
+            "title_en": "Read the five shared values"
           },
           {
             "id": "SA-D1-read-onboarding",
             "kind": "read",
             "title_ar": "راجع سياسات التهيئة والحضور والإجازات والسرية",
-            "completed_at": "2026-11-10T09:02:00.000+00:00"
+            "completed_at": "2026-11-10T09:02:00.000+00:00",
+            "title_en": "Review the onboarding, attendance, leave and confidentiality policies"
           }
         ]
       },
@@ -51,13 +54,15 @@
             "id": "SA-D30-quiz",
             "kind": "quiz",
             "title_ar": "اختبار قصير",
-            "completed_at": null
+            "completed_at": null,
+            "title_en": "Short quiz"
           },
           {
             "id": "SA-D30-s01",
             "kind": "scenario",
             "title_ar": "موقف عملي: زبون يسأل عن ثلاجة",
-            "completed_at": null
+            "completed_at": null,
+            "title_en": "Practice scenario: a customer asks about a fridge"
           }
         ]
       },
@@ -71,13 +76,15 @@
             "id": "SA-D60-s02",
             "kind": "scenario",
             "title_ar": "موقف عملي: ميزة غير مؤكدة في منتج",
-            "completed_at": null
+            "completed_at": null,
+            "title_en": "Practice scenario: an unconfirmed product feature"
           },
           {
             "id": "SA-D60-s03",
             "kind": "scenario",
             "title_ar": "موقف عملي: تنسيق موعد تسليم",
-            "completed_at": null
+            "completed_at": null,
+            "title_en": "Practice scenario: coordinating a delivery date"
           }
         ]
       },
@@ -91,7 +98,8 @@
             "id": "SA-D90-summary",
             "kind": "summary",
             "title_ar": "اعرض ملخص تقدمك للمراجعة البشرية فقط",
-            "completed_at": null
+            "completed_at": null,
+            "title_en": "Present your progress summary for human review only"
           }
         ]
       }

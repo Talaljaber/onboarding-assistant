@@ -2,7 +2,7 @@
   "reply": {
     "kind": "quiz",
     "text_ar": "إليك اختباراً تدريبياً قصيراً من خمسة أسئلة.",
-    "text_en": null,
+    "text_en": "Here is a short practice quiz with five questions.",
     "status": null,
     "band": null,
     "sources": [],
@@ -20,7 +20,13 @@
           "B": "المثابرة",
           "C": "محورية العميل"
         },
-        "source_knowledge_id": "K06"
+        "source_knowledge_id": "K06",
+        "question_en": "Which value means cooperation between colleagues?",
+        "options_en": {
+          "A": "One Team",
+          "B": "Perseverance",
+          "C": "Customer Centricity"
+        }
       },
       {
         "id": "Q02",
@@ -30,7 +36,13 @@
           "B": "60 يوماً",
           "C": "90 يوماً"
         },
-        "source_knowledge_id": "K14"
+        "source_knowledge_id": "K14",
+        "question_en": "How long is the probation period?",
+        "options_en": {
+          "A": "30 days",
+          "B": "60 days",
+          "C": "90 days"
+        }
       },
       {
         "id": "Q03",
@@ -40,7 +52,13 @@
           "B": "العميل",
           "C": "المورد"
         },
-        "source_knowledge_id": "K10"
+        "source_knowledge_id": "K10",
+        "question_en": "Who is responsible for carrying out the employee onboarding policy?",
+        "options_en": {
+          "A": "Human Resources",
+          "B": "The customer",
+          "C": "The supplier"
+        }
       },
       {
         "id": "Q04",
@@ -50,7 +68,13 @@
           "B": "الرجوع للمصدر أو الموارد البشرية",
           "C": "تجاهل السؤال"
         },
-        "source_knowledge_id": "K10"
+        "source_knowledge_id": "K10",
+        "question_en": "What is the right step when you are not sure about an internal policy?",
+        "options_en": {
+          "A": "Make up an answer",
+          "B": "Go back to the source or to Human Resources",
+          "C": "Ignore the question"
+        }
       },
       {
         "id": "Q05",
@@ -60,7 +84,13 @@
           "B": "بعد 90 يوماً",
           "C": "قبل سنة"
         },
-        "source_knowledge_id": "K13"
+        "source_knowledge_id": "K13",
+        "question_en": "When is the welcome message sent to someone who has a work email?",
+        "options_en": {
+          "A": "Within the first three days",
+          "B": "After 90 days",
+          "C": "A year before"
+        }
       }
     ],
     "reason": null,

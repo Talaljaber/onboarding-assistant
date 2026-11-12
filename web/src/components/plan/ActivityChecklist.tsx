@@ -4,6 +4,7 @@
 // says read, practice or quiz, so there is no separate type caption.
 import type { ActivityKind, Milestone } from "@/api/types";
 import { cn } from "@/components/ui/cn";
+import { ContentText } from "@/components/ui/ContentText";
 import { Icon } from "@/components/ui/Icon";
 import { useAppState } from "@/state/useAppState";
 import { useT, type DictKey } from "@/i18n";
@@ -48,15 +49,15 @@ export function ActivityChecklist({ milestone, onOpenSummary }: { milestone: Mil
                   className="pointer-events-none absolute text-on-accent opacity-0 peer-checked:opacity-100"
                 />
               </span>
+              {/* The line keeps the UI direction; the title is an isolate in its own language, so an Arabic
+                  fallback in the English UI stays beside its checkbox instead of flushing to the far side. */}
               <span
-                lang="ar"
-                dir="rtl"
                 className={cn(
                   "min-w-0 flex-1 text-start text-base leading-snug",
                   done ? "text-fg-2 line-through decoration-fg-3" : "font-medium text-fg-1",
                 )}
               >
-                {a.title_ar}
+                <ContentText ar={a.title_ar} en={a.title_en} />
               </span>
             </label>
             {note && <p className="m-0 ps-10 text-sm text-fg-2">{t(note)}</p>}

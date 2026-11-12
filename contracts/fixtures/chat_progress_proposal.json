@@ -19,7 +19,11 @@
         "موقف عملي: زبون يسأل عن ثلاجة"
       ],
       "current_percent": 12,
-      "proposed_percent": 38
+      "proposed_percent": 38,
+      "titles_en": [
+        "Short quiz",
+        "Practice scenario: a customer asks about a fridge"
+      ]
     },
     "progress": {
       "percent": 12,

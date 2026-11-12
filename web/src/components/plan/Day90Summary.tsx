@@ -14,6 +14,7 @@ import { useT } from "@/i18n";
 import { localDay } from "@/lib/format";
 import { practisedScenarios } from "@/state/progress";
 import { useAppState } from "@/state/useAppState";
+import { ContentText } from "@/components/ui/ContentText";
 
 const listCls = "m-0 flex list-none flex-col divide-y divide-line p-0";
 const itemCls = "flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-2.5 print:py-1";
@@ -91,7 +92,7 @@ export function Day90Summary({ onClose }: { onClose: () => void }) {
           <ul className={listCls}>
             {done.map(({ a, date }) => (
               <li key={a.id} className={itemCls}>
-                <span lang="ar" dir="rtl" className="min-w-0 text-start text-fg-1">{a.title_ar}</span>
+                <span className="min-w-0 text-start text-fg-1"><ContentText ar={a.title_ar} en={a.title_en} /></span>
                 <bdi className={dateCls} dir="ltr">({localDay(date)})</bdi>
               </li>
             ))}

@@ -363,7 +363,7 @@ describe("practice mode", () => {
     expect(be.chat()[1]!.body).toMatchObject({ state: { active_scenario: "S02" } });
     const fb = card("scenario_feedback")!;
     // P14.3: the first feedback of the run is the customer's turn; the suggested reply waits behind "Stuck?"
-    expect(fb.querySelector("[data-customer]")).toHaveTextContent(scenarioFeedback.reply.feedback.customer_ar);
+    expect(fb.querySelector("[data-customer]")).toHaveTextContent(scenarioFeedback.reply.feedback.customer_en!);
     expect(fb).not.toHaveTextContent("Suggested response in the training material");
     await userEvent.click(within(fb as HTMLElement).getByRole("button", { name: "Stuck?" }));
     expect(fb).toHaveTextContent("Suggested response in the training material");
@@ -389,7 +389,7 @@ describe("practice mode", () => {
     expect(stuck).toHaveAttribute("aria-expanded", "false");
     await userEvent.click(stuck);
     expect(stuck).toHaveAttribute("aria-expanded", "true");
-    expect(first).toHaveTextContent(scenarioFeedback.reply.feedback.suggested_good_response_ar);
+    expect(first).toHaveTextContent(scenarioFeedback.reply.feedback.suggested_good_response_en!);
 
     await ask("ما بقدر أأكد قبل ما أسأل المسؤول");
     await waitFor(() => expect(document.querySelectorAll('[data-kind="scenario_feedback"]')).toHaveLength(2));
@@ -417,7 +417,7 @@ describe("practice mode", () => {
     await ask("بقوله إني رح أتأكد");
     await waitFor(() => expect(card("scenario_feedback")).not.toBeNull());
     expect(card("scenario_feedback")!.querySelector("[data-customer]")).toHaveTextContent(
-      scenarioFeedback.reply.feedback.customer_ar,
+      scenarioFeedback.reply.feedback.customer_en!,
     );
   });
 

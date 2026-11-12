@@ -13,7 +13,8 @@
       "value_ar": "النزاهة",
       "scenario_ar": "يسأل الزبون عن ميزة غير مؤكدة في منتج.",
       "data_status": "SYNTHETIC_TRAINING_EXAMPLE",
-      "options": null
+      "options": null,
+      "scenario_en": "The customer asks about an unconfirmed feature of a product."
     },
     "feedback": null,
     "proposal": null,

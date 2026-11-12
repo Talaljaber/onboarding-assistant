@@ -657,3 +657,45 @@ def test_premise_is_optional_verbatim_and_names_a_source() -> None:
         s.Reply.model_validate(bad)
     with pytest.raises(ValidationError):
         s.Reply.model_validate({**load("chat_refusal_contact.json")["reply"], "premise": p})
+
+
+# ------------------------------------------------------------------ P16.3 bilingual learning content
+
+EN_FIELDS = (
+    "title_en", "learning_goal_en", "scenario_en", "text_en", "strengths_en", "improve_en",
+    "suggested_good_response_en", "customer_en", "titles_en", "question_en", "options_en",
+)
+
+
+def _strip_en(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: _strip_en(v) for k, v in obj.items() if not (k.endswith("_en") and k in EN_FIELDS)}
+    if isinstance(obj, list):
+        return [_strip_en(v) for v in obj]
+    return obj
+
+
+def test_english_helper_fields_are_optional_and_named_in_types() -> None:
+    """P16.3: fixtures carry the authored English; a payload without it (older server) still validates."""
+    for name in ("plan.json", "quiz.json", "scenarios_list.json", "scenario_feedback.json", "intern_detail.json",
+                 "chat_progress_proposal.json", "chat_scenario_feedback_option.json"):
+        data = load(name)
+        assert any(k in json.dumps(data) for k in EN_FIELDS), name
+        FIXTURES[name].model_validate(_strip_en(data))
+    ts = TYPES_TS.read_text(encoding="utf-8")
+    for field in EN_FIELDS:
+        assert f"{field}?:" in ts or f"{field}:" in ts, field
+    assert "6i. Bilingual learning content" in CONTRACT_MD.read_text(encoding="utf-8")
+
+
+def test_english_helper_fields_keep_the_arabic_shape() -> None:
+    fb = load("chat_scenario_feedback.json")["reply"]["feedback"]
+    assert len(fb["strengths_en"]) == len(fb["strengths_ar"]) and fb["tip_ar"] and "tip_en" not in fb
+    with pytest.raises(ValidationError):
+        s.Feedback.model_validate({**fb, "strengths_en": fb["strengths_en"][:1]})
+    item = load("quiz.json")["items"][0]
+    with pytest.raises(ValidationError):
+        s.QuizItem.model_validate({**item, "options_en": None})
+    prop = load("chat_progress_proposal.json")["reply"]["proposal"]
+    with pytest.raises(ValidationError):
+        s.Proposal.model_validate({**prop, "titles_en": [*prop["titles_en"], "extra"]})

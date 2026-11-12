@@ -12,14 +12,15 @@
         {
           "id": "SA-D1-read-company",
           "kind": "read",
-          "title_ar": "اقرأ تعريف الشركة ومعارضها وعلاماتها",
+          "title_ar": "تعرّف على الشركة: التأسيس والمعارض والرؤية والرسالة والعلامات التجارية",
           "refs": [
             "K01",
             "K02",
             "K03",
             "K04",
             "K18"
-          ]
+          ],
+          "title_en": "Get to know the company: founding, showrooms, vision, mission and brands"
         },
         {
           "id": "SA-D1-read-values",
@@ -31,12 +32,13 @@
             "K07",
             "K08",
             "K09"
-          ]
+          ],
+          "title_en": "Read the five shared values"
         },
         {
           "id": "SA-D1-read-onboarding",
           "kind": "read",
-          "title_ar": "اقرأ سياسات التهيئة والسياسات العامة",
+          "title_ar": "راجع سياسات التهيئة والحضور والإجازات والسرية",
           "refs": [
             "K10",
             "K11",
@@ -46,9 +48,11 @@
             "K15",
             "K16",
             "K17"
-          ]
+          ],
+          "title_en": "Review the onboarding, attendance, leave and confidentiality policies"
         }
-      ]
+      ],
+      "learning_goal_en": "Get to know the company, its values and the basic onboarding policies"
     },
     {
       "name": "Day 30",
@@ -65,7 +69,8 @@
             "Q03",
             "Q04",
             "Q05"
-          ]
+          ],
+          "title_en": "Short quiz"
         },
         {
           "id": "SA-D30-s01",
@@ -73,9 +78,11 @@
           "title_ar": "موقف عملي: زبون يسأل عن ثلاجة",
           "refs": [
             "S01"
-          ]
+          ],
+          "title_en": "Practice scenario: a customer asks about a fridge"
         }
-      ]
+      ],
+      "learning_goal_en": "Complete a short quiz and a simple practical scenario"
     },
     {
       "name": "Day 60",
@@ -85,10 +92,11 @@
         {
           "id": "SA-D60-s02",
           "kind": "scenario",
-          "title_ar": "موقف عملي: ميزة غير مؤكدة",
+          "title_ar": "موقف عملي: ميزة غير مؤكدة في منتج",
           "refs": [
             "S02"
-          ]
+          ],
+          "title_en": "Practice scenario: an unconfirmed product feature"
         },
         {
           "id": "SA-D60-s03",
@@ -96,9 +104,11 @@
           "title_ar": "موقف عملي: تنسيق موعد تسليم",
           "refs": [
             "S03"
-          ]
+          ],
+          "title_en": "Practice scenario: coordinating a delivery date"
         }
-      ]
+      ],
+      "learning_goal_en": "Practise a more complex job scenario and get feedback"
     },
     {
       "name": "Day 90",
@@ -108,10 +118,12 @@
         {
           "id": "SA-D90-summary",
           "kind": "summary",
-          "title_ar": "ملخص تقدم التعلم للمراجعة البشرية",
-          "refs": []
+          "title_ar": "اعرض ملخص تقدمك للمراجعة البشرية فقط",
+          "refs": [],
+          "title_en": "Present your progress summary for human review only"
         }
-      ]
+      ],
+      "learning_goal_en": "Present a summary of your learning progress for human review only"
     }
   ],
   "notes_ar": [

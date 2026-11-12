@@ -270,6 +270,8 @@ class Source(_Model):
 class Option(_Model):
     id: OptionId
     text_ar: str
+    #: P16.3: authored English helper text (data/ours/content_en.csv); null → the client shows the Arabic.
+    text_en: str | None = None
 
 
 class ScenarioOut(_Model):
@@ -280,6 +282,8 @@ class ScenarioOut(_Model):
     scenario_ar: str
     data_status: str
     options: list[Option] | None = None
+    #: P16.3: authored English of `scenario_ar` (helper only; Arabic stays the reference).
+    scenario_en: str | None = None
 
     @model_validator(mode="after")
     def _options_belong(self) -> ScenarioOut:
@@ -304,6 +308,18 @@ class Feedback(_Model):
     label_ar: str
     #: P14.3: the scenario's authored customer pressure line (always set by the server; optional for old clients).
     customer_ar: str | None = None
+    #: P16.3: authored English of the fixed sentences above (null when any one is missing). `tip_ar` is
+    #: model-written and is never translated.
+    strengths_en: list[str] | None = None
+    improve_en: str | None = None
+    suggested_good_response_en: str | None = None
+    customer_en: str | None = None
+
+    @model_validator(mode="after")
+    def _english_aligns(self) -> Feedback:
+        if self.strengths_en is not None and len(self.strengths_en) != len(self.strengths_ar):
+            raise ValueError("strengths_en must align with strengths_ar")
+        return self
 
 
 class Proposal(_Model):
@@ -312,11 +328,15 @@ class Proposal(_Model):
     titles_ar: list[str]
     current_percent: Percent
     proposed_percent: Percent
+    #: P16.3: authored English titles, aligned with `activity_ids` (null when any one is missing).
+    titles_en: list[str] | None = None
 
     @model_validator(mode="after")
     def _titles_align(self) -> Proposal:
         if len(self.titles_ar) != len(self.activity_ids):
             raise ValueError("titles_ar must align with activity_ids")
+        if self.titles_en is not None and len(self.titles_en) != len(self.activity_ids):
+            raise ValueError("titles_en must align with activity_ids")
         return self
 
 
@@ -340,6 +360,8 @@ class Activity(_Model):
     kind: ActivityKind
     title_ar: str
     refs: list[RefId]
+    #: P16.3: authored English title (helper only).
+    title_en: str | None = None
 
 
 class Milestone(_Model):
@@ -347,6 +369,8 @@ class Milestone(_Model):
     name_ar: str
     learning_goal_ar: str
     activities: list[Activity]
+    #: P16.3: authored English of the official goal (helper only).
+    learning_goal_en: str | None = None
 
 
 class PlanOut(_Model):
@@ -376,6 +400,9 @@ class QuizItem(_Model):
     question_ar: str
     options: dict[QuizOptionKey, str]
     source_knowledge_id: KbId
+    #: P16.3: authored English question and options; both set or both null, so they share one direction.
+    question_en: str | None = None
+    options_en: dict[QuizOptionKey, str] | None = None
 
     @field_validator("options")
     @classmethod
@@ -383,6 +410,14 @@ class QuizItem(_Model):
         if set(v) != {"A", "B", "C"}:
             raise ValueError("options must have exactly the keys A, B, C")
         return v
+
+    @model_validator(mode="after")
+    def _english_together(self) -> QuizItem:
+        if (self.question_en is None) != (self.options_en is None):
+            raise ValueError("question_en and options_en are set together")
+        if self.options_en is not None and set(self.options_en) != {"A", "B", "C"}:
+            raise ValueError("options_en must have exactly the keys A, B, C")
+        return self
 
 
 # --------------------------------------------------------------------------------------
@@ -1085,6 +1120,8 @@ class DetailActivity(_Model):
     kind: ActivityKind
     title_ar: str
     completed_at: str | None
+    #: P16.3: authored English title (helper only).
+    title_en: str | None = None
 
 
 class DetailMilestone(_Model):
