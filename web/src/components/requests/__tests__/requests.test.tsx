@@ -131,6 +131,10 @@ describe("intern: From your mentor", () => {
     expect(within(section).getByRole("button", { name: /Hide requests/ })).toHaveAttribute("aria-expanded", "true");
     const cards = section.querySelectorAll("[data-request-id]");
     expect([...cards].map((c) => c.getAttribute("data-request-kind"))).toEqual(["do", "read", "learn"]);
+    // P19.2: the status tiles keep a 44 px target on tablets too (they were 40 px from 640 px up)
+    const tile = section.querySelector("[data-request-status] label")!;
+    expect(tile).toHaveClass("min-h-11", "min-w-11", "lg:min-h-10");
+    expect(tile).not.toHaveClass("sm:min-h-10");
     // K-row: one click shows the live row verbatim
     const read = listFx.requests.find((r) => r.kind === "read")!;
     await userEvent.click(within(section).getByRole("button", { name: /Show K05/ }));

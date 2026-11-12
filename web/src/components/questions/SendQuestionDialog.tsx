@@ -102,7 +102,12 @@ export function SendQuestionDialog({ source, initialText, onClose, onSent }: Sen
           <Icon name="shield" size={16} className="mt-0.5 shrink-0" />
           {t("questions.privacy")}
         </p>
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        {/* P19.2: stays at the sheet's bottom edge while the text scrolls, so Send is in view when the keyboard
+            makes the sheet short. */}
+        <div
+          data-sheet-actions
+          className="sticky bottom-0 z-10 -mx-5 flex flex-col-reverse gap-2 bg-surface-0 px-5 py-2 sm:-mx-6 sm:flex-row sm:justify-end sm:px-6"
+        >
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             {t("common.cancel")}
           </Button>

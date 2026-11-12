@@ -93,7 +93,7 @@ export function MyQuestionsPanel({ busy, onReask }: { busy: boolean; onReask: (t
       data-my-questions
       data-expanded={open || undefined}
       aria-labelledby={`${listId}-h`}
-      className={cn(surface.soft, "flex min-w-0 flex-[1_1_12rem] flex-col", open && "basis-full gap-3 pb-3 sm:pb-4")}
+      className={cn(surface.soft, "flex min-w-0 flex-[1_1_15rem] flex-col", open && "basis-full gap-3 pb-3 sm:pb-4")}
     >
       <h2 id={`${listId}-h`} className="m-0 text-base font-bold text-fg-1">
         <button
@@ -104,11 +104,15 @@ export function MyQuestionsPanel({ busy, onReask }: { busy: boolean; onReask: (t
           className="flex min-h-11 w-full items-center gap-2 rounded-lg ps-3 pe-2 text-start transition-colors duration-(--da-motion-fast) hover:bg-surface-0/60"
         >
           <Icon name={answered ? "check" : "send"} size={16} className={cn("shrink-0", answered ? "text-ok" : "text-accent")} />
-          <span data-my-questions-title className="min-w-0 py-2 leading-snug">
+          {/* P19.2: the title wraps inside its own box (it ran under "Show questions" at 768 px with three items) */}
+          <span data-my-questions-title className="min-w-0 py-2 leading-snug [overflow-wrap:anywhere]">
             {t(answered ? "questions.answeredTitle" : "questions.panelTitle")}
           </span>
           <span className="ms-auto inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-accent">
-            <span className="max-sm:sr-only">{t(open ? "questions.hide" : "questions.show")}</span>
+            {/* in the dock: the chevron alone at every width; the label stays for screen readers */}
+            <span data-bar-action className="sr-only">
+              {t(open ? "questions.hide" : "questions.show")}
+            </span>
             <Icon name="chevron-down" size={16} className={cn("shrink-0 transition-transform", open && "rotate-180")} />
           </span>
         </button>
