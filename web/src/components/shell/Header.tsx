@@ -11,7 +11,7 @@ import { translate, useLang, useT } from "@/i18n";
 import { internFirstName, internName, internNameLang } from "@/lib/intern";
 import { replace } from "@/router";
 import { useAppState } from "@/state/useAppState";
-import { BrandMark } from "./BrandMark";
+import { DadaLogo } from "./BrandMark";
 
 /** Segmented buttons in the settings sheet: 44px tall for touch. */
 const SEG_SHEET = "min-h-11 px-5";
@@ -162,8 +162,9 @@ export function Header({ health }: { health: Health | null }) {
         <div className="flex h-full items-center gap-2 px-3 sm:gap-3 sm:px-6">
           {/* One link: the mark everywhere, the wordmark from sm (on phones it is the link's hidden name). */}
           <a href="#/" className="flex min-h-11 shrink-0 items-center gap-2.5 rounded-md">
-            <BrandMark size={34} className="sm:hidden" />
-            <BrandMark size={38} className="max-sm:hidden" />
+            <DadaLogo height={28} className="sm:hidden" />
+            <DadaLogo height={36} className="max-sm:hidden" />
+            <span aria-hidden="true" className="h-7 w-px bg-line max-sm:hidden" />
             <span className="text-lg font-bold whitespace-nowrap text-fg-1 max-sm:sr-only">{t("app.name")}</span>
           </a>
           <div className="ms-auto flex min-w-0 items-center gap-2">

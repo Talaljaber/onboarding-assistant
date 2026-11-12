@@ -4,6 +4,7 @@ import type { Dict } from "./ar";
 export const en: Dict = {
   app: {
     name: "Onboarding Academy",
+    company: "Dada Group",
     prototype: "Competition prototype",
     disclaimer: "Fictional training data · no employment decisions",
   },

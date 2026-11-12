@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
+import { DadaLogo } from "../shell/BrandMark";
 import { getInterns, startInternSession } from "@/api/client";
 import type { InternPublic } from "@/api/types";
 import { Button } from "@/components/ui/Button";
@@ -97,6 +98,7 @@ export default function WelcomeScreen() {
     <section data-screen="welcome" className="mx-auto w-full max-w-6xl px-4 pt-6 pb-10 sm:px-6 sm:pt-12 lg:px-8 lg:pt-16">
       <div className="grid items-start gap-6 sm:gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-x-14">
         <div className="da-rise-in lg:col-start-1 lg:row-start-1">
+          <DadaLogo height={52} alt={t("app.company")} className="mb-5" />
           <p className="inline-flex items-center gap-2 rounded-full border border-accent-line bg-accent-soft px-3 py-1 text-sm font-semibold text-accent">
             <Icon name="sparkle" size={16} className="shrink-0" />
             {t("uiIntern.signinEyebrow")}

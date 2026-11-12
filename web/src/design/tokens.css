@@ -1,11 +1,11 @@
 /*
- * Dada Academy design tokens (P9 redesign). Every component styles against these variables.
- * Light theme only (no dark theme, no OS-following). Original palette: no Dada logo, colours
- * or typography (plan Part D §4.3). Direction: warm ivory neutrals, deep teal for trust and
- * action, amber as the warm highlight. See docs/UI_PLAN.md for the ratios.
+ * Dada Academy design tokens. Every component styles against these variables. Light theme only.
+ * Palette: Dada Group's own colours (owner's request, Thu 12 Nov 2026; taken from dadagroup.jo and its logo):
+ * Dada blue #0b5696 for trust and action, the logo's yellow #e8d60e as the highlight, navy #1f2e3f for text
+ * and the footer, the site's pale blue-grey #f2f7fa as the page.
  *
- * Amber (--da-amber) fails contrast against white, so it is for borders and fills behind dark
- * text only; text that needs amber uses --da-amber-ink. --da-brand is for graphics only.
+ * The yellow (--da-amber) fails contrast against white, so it is for borders and fills behind dark text
+ * only; text that needs it uses --da-amber-ink. --da-brand is for graphics only.
  *
  * Rules enforced by src/design/__tests__/tokens.test.ts:
  *  - text tokens reach >= 4.5:1 on every surface
@@ -18,45 +18,45 @@
   /* Light only: native controls and scrollbars stay light even on a dark OS. */
   color-scheme: light;
 
-  /* surfaces + text + lines (warm ivory neutrals) */
+  /* surfaces + text + lines (Dada blue-grey neutrals) */
   --da-surface-0: #ffffff;
-  --da-surface-1: #fbf9f6;
-  --da-surface-2: #efeae2;
+  --da-surface-1: #f7fafc;
+  --da-surface-2: #e7eef4;
   --da-surface-raised: #ffffff;
-  --da-surface-soft: #e7f2ef;
-  --da-text-1: #1b2220;
-  --da-text-2: #3a4441;
-  --da-text-3: #56605d;
-  --da-border: #e4ded4;
-  --da-border-strong: #7a827e;
-  --da-focus: #0b6457;
+  --da-surface-soft: #eaf2f9;
+  --da-text-1: #1f2e3f;
+  --da-text-2: #3b4a5c;
+  --da-text-3: #536276;
+  --da-border: #dde5ec;
+  --da-border-strong: #6f7f90;
+  --da-focus: #0b5696;
   --da-on-accent: #ffffff;
-  --da-accent: #0b6457;
-  --da-accent-hover: #084f45;
-  --da-accent-soft: #e7f2ef;
-  --da-accent-line: #b7d8d0;
+  --da-accent: #0b5696;
+  --da-accent-hover: #084476;
+  --da-accent-soft: #eaf2f9;
+  --da-accent-line: #b8d1e8;
 
   /* brand + shell */
-  --da-brand: #16897a;
-  --da-heading: #3b4744;
-  --da-page: #f6f3ee;
+  --da-brand: #0b5696;
+  --da-heading: #1f2e3f;
+  --da-page: #f2f7fa;
   --da-band: #ffffff;
-  --da-band-2: #fbf9f6;
-  --da-on-band: #1b2220;
-  --da-amber: #e8a33d;
-  --da-on-amber: #1b2220;
-  --da-amber-ink: #855300;
-  --da-amber-soft: #fcf0dc;
-  --da-footer: #1d2a28;
-  --da-on-footer: #e8eeec;
-  --da-footer-link: #8fd9cb;
-  --da-input: #fdfcfa;
+  --da-band-2: #f7fafc;
+  --da-on-band: #1f2e3f;
+  --da-amber: #e8d60e;
+  --da-on-amber: #1f2e3f;
+  --da-amber-ink: #6b5f00;
+  --da-amber-soft: #fbf7d4;
+  --da-footer: #1f2e3f;
+  --da-on-footer: #e8eef4;
+  --da-footer-link: #f0e04a;
+  --da-input: #fbfdfe;
 
   /* semantic (label always shown next to colour; icons in the component) */
   --da-ok: #1d7439;
   --da-warn: #8a5600;
   --da-danger: #b4232a;
-  --da-info: #0b6457;
+  --da-info: #0b5696;
   --da-value: #584896;
 
   /* spacing (4px scale) */
@@ -87,19 +87,19 @@
   --da-text-2xl: 1.75rem;
   --da-text-3xl: 2.25rem;
 
-  /* elevation: hairline first, soft warm shadows (no gradients) */
-  --da-shadow-1: 0 1px 2px rgb(28 35 33 / 0.06);
-  --da-shadow-2: 0 16px 40px -12px rgb(28 35 33 / 0.22), 0 4px 10px -4px rgb(28 35 33 / 0.1);
-  --da-shadow-3: 0 10px 24px -10px rgb(28 35 33 / 0.18), 0 2px 4px rgb(28 35 33 / 0.04);
-  --da-shadow-card: 0 1px 2px rgb(28 35 33 / 0.04), 0 4px 12px -6px rgb(28 35 33 / 0.08);
-  --da-shadow-float: 0 -1px 0 rgb(28 35 33 / 0.04), 0 -8px 24px -12px rgb(28 35 33 / 0.16);
-  --da-container-shadow: 0 0 0 1px rgb(28 35 33 / 0.05), 0 8px 28px -8px rgb(28 35 33 / 0.14);
+  /* elevation: hairline first, soft navy shadows (no gradients) */
+  --da-shadow-1: 0 1px 2px rgb(31 46 63 / 0.06);
+  --da-shadow-2: 0 16px 40px -12px rgb(31 46 63 / 0.22), 0 4px 10px -4px rgb(31 46 63 / 0.1);
+  --da-shadow-3: 0 10px 24px -10px rgb(31 46 63 / 0.18), 0 2px 4px rgb(31 46 63 / 0.04);
+  --da-shadow-card: 0 1px 2px rgb(31 46 63 / 0.04), 0 4px 12px -6px rgb(31 46 63 / 0.08);
+  --da-shadow-float: 0 -1px 0 rgb(31 46 63 / 0.04), 0 -8px 24px -12px rgb(31 46 63 / 0.16);
+  --da-container-shadow: 0 0 0 1px rgb(31 46 63 / 0.05), 0 8px 28px -8px rgb(31 46 63 / 0.14);
 
   /* motion */
   --da-motion-fast: 120ms;
   --da-motion-slow: 280ms;
   --da-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --da-overlay: rgb(20 28 26 / 0.48);
+  --da-overlay: rgb(15 30 48 / 0.48);
 
   /* layout */
   --da-header-h: 4rem;

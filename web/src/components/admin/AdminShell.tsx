@@ -5,7 +5,7 @@ import { Icon, type IconName } from "@/components/ui/Icon";
 import { useToast } from "@/components/ui/Toast";
 import { translate, useLang, useT, type DictKey } from "@/i18n";
 import { replace, usePath } from "@/router";
-import { BrandMark } from "../shell/BrandMark";
+import { DadaLogo } from "../shell/BrandMark";
 import { useOpenQuestionCount } from "../questions/openCount"; // P18.1
 
 interface Item {
@@ -92,7 +92,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
       <header data-shell className="sticky top-0 z-30 border-b border-line bg-band/90 text-on-band backdrop-blur-md">
         <div className="flex h-(--da-header-h) items-center gap-2 px-3 sm:gap-4 sm:px-6">
           <a href="#/admin/interns" className="flex min-h-11 shrink-0 items-center gap-2.5 rounded-md">
-            <BrandMark size={34} />
+            <DadaLogo height={28} className="sm:hidden" />
+            <DadaLogo height={34} className="max-sm:hidden" />
+            <span aria-hidden="true" className="h-7 w-px bg-line max-sm:hidden" />
             <span className="flex flex-col leading-tight">
               <span className="text-base font-bold whitespace-nowrap text-fg-1 max-sm:sr-only">{t("app.name")}</span>
               <span className="text-xs font-semibold text-accent">{t("uiIntern.adminArea")}</span>
