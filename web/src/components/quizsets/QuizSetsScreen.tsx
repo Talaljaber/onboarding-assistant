@@ -3,7 +3,7 @@
 // draft or published, and how many interns practised it (a count, never a result).
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useLang, useT } from "@/i18n";
-import { pluralForm } from "@/lib/plural";
+import { questionCount } from "@/lib/format";
 import { navigate } from "@/router";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -57,7 +57,7 @@ export function SetMeta({ s }: { s: AdminQuizSet }) {
   const parts = [
     t(aud.key, aud.vars),
     s.opens_at_percent > 0 ? t("adminQuizzes.opensAt", { n: s.opens_at_percent }) : t("adminQuizzes.opensAlways"),
-    t(`quizSets.count${pluralForm(s.item_count, lang)}`, { n: s.item_count }),
+    questionCount(s.item_count, lang, t),
     t("adminQuizzes.practised", { n: s.interns_practised }),
   ];
   return (
@@ -124,7 +124,7 @@ function OfficialCard({ official }: { official: AdminOfficialQuiz | null }) {
           <p className="m-0 text-sm text-fg-2">{t("adminQuizzes.officialNote")}</p>
           {official && (
             <p className="m-0 text-sm text-fg-2" data-set-meta>
-              <span>{t(`quizSets.count${pluralForm(official.item_count, lang)}`, { n: official.item_count })}</span>
+              <span>{questionCount(official.item_count, lang, t)}</span>
               <span aria-hidden="true"> · </span>
               <span>{t("adminQuizzes.practised", { n: official.interns_practised })}</span>
             </p>
