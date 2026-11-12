@@ -152,6 +152,15 @@ FIXTURES: dict[str, type[BaseModel]] = {
     "error_400_quiz_mode.json": s.ErrorBody,
     # P21.2 final report
     "final_report.json": s.FinalReport,
+    # P23 quiz runs
+    "quiz_run_start_request.json": s.QuizRunStart,
+    "quiz_run.json": s.QuizRun,
+    "quiz_run_answer_request.json": s.QuizRunAnswer,
+    "quiz_run_answered.json": s.QuizRunAnswered,
+    "quiz_run_finish_request.json": s.QuizRunFinish,
+    "quiz_run_review.json": s.QuizRunReview,
+    "error_400_quiz_run_expired.json": s.ErrorBody,
+    "error_400_quiz_use_run.json": s.ErrorBody,
 }
 
 # One response fixture per endpoint (the request fixtures are listed in FIXTURES above).
@@ -222,6 +231,11 @@ ENDPOINT_FIXTURES = {
     "GET /api/quiz-sets/{id}": "quiz_set.json",
     "GET /api/admin/quiz-sets/{id}/results": "checkpoint_results.json",  # D-P20-checkpoint
     "GET /api/admin/report": "final_report.json",  # P21.2
+    # P23 quiz runs
+    "POST /api/quiz-runs": "quiz_run.json",
+    "POST /api/quiz-runs/{id}/answer": "quiz_run_answered.json",
+    "POST /api/quiz-runs/{id}/finish": "quiz_run_review.json",
+    "GET /api/quiz-runs/{id}/review": "quiz_run_review.json",
 }
 
 REQUEST_MODELS: dict[type[BaseModel], str] = {
@@ -253,6 +267,9 @@ REQUEST_MODELS: dict[type[BaseModel], str] = {
     s.QuizItemOrder: "quiz_item_order_request.json",  # P20
     s.QuizDraftRequest: "quiz_draft_request.json",  # P20
     s.QuizImportRequest: "quiz_import_request.json",  # P20
+    s.QuizRunStart: "quiz_run_start_request.json",  # P23
+    s.QuizRunAnswer: "quiz_run_answer_request.json",  # P23
+    s.QuizRunFinish: "quiz_run_finish_request.json",  # P23
 }
 
 
@@ -350,6 +367,8 @@ def test_official_sources_are_verbatim() -> None:
             rows += data["rows"]
         if data.get("row") is not None:  # P18.5: a private reply has no row
             rows.append(data["row"])
+        if name == "quiz_run_review.json":  # P23: each reviewed question cites its row
+            rows += [i["explanation"] for i in data["items"]]
         for row in rows:
             if row["status"] != "official":
                 continue
@@ -412,6 +431,9 @@ def test_admin_intern_views_have_no_correctness_or_score() -> None:
         quiz_keys |= all_keys(load(name)) - {"correct_option"}
     assert not [k for k in quiz_keys if banned.search(k)]
     assert not [k for k in quiz_keys if re.search(r"profile|name|intern_id$", k)]
+    # P23: runs and their reviews are intern-only; no admin shape names a run.
+    admin_keys = keys | cp_keys | quiz_keys
+    assert not [k for k in admin_keys if re.search(r"run_id|your_option|remaining", k)]
     assert load("admin_interns.json")["label_ar"] == s.INTERNS_LABEL_AR
     assert load("intern_detail.json")["label_ar"] == s.INTERNS_LABEL_AR
 
@@ -1064,3 +1086,60 @@ def test_final_report_contract() -> None:
         assert needle in ts, needle
     doc = CONTRACT_MD.read_text(encoding="utf-8")
     assert "Final report (P21.2" in doc and "GET /api/admin/report" in doc
+
+
+# ------------------------------------------------------------------ P23 quiz runs
+
+
+def test_quiz_run_contract() -> None:
+    """P23: a run carries no correctness while open (items without the correct option, answers without right/wrong,
+    the answer response only counts); the review is the intern's own result with the cited rows; the time limit is
+    1–120 minutes or null (never on the official quiz); the run errors keep the frozen enum (`reason:<code>`)."""
+    run = load("quiz_run.json")
+    for name in ("quiz_run.json", "quiz_run_answered.json", "quiz_run_start_request.json",
+                 "quiz_run_answer_request.json"):
+        keys = all_keys(load(name))
+        assert not [k for k in keys if re.search(r"correct|right|wrong|score|grade", k)], name
+    for model in (s.QuizRun, s.QuizRunAnswered):
+        assert not [f for f in model.model_fields if re.search(r"correct|right|wrong|score|grade", f)], model
+    with pytest.raises(ValidationError):
+        s.QuizRun.model_validate({**run, "items": [{**run["items"][0], "correct_option": "A"}]})
+    with pytest.raises(ValidationError):
+        s.QuizRun.model_validate({**run, "answers": {"M999": "A"}})
+    with pytest.raises(ValidationError):
+        s.QuizRun.model_validate({**run, "remaining_seconds": None})
+    with pytest.raises(ValidationError):
+        s.QuizRun.model_validate({**run, "set_id": "official"})
+    review = load("quiz_run_review.json")
+    assert review["right"] <= review["answered"] <= review["total"] == len(review["items"])
+    for bad in ({"right": 2}, {"answered": 3}, {"status": "in_progress"}):
+        with pytest.raises(ValidationError):
+            s.QuizRunReview.model_validate({**review, **bad})
+    unanswered = [i for i in review["items"] if i["your_option"] is None]
+    assert unanswered and not any(i["right"] for i in unanswered)
+    with pytest.raises(ValidationError):
+        s.QuizRunReviewItem.model_validate({**review["items"][1], "right": True})
+    # The time limit: admin shapes and the intern's list; the official quiz never has one.
+    assert load("admin_quiz_set.json")["time_limit_minutes"] == 10
+    for bad in (0, 121):
+        with pytest.raises(ValidationError):
+            s.QuizSetCreate.model_validate({"title_ar": "س", "audience": "all", "time_limit_minutes": bad})
+    assert s.QuizSetPatch.model_validate({"time_limit_minutes": None}).changes() == {"time_limit_minutes": None}
+    sets = load("quiz_sets.json")["sets"]
+    assert sets[0]["official"] and sets[0]["time_limit_minutes"] is None
+    with pytest.raises(ValidationError):
+        s.QuizSetSummary.model_validate({**sets[0], "time_limit_minutes": 10})
+    with pytest.raises(ValidationError):
+        s.QuizSetSummary.model_validate({**sets[1], "open_run_remaining_seconds": 60})
+    for name, field in (("error_400_quiz_run_expired.json", "status"), ("error_400_quiz_use_run.json", "id")):
+        err = load(name)["error"]
+        assert err["code"] == "validation_error" and err["field"] == field
+        assert err["message"].removeprefix("reason:") in s.QUIZ_RUN_REASONS
+    ts = TYPES_TS.read_text(encoding="utf-8")
+    for value in (*s.QUIZ_RUN_STATUSES, *s.QUIZ_RUN_REASONS):
+        assert f'"{value}"' in ts, value
+    for needle in ("export function isQuizRun", "export function isQuizRunAnswered", "export function isQuizRunReview",
+                   "time_limit_minutes", "open_run_id", "open_run_remaining_seconds", "last_review_run_id"):
+        assert needle in ts, needle
+    doc = CONTRACT_MD.read_text(encoding="utf-8")
+    assert "6o. Quiz runs" in doc

@@ -249,3 +249,21 @@ about, first attempt only; practice results are never shared.
 
 Counts, dates, task timings and checkpoint first answers only. No rank, no composite score, no "best" field: the
 rows keep the roster order and the admin sorts them. Names, times and counts are illustrative.
+
+### Quiz runs (P23)
+
+| File | Endpoint | Model |
+|---|---|---|
+| `quiz_run_start_request.json` | `POST /api/quiz-runs` body (Sara's profile, the Sales checkpoint set) | `QuizRunStart` |
+| `quiz_run.json` | `POST /api/quiz-runs` (resumed: 10-minute limit, 412 s left, M001 already answered; no correct option, no right/wrong) | `QuizRun` |
+| `quiz_run_answer_request.json` | `POST /api/quiz-runs/{id}/answer` body | `QuizRunAnswer` |
+| `quiz_run_answered.json` | `POST /api/quiz-runs/{id}/answer` (counts only) | `QuizRunAnswered` |
+| `quiz_run_finish_request.json` | `POST /api/quiz-runs/{id}/finish` body | `QuizRunFinish` |
+| `quiz_run_review.json` | `POST /api/quiz-runs/{id}/finish` and `GET /api/quiz-runs/{id}/review?profile_id=` (expired at the deadline: M001 right, M002 wrong, M003 unanswered = not right; each item cites its official row verbatim) | `QuizRunReview` |
+| `error_400_quiz_run_expired.json` | 400 `validation_error`, `field: "status"`, `message: "reason:expired"` (an answer after the deadline + 2 s) | `ErrorBody` |
+| `error_400_quiz_use_run.json` | 400 `validation_error`, `field: "id"`, `message: "reason:use_run"` (`POST /api/quiz/check` for an item of a timed or checkpoint set) | `ErrorBody` |
+
+`admin_quiz_sets.json`, `admin_quiz_set*.json` and `quiz_set_*_request.json` carry `time_limit_minutes` (10 for the
+Sales checkpoint set, null for the draft); `quiz_sets.json` carries `time_limit_minutes`, `open_run_id`,
+`open_run_remaining_seconds` and `last_review_run_id` (the official quiz has a review to show). Ids and times are
+illustrative. The review is the intern's own result; no admin fixture carries a run.

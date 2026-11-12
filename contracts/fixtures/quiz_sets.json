@@ -9,7 +9,11 @@
       "open": true,
       "official": true,
       "mode": "practice",
-      "my_result": null
+      "my_result": null,
+      "time_limit_minutes": null,
+      "open_run_id": null,
+      "open_run_remaining_seconds": null,
+      "last_review_run_id": "0000c001-4d3a-4e8b-9c71-2a5d0e7f3b14"
     },
     {
       "id": "0000a001-4d3a-4e8b-9c71-2a5d0e7f3b14",
@@ -24,7 +28,11 @@
         "answered": 0,
         "first_attempt_right": 0,
         "total": 3
-      }
+      },
+      "time_limit_minutes": 10,
+      "open_run_id": null,
+      "open_run_remaining_seconds": null,
+      "last_review_run_id": null
     }
   ]
 }

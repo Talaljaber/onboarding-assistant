@@ -661,3 +661,51 @@ import { isFinalReport, type FinalReport } from "./types";
 /** Every active intern's evidence (optionally one track). */
 export const getFinalReport = (track?: Role | null, signal?: AbortSignal) =>
   request<FinalReport>(`/api/admin/report${track ? `?track=${q(track)}` : ""}`, { guard: isFinalReport, signal, admin: true });
+
+// ---- quiz runs (P23): start or resume, answer (locked in), finish, review (the intern's own result)
+
+import {
+  isQuizRun,
+  isQuizRunAnswered,
+  isQuizRunReview,
+  type QuizOptionKey,
+  type QuizRun,
+  type QuizRunAnswered,
+  type QuizRunReview,
+} from "./types";
+
+/** Start the profile's run of a set, or resume its open one (same items, order, answers, remaining time). 404 when
+ *  the set is not visible to this profile; 400 field "progress" `reason:locked:<pct>` when it has not opened. */
+export const startQuizRun = (profileId: string, setId: string, signal?: AbortSignal) =>
+  request<QuizRun>("/api/quiz-runs", {
+    method: "POST",
+    body: { profile_id: profileId, set_id: setId },
+    guard: isQuizRun,
+    signal,
+  });
+
+/** One answer, locked in; no correctness until the review. 400 `reason:expired` / `reason:finished` (field
+ *  "status": finish the run to get its review) or `reason:answered` (field "item_id"). */
+export const answerQuizRun = (runId: string, profileId: string, itemId: string, option: QuizOptionKey, signal?: AbortSignal) =>
+  request<QuizRunAnswered>(`/api/quiz-runs/${q(runId)}/answer`, {
+    method: "POST",
+    body: { profile_id: profileId, item_id: itemId, option },
+    guard: isQuizRunAnswered,
+    signal,
+  });
+
+/** Close the run (idempotent; an expired run returns its review). */
+export const finishQuizRun = (runId: string, profileId: string, signal?: AbortSignal) =>
+  request<QuizRunReview>(`/api/quiz-runs/${q(runId)}/finish`, {
+    method: "POST",
+    body: { profile_id: profileId },
+    guard: isQuizRunReview,
+    signal,
+  });
+
+/** The review of a finished or expired run (400 field "status" `reason:in_progress` while it is open). */
+export const getQuizRunReview = (runId: string, profileId: string, signal?: AbortSignal) =>
+  request<QuizRunReview>(`/api/quiz-runs/${q(runId)}/review?profile_id=${q(profileId)}`, {
+    guard: isQuizRunReview,
+    signal,
+  });

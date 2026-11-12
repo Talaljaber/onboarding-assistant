@@ -870,7 +870,8 @@ the set is not visible to this intern (unknown, draft, another audience, no inte
 ### POST /api/quiz/check (set items)
 
 Unchanged shape. An `M` id needs the `profile_id` of an intern who can see the set and for whom it is open
-(else 404). The answer's explanation is the cited live row; the attempt is recorded as for Q items.
+(else 404). The answer's explanation is the cited live row; the attempt is recorded as for Q items. P23: an item of a
+timed or checkpoint set is 400 `field: "id"`, `reason:use_run` (only a run may answer it; §6o).
 
 ### POST /api/questions with `source: "quiz"`
 
@@ -953,6 +954,91 @@ The printable per-intern page reads `GET /api/admin/interns/{id}` (which now als
 question; retries never change it; zeros before the first answer); `null` for practice sets, the official quiz and
 without an intern profile. One intern never sees another's result.
 
+## 6o. Quiz runs (P23)
+
+The owner asked that a quiz keeps its state on the server, that the intern cannot simply start over, that the admin
+can give a set a time limit, and that the intern sees a report at the end. A **run** is one sitting of one quiz (the
+official quiz or a set) by one profile, stored on the server (`quiz_runs`, migration `0011_quiz_runs.sql`).
+
+- **Start or resume.** Opening a quiz starts the profile's run of that set, or resumes its open run: the same items
+  in the same order, the answers already given and the remaining time, on any device. At most one open run per
+  (profile, set). A new run serves the questions the intern missed (wrong or unanswered) in their last closed run
+  of that set first, then the rest (official quiz: the track's order; a set: the admin's order).
+- **Answers are locked in and not revealed.** One answer per item per run (a second one is 400 `reason:answered`);
+  the answer response carries counts only. The correct options, the explanation rows and the result come in the
+  review when the run is finished or expired.
+- **Time limit.** A set may have `time_limit_minutes` (1–120; null = none; the official quiz never has one). The
+  deadline is fixed when the run starts (`deadline_at = started_at + limit`; a later change of the limit does not
+  move it). The server's clock decides: an answer is accepted until 2 s (`QUIZ_RUN_GRACE_S`) after the deadline;
+  after that the run is **expired** (lazily, on the next call: start, answer, finish, review or the quiz list) with
+  `finished_at = deadline_at`; unanswered questions count as unanswered (not right).
+- **Scoping.** Every run route needs the `profile_id` of the run's profile, or of another profile of the same active
+  intern; anything else is 404 (as for an unknown run). An anonymous profile (not an intern's) may take only the
+  official quiz (a set is 404).
+- **Checkpoint sets (D-P20-checkpoint, refined).** The shared result is the intern's **first run** of the set: its
+  answers, unanswered = not right; later runs never change it. `answered` / `first_attempt_right` count that run's
+  answers to the set's current items; `finished_at` is when that run closed (finished or expired; null while it is
+  open). Compatibility: when the intern has answers to the set from before runs existed (`run_id` null), the old
+  rule applies (the earliest answer per item over all their answers). The admin's results, the intern detail, the
+  final report and the intern's own `my_result` all follow this rule. The admin never receives a run, a run id or a
+  review.
+- **The plan.** Finishing a run of the official quiz ticks the suggested plan's quiz activity for that profile on
+  the server (as the client did).
+- **Old clients.** `POST /api/quiz/check` keeps working for the official quiz and untimed practice sets (its answers
+  are stored with `run_id` null and keep counting as practice). For an item of a **timed or checkpoint** set it is 400
+  `validation_error`, `field: "id"`, `message: "reason:use_run"` (`error_400_quiz_use_run.json`), so it can never
+  bypass a deadline or a shared first run.
+
+Errors keep the frozen enum: 400 `validation_error` with `message` `reason:<QuizRunReason>`:
+
+| `message` | `field` | when |
+|---|---|---|
+| `reason:expired` | `status` | the run's deadline (+ 2 s) has passed (`error_400_quiz_run_expired.json`); finish it to get its review |
+| `reason:finished` | `status` | the run was already finished |
+| `reason:answered` | `item_id` | this item already has an answer in this run |
+| `reason:in_progress` | `status` | the review of a run that is still open |
+| `reason:use_run` | `id` | `POST /api/quiz/check` for an item of a timed or checkpoint set |
+
+Every run route answers 503 `requests_unavailable` when the store cannot serve the run tables (Supabase before
+migration 0011).
+
+### POST /api/quiz-runs
+
+Body `QuizRunStart` `{profile_id, set_id}` (`set_id`: `official` or a set UUID) → `QuizRun` `{id, set_id, status,
+started_at, deadline_at, remaining_seconds, items: QuizItem[] (run order, never the correct option), answers:
+{item_id: option}, mode, official}`. `deadline_at` and `remaining_seconds` are null without a time limit. 404 unknown
+profile, a set not visible to this profile (unknown, draft, another audience, anonymous profile) or a set with no
+answerable item; 400 `field: "progress"`, `reason:locked:<pct>` when the set has not opened yet (as `GET
+/api/quiz-sets/{id}`).
+
+### POST /api/quiz-runs/{id}/answer
+
+Body `QuizRunAnswer` `{profile_id, item_id, option}` → `QuizRunAnswered` `{answered, total, remaining_seconds,
+status}` (no correctness). 400 `reason:expired` / `reason:finished` / `reason:answered`; 404 unknown run, another
+profile's run, or an item that is not in this run.
+
+### POST /api/quiz-runs/{id}/finish
+
+Body `QuizRunFinish` `{profile_id}` → `QuizRunReview`. Idempotent: a finished run returns its review again; an
+expired run (also one that expires on this call) returns its review with `status: "expired"`. 404 as above.
+
+### GET /api/quiz-runs/{id}/review?profile_id=…
+
+→ `QuizRunReview` `{run_id, set_id, status ("finished" | "expired"), started_at, finished_at, total, answered, right,
+items: [{item_id, question_ar, options, question_en, options_en, your_option (null = unanswered), correct_option,
+right, explanation: Source}], mode, official}`. `right` ≤ `answered` ≤ `total` = the number of items. This is the
+intern's own result (the review stays reachable from the quiz list); the explanation is the cited live row
+verbatim (the official row when an official quiz row is no longer live). Items deleted by the admin (or whose row
+is gone from the KB) are left out. 400 `reason:in_progress` while the run is open; 404 as above.
+
+### `GET /api/quiz-sets?profile_id=` and the admin set shapes
+
+`QuizSetSummary` adds `time_limit_minutes` (null for the official quiz), `open_run_id` (this profile's open run, to
+resume; null when none), `open_run_remaining_seconds` (null without a limit or an open run) and
+`last_review_run_id` (the latest finished or expired run of the intern, its review stays reachable; null when
+none). `AdminQuizSet`, `QuizSetCreate` and `QuizSetPatch` add `time_limit_minutes` (1–120 or null; on a patch null
+clears it); the admin sets list shows it. No admin shape carries a run, a run id or a review.
+
 ## 7. Fixed labels
 
 | constant | text |
@@ -1010,6 +1096,9 @@ of plan Part C §4.6 (owned by `app/answer.py`); the fixtures use them verbatim.
   `question_create_quiz_request.json`, `error_400_quiz_grounding.json`, `error_400_quiz_locked.json`,
   `error_503_quiz_draft.json`; checkpoint quizzes: `checkpoint_results.json`, `error_400_quiz_mode.json`;
 - final report (P21.2): `final_report.json`;
+- quiz runs (P23): `quiz_run_start_request.json`, `quiz_run.json`, `quiz_run_answer_request.json`,
+  `quiz_run_answered.json`, `quiz_run_finish_request.json`, `quiz_run_review.json`,
+  `error_400_quiz_run_expired.json`, `error_400_quiz_use_run.json`;
 - request threads (P15): `request_thread.json`, `request_comment.json`, `request_comment_create_request.json`,
   `request_comment_admin_create_request.json`;
 - errors: `error_400_validation.json`, `error_404.json`, `error_409.json`, `error_413.json`,
