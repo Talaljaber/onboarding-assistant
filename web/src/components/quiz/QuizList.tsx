@@ -1,6 +1,8 @@
 // `#/quiz` (P20.2): the intern's practice quizzes. The official sample quiz first (always open), then the
 // published sets the admin assigned to this intern (everyone, their track, or them by name). A set opens when
 // the intern's suggested-plan progress reaches its share; until then it shows a lock and that share.
+// P23.2: a card offers «متابعة» (with the time left) for an open run, «عرض آخر نتيجة» for the last finished
+// run, and shows the set's time limit ("10 د").
 import { useEffect, useState } from "react";
 import { linkButton } from "@/components/plan/shared";
 import { Badge } from "@/components/ui/Badge";
@@ -12,11 +14,12 @@ import { Page, PageHeader } from "@/components/ui/Page";
 import { link, surface } from "@/components/ui/recipes";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useLang, useT } from "@/i18n";
+import { minutesText, mmss } from "./Countdown";
 import { questionCount } from "@/lib/format";
 import { useAppState } from "@/state/useAppState";
 import { getQuizSets } from "@/api/client";
 import type { CheckpointMyResult, QuizSetSummary } from "@/api/types";
-import { quizSetHref } from "./hashParam";
+import { quizReviewHref, quizSetHref } from "./hashParam";
 
 /** «للتعلّم فقط: لا تُعرض إجاباتك أو نتيجتك على المشرف.» */
 export function PrivacyNote({ small = false }: { small?: boolean }) {
@@ -31,11 +34,12 @@ export function PrivacyNote({ small = false }: { small?: boolean }) {
 
 /** P22: the intern's own shared checkpoint result from the server (first answers): "2 / 3" once every question
  *  has a first answer, else how many are answered so far. Kept on the card and the set page, so it shows again
- *  after a reload or on another device. Null for practice sets or before the first answer. */
-export function SharedResultLine({ mine, className }: { mine: CheckpointMyResult | null | undefined; className?: string }) {
+ *  after a reload or on another device. Null for practice sets or before the first answer.
+ *  P23.2 `final`: the first run is finished (unanswered questions count as not right), so "1 / 3" is final. */
+export function SharedResultLine({ mine, className, final = false }: { mine: CheckpointMyResult | null | undefined; className?: string; final?: boolean }) {
   const t = useT();
-  if (!mine || mine.answered <= 0) return null;
-  const complete = mine.answered >= mine.total;
+  if (!mine || (mine.answered <= 0 && !final)) return null;
+  const complete = final || mine.answered >= mine.total;
   return (
     <p data-shared-result={complete ? "complete" : "partial"} className={cn("m-0 font-semibold text-fg-1", className)}>
       {complete ? (
@@ -59,6 +63,20 @@ export function BackToQuizzes() {
       <Icon name="arrow-end" size={16} className="shrink-0 rotate-180 rtl:rotate-0" />
       {t("quizSets.back")}
     </a>
+  );
+}
+
+/** "10 د" / "10 min" with the full wording for screen readers. */
+export function TimeLimitBadge({ minutes }: { minutes: number }) {
+  const t = useT();
+  const { lang } = useLang();
+  return (
+    <span data-time-limit={minutes} className="inline-flex">
+      <Badge tone="neutral" size="sm" icon="clock">
+        <span aria-hidden="true">{t("quizRuns.limitBadge", { n: minutes })}</span>
+        <span className="sr-only">{t("quizRuns.limitNamed", { time: minutesText(minutes, lang, t) })}</span>
+      </Badge>
+    </span>
   );
 }
 
@@ -92,6 +110,12 @@ function QuizCard({ s }: { s: QuizSetSummary }) {
               {t("quizSets.open")}
             </Badge>
           ) : null}
+          {s.time_limit_minutes ? <TimeLimitBadge minutes={s.time_limit_minutes} /> : null}
+          {s.open && s.open_run_id ? (
+            <Badge tone="warn" size="sm" icon="clock">
+              {t("quizRuns.inProgress")}
+            </Badge>
+          ) : null}
           {s.mode === "checkpoint" && (
             <span data-checkpoint className="inline-flex">
               <Badge tone="info" size="sm" icon="eye">
@@ -106,18 +130,48 @@ function QuizCard({ s }: { s: QuizSetSummary }) {
             </span>
           )}
         </p>
-        {s.mode === "checkpoint" && <SharedResultLine mine={s.my_result} className="text-sm" />}
+        {s.mode === "checkpoint" && <SharedResultLine mine={s.my_result} final={!!s.last_review_run_id} className="text-sm" />}
         {s.mode !== "checkpoint" && <PrivacyNote small />}
       </div>
       {s.open && (
-        <a
-          href={quizSetHref(s.id)}
-          aria-label={t("quizSets.startNamed", { title: title.text })}
-          className={cn(linkButton(s.official ? "primary" : "secondary"), "shrink-0 max-sm:w-full")}
-        >
-          {t("quizSets.start")}
-          <Icon name="arrow-end" size={18} className="shrink-0" />
-        </a>
+        <div className="flex shrink-0 flex-col gap-2 max-sm:w-full sm:items-stretch">
+          {s.open_run_id ? (
+            <a
+              href={quizSetHref(s.id)}
+              aria-label={t("quizRuns.resumeNamed", { title: title.text })}
+              className={cn(linkButton("primary"), "max-sm:w-full")}
+              data-run-resume
+            >
+              {t("quizRuns.resume")}
+              {typeof s.open_run_remaining_seconds === "number" && (
+                <span className="text-sm font-normal" data-run-left>
+                  · {t("quizRuns.resumeLeft", { time: s.open_run_remaining_seconds >= 60 ? minutesText(Math.ceil(s.open_run_remaining_seconds / 60), lang, t) : mmss(s.open_run_remaining_seconds) })}
+                </span>
+              )}
+              <Icon name="arrow-end" size={18} className="shrink-0" />
+            </a>
+          ) : (
+            <a
+              href={quizSetHref(s.id)}
+              aria-label={t("quizSets.startNamed", { title: title.text })}
+              className={cn(linkButton(s.official ? "primary" : "secondary"), "max-sm:w-full")}
+            >
+              {t("quizSets.start")}
+              <Icon name="arrow-end" size={18} className="shrink-0" />
+            </a>
+          )}
+          {s.last_review_run_id && (
+            <a
+              href={quizReviewHref(s.id, s.last_review_run_id)}
+              aria-label={t("quizRuns.lastReviewNamed", { title: title.text })}
+              className={cn(linkButton("soft"), "max-sm:w-full")}
+              data-run-review
+            >
+              <Icon name="list" size={18} className="shrink-0" />
+              {t("quizRuns.lastReview")}
+            </a>
+          )}
+        </div>
       )}
     </li>
   );
@@ -170,7 +224,7 @@ export function QuizList() {
               {t("quiz.notEval")}
             </Badge>
           }
-          description={t("quizSets.listLead")}
+          description={t("quizRuns.listLead")}
         />
         {sets === null ? (
           <Skeleton lines={4} />

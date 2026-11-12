@@ -1,6 +1,7 @@
 // `#/admin/quizzes/:id` (P20.2): one practice quiz. Settings (titles, who it is for, the progress share that opens
 // it), publish, the questions (reorder, edit, delete, add — by hand or as a model draft from a K-row), a CSV
 // upload, and the anonymous content signals. Nothing here shows an intern's result.
+// P23.2: the optional time limit «مدة الاختبار (دقائق)» (empty = none, 1–120).
 import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
 import { getAdminInterns } from "@/api/client";
 import { ROLES, type InternSummary, type Role } from "@/api/types";
@@ -28,14 +29,14 @@ import {
   type AdminQuizSetDetail,
   type QuizAudience,
   type QuizMode,
-  type QuizOrigin,
   type QuizSetPatch,
+  type QuizOrigin,
   QUIZ_MODES,
 } from "@/api/types";
 import { CsvImport } from "./CsvImport";
 import { ItemDialog } from "./ItemDialog";
 import { asciiDigits, KEYS, roleKey, titleOk } from "./meta";
-import { CheckpointBadge, SetMeta, StatusBadge } from "./QuizSetsScreen";
+import { CheckpointBadge, SetMeta, StatusBadge, TimeLimitBadge } from "./QuizSetsScreen";
 import { ResultsPanel } from "./ResultsPanel";
 import { SignalsPanel } from "./SignalsPanel";
 
@@ -57,6 +58,15 @@ export function BackToQuizSets() {
 
 // ---------------------------------------------------------------- settings
 
+/** The time-limit box: "" = no limit, else whole minutes 1–120 (null when invalid). */
+export function parseLimit(text: string): number | null | "bad" {
+  const v = asciiDigits(text).trim();
+  if (v === "") return null;
+  if (!/^\d{1,3}$/.test(v)) return "bad";
+  const n = Number(v);
+  return n >= 1 && n <= 120 ? n : "bad";
+}
+
 function SettingsCard({ set, onSaved }: { set: AdminQuizSet; onSaved: (s: AdminQuizSet) => void }) {
   const t = useT();
   const { lang } = useLang();
@@ -69,6 +79,7 @@ function SettingsCard({ set, onSaved }: { set: AdminQuizSet; onSaved: (s: AdminQ
   const [track, setTrack] = useState<Role>(set.track ?? "Sales");
   const [chosen, setChosen] = useState<string[]>(set.intern_ids);
   const [opens, setOpens] = useState(set.opens_at_percent);
+  const [limitText, setLimitText] = useState(set.time_limit_minutes ? String(set.time_limit_minutes) : "");
   const [interns, setInterns] = useState<InternSummary[] | null>(null);
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -86,11 +97,13 @@ function SettingsCard({ set, onSaved }: { set: AdminQuizSet; onSaved: (s: AdminQ
   const titleBad = !titleOk(titleAr);
   const enBad = titleEn.trim().length > max;
   const internsBad = audience === "interns" && chosen.length === 0;
+  const limit = parseLimit(limitText);
+  const limitBad = limit === "bad";
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setTouched(true);
-    if (titleBad || enBad || internsBad || busy) return;
+    if (titleBad || enBad || internsBad || limitBad || busy) return;
     const patch: QuizSetPatch = {};
     if (titleAr.trim() !== set.title_ar) patch.title_ar = titleAr.trim();
     if ((titleEn.trim() || null) !== set.title_en) patch.title_en = titleEn.trim() || null;
@@ -101,6 +114,7 @@ function SettingsCard({ set, onSaved }: { set: AdminQuizSet; onSaved: (s: AdminQ
     const nextIds = audience === "interns" ? chosen : [];
     if (nextIds.join() !== set.intern_ids.join()) patch.intern_ids = nextIds;
     if (opens !== set.opens_at_percent) patch.opens_at_percent = opens;
+    if (limit !== (set.time_limit_minutes ?? null)) patch.time_limit_minutes = limit;
     if (Object.keys(patch).length === 0) {
       toast.show(t("adminQuizzes.saved"), "ok");
       return;
@@ -280,6 +294,33 @@ function SettingsCard({ set, onSaved }: { set: AdminQuizSet; onSaved: (s: AdminQ
           </div>
           <p id={`${uid}-opens-hint`} className="m-0 text-sm text-fg-3">
             {t("adminQuizzes.opensHint")}
+          </p>
+        </div>
+        <div className="flex min-w-0 flex-col gap-1.5" data-quiz-limit>
+          <label htmlFor={`${uid}-limit`} className="text-sm font-semibold text-fg-1">
+            {t("quizRuns.limitLabel")}
+          </label>
+          {/* a text box with the numeric keypad, like the opens-at box (type=number shows locale digits) */}
+          <span className="block w-24">
+            <input
+              id={`${uid}-limit`}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              lang="en"
+              maxLength={3}
+              value={limitText}
+              onChange={(e) => setLimitText(asciiDigits(e.target.value).replace(/\D/g, ""))}
+              aria-describedby={`${uid}-limit-hint`}
+              aria-invalid={(touched && limitBad) || undefined}
+              disabled={busy}
+              dir="ltr"
+              data-limit-number
+              className={cn(CONTROL, "min-h-11 px-2 text-center font-id")}
+            />
+          </span>
+          <p id={`${uid}-limit-hint`} className={cn("m-0 text-sm", touched && limitBad ? "font-medium text-danger" : "text-fg-3")}>
+            {touched && limitBad ? t("quizRuns.limitError") : t("quizRuns.limitHint")}
           </p>
         </div>
         {failed && (
@@ -542,6 +583,7 @@ export default function QuizSetEditor() {
                     <>
                       <StatusBadge status={set.status} />
                       {set.mode === "checkpoint" && <CheckpointBadge />}
+                      {set.time_limit_minutes ? <TimeLimitBadge minutes={set.time_limit_minutes} /> : null}
                     </>
                   }
                   description={<SetMeta s={{ ...set, item_count: items.length }} />}

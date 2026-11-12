@@ -94,6 +94,15 @@ describe("the sets list", () => {
     expect(published).toHaveAttribute("href", `#/admin/quizzes/${SET_ID}`);
   });
 
+  it("P23.2: a set with a time limit shows it on its card", async () => {
+    backend();
+    mount(<QuizSetsScreen />);
+    const sets = await screen.findAllByRole("link", { name: /^افتح:/ });
+    const [draft, published] = sets as [HTMLElement, HTMLElement];
+    expect(draft.querySelector("[data-time-limit]")).toBeNull();
+    expect(published.querySelector("[data-time-limit]")).toHaveTextContent("10 د");
+  });
+
   it("the official signals: anonymous counts, a share once 3 interns tried, «—» and the wait note before", async () => {
     backend();
     mount(<QuizSetsScreen />);
@@ -216,6 +225,38 @@ describe("the set editor", () => {
     expect(pct).toHaveValue("45");
     await userEvent.click(screen.getByTestId("quiz-settings-save"));
     await waitFor(() => expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ opens_at_percent: 45 }));
+  });
+
+  it("P23.2: the time limit box: minutes 1–120 in Latin digits, empty clears the limit, out of range is refused", async () => {
+    const calls = backend();
+    mount(<QuizSetEditor />);
+    const box = await screen.findByRole("textbox", { name: "مدة الاختبار (دقائق)" });
+    expect(box).toHaveAttribute("type", "text");
+    expect(box).toHaveAttribute("inputmode", "numeric");
+    expect(box).toHaveValue("10");
+    expect(screen.getByText(/يبدأ العدّ عند فتح المتدرب للاختبار ويُغلق تلقائياً عند انتهاء الوقت/)).toBeInTheDocument();
+    // the header badge
+    expect(document.querySelector("[data-time-limit]")).toHaveTextContent("10 د");
+    await userEvent.clear(box);
+    await userEvent.type(box, "200");
+    await userEvent.click(screen.getByTestId("quiz-settings-save"));
+    expect(await screen.findByText("اكتب عدداً من 1 إلى 120، أو اتركه فارغاً.")).toBeInTheDocument();
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+    await userEvent.clear(box);
+    await userEvent.type(box, "١٥");
+    expect(box).toHaveValue("15");
+    await userEvent.click(screen.getByTestId("quiz-settings-save"));
+    await waitFor(() => expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ time_limit_minutes: 15 }));
+    await userEvent.clear(box);
+    await userEvent.click(screen.getByTestId("quiz-settings-save"));
+    await waitFor(() => expect(calls.filter((c) => c.method === "PATCH").at(-1)?.body).toEqual({ time_limit_minutes: null }));
+  });
+
+  it("P23.2: the time limit field in English", async () => {
+    backend();
+    mount(<QuizSetEditor />, "en");
+    expect(await screen.findByRole("textbox", { name: "Time limit (minutes)" })).toHaveValue("10");
+    expect(screen.getByText(/Leave empty for no time limit/)).toBeInTheDocument();
   });
 
   it("the delete-quiz confirmation names the quiz in the UI language (P22.2)", async () => {

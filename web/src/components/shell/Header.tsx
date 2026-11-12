@@ -12,6 +12,8 @@ import { internFirstName, internName, internNameLang } from "@/lib/intern";
 import { replace } from "@/router";
 import { useAppState } from "@/state/useAppState";
 import { DadaLogo } from "./BrandMark";
+import { useOpenQuizRun } from "../quiz/quizLock"; // P23.2
+import { LeaveDialog } from "../quiz/useLeaveGuard"; // P23.2
 
 /** Segmented buttons in the settings sheet: 44px tall for touch. */
 const SEG_SHEET = "min-h-11 px-5";
@@ -62,6 +64,9 @@ export function Header({ health }: { health: Health | null }) {
   const { role, intern, mode, setMode, forceOffline, trace, setTrace, signOut } = useAppState();
   const toast = useToast();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // P23.2: signing out of an open quiz run asks first (the run stays saved on the server)
+  const quizRun = useOpenQuizRun();
+  const [askSignOut, setAskSignOut] = useState(false);
   const llmOn = !forceOffline && health?.llm_available === true;
   const roleName = role ? t(role === "Sales" ? "role.sales" : "role.delivery") : "";
   const roleShort = role ? t(role === "Sales" ? "uiUat.roleShortSales" : "uiUat.roleShortDelivery") : "";
@@ -95,6 +100,12 @@ export function Header({ health }: { health: Health | null }) {
     </p>
   );
   const doSignOut = () => {
+    if (quizRun && !askSignOut) {
+      setSettingsOpen(false);
+      setAskSignOut(true);
+      return;
+    }
+    setAskSignOut(false);
     setSettingsOpen(false);
     signOut();
     replace("/");
@@ -234,6 +245,7 @@ export function Header({ health }: { health: Health | null }) {
           )}
         </div>
       </Dialog>
+      <LeaveDialog open={askSignOut && quizRun !== null} onStay={() => setAskSignOut(false)} onLeave={doSignOut} />
     </>
   );
 }

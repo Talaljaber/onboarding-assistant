@@ -4,6 +4,7 @@ import { useT, type DictKey } from "@/i18n";
 import { usePath } from "@/router";
 import { useAppState } from "@/state/useAppState";
 import { needsAttention, useAttention } from "../chat/attention";
+import { useOpenQuizRun } from "../quiz/quizLock"; // P23.2
 
 interface Item {
   path: string;
@@ -45,9 +46,27 @@ function DotHint() {
 }
 
 /** One sidebar link: a rail tile (icon over label) at md, a full row from lg. */
-function SideLink({ item, current }: { item: Item; current: boolean }) {
+function SideLink({ item, current, locked = false }: { item: Item; current: boolean; locked?: boolean }) {
   const t = useT();
   const dot = useChatDot(item);
+  // P23.2: during a locked quiz the other screens are shown but not reachable
+  if (locked && !current) {
+    return (
+      <li>
+        <span
+          aria-disabled="true"
+          data-nav-locked
+          className={cn(
+            "relative flex min-h-11 cursor-not-allowed flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-center text-xs font-semibold leading-tight text-fg-3 opacity-60",
+            "lg:flex-row lg:justify-start lg:gap-3 lg:px-3 lg:py-2.5 lg:text-start lg:text-sm",
+          )}
+        >
+          <Icon name={item.icon} size={20} className="shrink-0" />
+          <span>{t(item.key)}</span>
+        </span>
+      </li>
+    );
+  }
   return (
     <li>
       <a
@@ -82,6 +101,7 @@ export function NavTabs() {
   const t = useT();
   const path = usePath();
   const MORE = useMore();
+  const locked = Boolean(useOpenQuizRun()?.locked);
   return (
     <nav
       data-shell
@@ -91,17 +111,23 @@ export function NavTabs() {
         "border-e border-line bg-surface-0/70 px-2 py-4 md:flex lg:w-(--da-sidebar-w) lg:px-3 lg:py-6",
       )}
     >
+      {locked && (
+        <p role="note" data-nav-lock-note className="mb-3 flex flex-col items-center gap-1 rounded-md bg-surface-2 px-1 py-2 text-center text-xs font-semibold text-fg-1 lg:flex-row lg:gap-2 lg:px-3 lg:text-start lg:text-sm">
+          <Icon name="lock" size={16} className="shrink-0 text-fg-2" />
+          {t("quizRuns.lockedNav")}
+        </p>
+      )}
       <p className="mb-2 hidden px-3 text-xs font-semibold text-fg-3 lg:block">{t("uiShell.navGroupLearn")}</p>
       <ul className="flex flex-col gap-1">
         {[...MAIN, CHECK].map((i) => (
-          <SideLink key={i.path} item={i} current={path === i.path} />
+          <SideLink key={i.path} item={i} current={path === i.path} locked={locked} />
         ))}
       </ul>
       <div aria-hidden="true" className="mx-2 my-4 h-px bg-line lg:mx-3" />
       <p className="mb-2 hidden px-3 text-xs font-semibold text-fg-3 lg:block">{t("uiShell.navGroupTools")}</p>
       <ul className="flex flex-col gap-1">
         {MORE.map((i) => (
-          <SideLink key={i.path} item={i} current={path === i.path} />
+          <SideLink key={i.path} item={i} current={path === i.path} locked={locked} />
         ))}
       </ul>
     </nav>
@@ -118,7 +144,23 @@ export function BottomNav() {
   const path = usePath();
   const { practiceActive } = useAppState();
   const chatDot = needsAttention(useAttention());
+  const quizRun = useOpenQuizRun();
   if (practiceActive) return null;
+  // P23.2: during a locked quiz the bar says so instead of offering the other screens
+  if (quizRun?.locked) {
+    return (
+      <nav
+        data-shell
+        aria-label={t("nav.label")}
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface-0/95 pb-[env(safe-area-inset-bottom)] shadow-float backdrop-blur-md md:hidden"
+      >
+        <p data-nav-lock-note className="m-0 flex h-16 items-center justify-center gap-2 px-4 text-sm font-semibold text-fg-1">
+          <Icon name="lock" size={18} className="shrink-0 text-fg-2" />
+          {t("quizRuns.lockedNav")}
+        </p>
+      </nav>
+    );
+  }
   const cls = "flex h-16 flex-1 flex-col items-center justify-center gap-1 px-0.5 text-xs leading-none";
   const pillCls = (on: boolean) =>
     cn(

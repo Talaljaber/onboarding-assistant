@@ -17,6 +17,7 @@ import { AskAgainHint, RecallNotice } from "./RecallNotice";
 import { askAgainHint, recallOf, type LiveKb } from "./recall";
 import { RECALL_KINDS } from "./attention";
 import { SendQuestionPrompt } from "../questions/SendToMentor"; // P18.1
+import { QuizLockNotice } from "../quiz/QuizLockNotice"; // P23.2
 
 export interface ChatMessageProps {
   item: ReplyItem;
@@ -54,6 +55,15 @@ export function ChatMessage(p: ChatMessageProps) {
   const live = p.liveKb ?? null;
   const recall = RECALL_KINDS.has(kind) ? recallOf(item.reply.sources, live) : [];
   const r = recall.length > 0 && item.reply.premise ? { ...item.reply, premise: undefined } : item.reply;
+
+  // P23.2: refused while a locked quiz is open: a calm notice that leads back to the quiz, nothing else
+  if (item.quizLock) {
+    return (
+      <AssistantFrame mode={null} cached={false} hasTrace={Boolean(item.trace)} traceShown={p.traceShown} onToggleTrace={p.onToggleTrace}>
+        <QuizLockNotice setId={item.quizLock.set_id} />
+      </AssistantFrame>
+    );
+  }
 
   let card;
   switch (kind) {

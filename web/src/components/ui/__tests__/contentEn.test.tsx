@@ -11,6 +11,7 @@ import type { Feedback } from "@/api/types";
 import { ScenarioFeedbackCard } from "@/components/chat/ScenarioCard";
 import PlanScreen from "@/components/plan/PlanScreen";
 import { json, renderScreen, stubApi } from "@/components/plan/__tests__/harness";
+import { PID, runServer } from "@/components/quiz/__tests__/runServer";
 import { QuizRunner } from "@/components/quiz/QuizRunner";
 import ScenariosScreen from "@/components/scenarios/ScenariosScreen";
 import { LangScope } from "@/i18n";
@@ -92,8 +93,9 @@ describe("quiz in English", () => {
   const first = quiz.items[0]!;
 
   it("question and options are English and share one direction", async () => {
-    stubApi();
-    renderScreen(<QuizRunner setId="official" />, { lang: "en" });
+    const srv = runServer({ setId: "official" });
+    stubApi({ "/api/quiz-sets": srv.handler, "/api/quiz-runs": srv.handler });
+    renderScreen(<QuizRunner setId="official" />, { lang: "en", data: { profile_id: PID } });
     const h = await screen.findByRole("heading", { name: first.question_en! });
     expect(h).toHaveAttribute("lang", "en");
     expect(h).toHaveAttribute("dir", "ltr");
@@ -104,8 +106,9 @@ describe("quiz in English", () => {
 
   it("without English, question and options are both Arabic RTL", async () => {
     const items = quiz.items.map((i) => ({ ...i, question_en: null, options_en: null }));
-    stubApi({ "/api/quiz": (url) => (url.startsWith("/api/quiz/check") ? json({}) : json({ ...quiz, items })) });
-    renderScreen(<QuizRunner setId="official" />, { lang: "en" });
+    const srv = runServer({ setId: "official", items });
+    stubApi({ "/api/quiz-sets": srv.handler, "/api/quiz-runs": srv.handler });
+    renderScreen(<QuizRunner setId="official" />, { lang: "en", data: { profile_id: PID } });
     const h = await screen.findByRole("heading", { name: first.question_ar });
     expect(h).toHaveAttribute("dir", "rtl");
     expect(screen.getByText(first.options.A)).toHaveAttribute("dir", "rtl");
