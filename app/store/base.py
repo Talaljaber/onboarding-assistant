@@ -10,6 +10,7 @@ or accept an alias shaped like an email or a phone number.
 
 from __future__ import annotations
 
+import json
 import re
 import uuid
 from datetime import UTC, datetime
@@ -279,6 +280,54 @@ class Store(Protocol):
 
     def mentor_question_update(self, question_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
         """Answer or dismiss (see `question_changes`). The stored row; {} when unknown; None on failure."""
+        ...
+
+    # Practice quizzes (P20) -------------------------------------------------------------------------------
+    # Sets written by the admin and their items (QUIZ_SET_COLUMNS, QUIZ_ITEM_COLUMNS). Same failure rule as the
+    # requests table (None -> 503 `requests_unavailable`, never flips the store), e.g. Supabase without 0009.
+
+    def quiz_sets(self, ids: list[str] | None = None) -> list[dict[str, Any]] | None:
+        """Sets (all, or these ids), newest first; None when unavailable."""
+        ...
+
+    def quiz_set_create(self, record: dict[str, Any]) -> dict[str, Any] | None:
+        """Insert one validated set (`quiz_set_record`). The stored set, or None."""
+        ...
+
+    def quiz_set_update(self, set_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        """Apply validated changes (`quiz_set_changes`). The set; {} when unknown; None on failure."""
+        ...
+
+    def quiz_set_delete(self, set_id: str) -> bool | None:
+        """Delete a set and its items (attempts are kept). False when unknown; None on failure."""
+        ...
+
+    def quiz_items(
+        self, *, set_ids: list[str] | None = None, ids: list[str] | None = None
+    ) -> list[dict[str, Any]] | None:
+        """Items matching the filters, by set and position; None when unavailable."""
+        ...
+
+    def quiz_items_add(self, set_id: str, records: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+        """Append items to a set: each gets the next free M-id (`next_item_ids`) and the next position. The stored
+        items, or None (invalid input, unknown set, no free id, failure)."""
+        ...
+
+    def quiz_item_update(self, item_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        """Apply validated item changes (`quiz_item_changes`). The item; {} when unknown; None on failure."""
+        ...
+
+    def quiz_item_delete(self, item_id: str) -> bool | None:
+        """Delete one item and renumber its set's positions 0..n-1. False when unknown; None on failure."""
+        ...
+
+    def quiz_items_order(self, set_id: str, ids: list[str]) -> bool | None:
+        """Positions in the order of `ids` (exactly the set's items). False when they differ; None on failure."""
+        ...
+
+    def quiz_answers(self, question_ids: list[str]) -> list[dict[str, Any]] | None:
+        """Every stored attempt at these questions: {profile_id, question_id, correct, at}, oldest first. Used only
+        for the anonymous signals and the checkpoint first answers. None when unavailable."""
         ...
 
     def close(self) -> None: ...
@@ -888,7 +937,7 @@ def mail_row(r: dict[str, Any]) -> dict[str, Any]:
 
 QUESTION_COLUMNS = ("id", "intern_id", "source", "text", "status", "answer_row_id", "created_at", "answered_at",
                     "answer_text")
-QUESTION_SOURCES = frozenset({"check", "chat"})
+QUESTION_SOURCES = frozenset({"check", "chat", "quiz"})  # P20: "quiz"
 QUESTION_STATUSES = frozenset({"open", "answered", "dismissed"})
 QUESTION_TEXT_MAX = 600
 #: P18.5: a private reply follows the KB answer limit (5..600 after cleaning, checked by the API).
@@ -936,3 +985,143 @@ def question_row(r: dict[str, Any]) -> dict[str, Any]:
     out["id"] = str(out["id"])
     out["intern_id"] = str(out["intern_id"])
     return out
+
+
+# Practice quizzes (P20) --------------------------------------------------------------------------------------
+# A set written by the admin (title, audience, opening progress, draft/published, practice/checkpoint) and its
+# items (question, three options, the correct key, the cited K-row). The API checks the grounding rules
+# (`app.quiz_sets.check_item`) before any write; these helpers only check shapes.
+
+QUIZ_SET_COLUMNS = ("id", "title_ar", "title_en", "audience", "track", "intern_ids", "opens_at_percent", "status",
+                    "mode", "created_at", "updated_at")
+QUIZ_ITEM_COLUMNS = ("id", "set_id", "position", "question_ar", "option_a", "option_b", "option_c",
+                     "correct_option", "source_knowledge_id", "origin", "created_at")
+QUIZ_SET_FIELDS = ("title_ar", "title_en", "audience", "track", "intern_ids", "opens_at_percent", "status", "mode")
+QUIZ_ITEM_FIELDS = ("question_ar", "option_a", "option_b", "option_c", "correct_option", "source_knowledge_id",
+                    "origin")
+QUIZ_ITEM_ID_RE = re.compile(r"^M\d{3}$")
+QUIZ_ITEM_ID_MAX = 999
+_QUIZ_TEXT_MAX = {"title_ar": 80, "title_en": 80, "question_ar": 300, "option_a": 120, "option_b": 120,
+                  "option_c": 120}
+
+
+def _quiz_set_field_ok(key: str, val: object) -> bool:
+    if key == "title_ar":
+        return isinstance(val, str) and 1 <= len(val.strip()) <= _QUIZ_TEXT_MAX[key]
+    if key == "title_en":
+        return val is None or (isinstance(val, str) and 1 <= len(val.strip()) <= _QUIZ_TEXT_MAX[key])
+    if key == "audience":
+        return val in ("all", "track", "interns")
+    if key == "track":
+        return val is None or val in ROLES
+    if key == "intern_ids":
+        return isinstance(val, list) and len(val) <= 200 and all(valid_uuid(v) == v for v in val)
+    if key == "opens_at_percent":
+        return isinstance(val, int) and not isinstance(val, bool) and 0 <= val <= 100
+    if key == "status":
+        return val in ("draft", "published")
+    if key == "mode":
+        return val in ("practice", "checkpoint")
+    return False
+
+
+def _audience_shape_ok(rec: dict[str, Any]) -> bool:
+    return ((rec["track"] is not None) == (rec["audience"] == "track")
+            and bool(rec["intern_ids"]) == (rec["audience"] == "interns"))
+
+
+def quiz_set_record(rec: object) -> dict[str, Any] | None:
+    """A new set to store (exactly QUIZ_SET_COLUMNS; id and times filled in), or None when invalid."""
+    if not isinstance(rec, dict):
+        return None
+    out = {k: rec.get(k) for k in QUIZ_SET_COLUMNS}
+    out["id"] = valid_uuid(out["id"]) or str(uuid.uuid4())
+    out["intern_ids"] = list(out["intern_ids"] or [])
+    out["opens_at_percent"] = out["opens_at_percent"] if out["opens_at_percent"] is not None else 0
+    out["status"] = out["status"] or "draft"
+    out["mode"] = out["mode"] or "practice"
+    if not all(_quiz_set_field_ok(k, out[k]) for k in QUIZ_SET_FIELDS) or not _audience_shape_ok(out):
+        return None
+    at = now_iso()
+    for key in ("created_at", "updated_at"):
+        out[key] = out[key] if isinstance(out[key], str) and out[key] else at
+    return out
+
+
+def quiz_set_changes(changes: dict[str, Any], current: dict[str, Any]) -> dict[str, Any] | None:
+    """Validated partial update (updated_at set); the merged set must keep the audience shape. None when invalid."""
+    if set(changes) - set(QUIZ_SET_FIELDS):
+        return None
+    if not all(_quiz_set_field_ok(k, v) for k, v in changes.items()):
+        return None
+    merged = {**{k: current.get(k) for k in QUIZ_SET_FIELDS}, **changes}
+    merged["intern_ids"] = list(merged["intern_ids"] or [])
+    if not _audience_shape_ok(merged):
+        return None
+    return {**changes, "updated_at": now_iso()}
+
+
+def quiz_set_row(r: dict[str, Any]) -> dict[str, Any]:
+    out = {k: r.get(k) for k in QUIZ_SET_COLUMNS}
+    out["id"] = str(out["id"])
+    ids = out["intern_ids"]
+    if isinstance(ids, str):  # LocalStore keeps the array as JSON text
+        try:
+            ids = json.loads(ids)
+        except ValueError:
+            ids = []
+    out["intern_ids"] = [str(i) for i in (ids or [])]
+    out["opens_at_percent"] = int(out["opens_at_percent"] or 0)
+    out["mode"] = out["mode"] or "practice"
+    out["created_at"], out["updated_at"] = str(out["created_at"]), str(out["updated_at"])
+    return out
+
+
+def _quiz_item_field_ok(key: str, val: object) -> bool:
+    if key in _QUIZ_TEXT_MAX:
+        return isinstance(val, str) and 1 <= len(val.strip()) <= _QUIZ_TEXT_MAX[key]
+    if key == "correct_option":
+        return val in ("A", "B", "C")
+    if key == "source_knowledge_id":
+        return isinstance(val, str) and bool(KB_ID_RE.match(val))
+    if key == "origin":
+        return val in ("manual", "model", "csv")
+    return False
+
+
+def quiz_item_input(rec: object) -> dict[str, Any] | None:
+    """The fields (QUIZ_ITEM_FIELDS) of a new item, or None when invalid. Ids and positions come from the store."""
+    if not isinstance(rec, dict):
+        return None
+    out = {k: rec.get(k) for k in QUIZ_ITEM_FIELDS}
+    out["origin"] = out["origin"] or "manual"
+    return out if all(_quiz_item_field_ok(k, out[k]) for k in QUIZ_ITEM_FIELDS) else None
+
+
+def quiz_item_changes(changes: dict[str, Any]) -> dict[str, Any] | None:
+    if not changes or set(changes) - set(QUIZ_ITEM_FIELDS):
+        return None
+    return dict(changes) if all(_quiz_item_field_ok(k, v) for k, v in changes.items()) else None
+
+
+def quiz_item_row(r: dict[str, Any]) -> dict[str, Any]:
+    out = {k: r.get(k) for k in QUIZ_ITEM_COLUMNS}
+    out["set_id"] = str(out["set_id"])
+    out["position"] = int(out["position"] or 0)
+    out["created_at"] = str(out["created_at"])
+    return out
+
+
+def next_item_ids(used: list[object], count: int) -> list[str] | None:
+    """`count` fresh M-ids after the highest one ever used (by an item or a stored attempt), or None when they run
+    out. An id held by an item or a stored attempt is never handed out again, so an old attempt never counts for
+    a new question."""
+    top = max((int(u[1:]) for u in used if isinstance(u, str) and QUIZ_ITEM_ID_RE.match(u)), default=0)
+    if top + count > QUIZ_ITEM_ID_MAX:
+        return None
+    return [f"M{n:03d}" for n in range(top + 1, top + count + 1)]
+
+
+def quiz_answer_row(r: dict[str, Any]) -> dict[str, Any]:
+    return {"profile_id": str(r.get("profile_id")), "question_id": str(r.get("question_id")),
+            "correct": bool(r.get("correct")), "at": str(r.get("at"))}

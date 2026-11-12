@@ -105,6 +105,32 @@ from app.schemas import (  # P18.1
     QuestionCreate,
     QuestionStatus,
 )
+from app import quiz_sets  # P20 practice quizzes
+from app.quiz import QuizResult  # P20
+from app.store.base import QUIZ_SET_FIELDS  # P20
+from app.schemas import (  # P20
+    OFFICIAL_QUIZ_SET_ID,
+    OFFICIAL_QUIZ_TITLE_AR,
+    OFFICIAL_QUIZ_TITLE_EN,
+    QUIZ_IMPORT_BODY_MAX_BYTES,
+    QUIZ_ITEM_ID_RE,
+    QUIZ_SET_ITEMS_MAX,
+    AdminOfficialQuiz,
+    AdminQuizSetDetail,
+    AdminQuizSetList,
+    DetailCheckpoint,
+    QuizCheckResponse,
+    QuizDraftRequest,
+    QuizImportRejected,
+    QuizImportRequest,
+    QuizImportResult,
+    QuizItemIn,
+    QuizItemOrder,
+    QuizItemPatch,
+    QuizSetCreate,
+    QuizSetList,
+    QuizSetPatch,
+)
 
 KB_LOCK_WAIT_S = 2.0
 PROBE_MIN_INTERVAL_S = 10.0  # `/api/health?probe=1` re-probes the LLM at most this often
@@ -115,6 +141,8 @@ IMPORT_PATH = "/api/admin/kb/imports"
 #: P15: a comment with up to three 5 MiB files (base64 JSON). The intern route is open like every intern
 #: route; the admin route gets the larger limit only with a valid admin token.
 COMMENT_PATH_RE = re.compile(r"^/api/(admin/)?requests/[0-9a-f-]{36}/comments$")
+#: P20: the practice-quiz CSV upload (base64, file <= 200 KB) gets a 300 KB body, only with a valid admin token.
+QUIZ_IMPORT_PATH_RE = re.compile(r"^/api/admin/quiz-sets/[0-9a-f-]{36}/import$")
 # The web client is fully bundled (scripts, styles, fonts under /assets) and talks to its own origin only.
 # React style props are set through the CSSOM, which style-src 'self' allows. No CORS headers are sent.
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; "
@@ -207,6 +235,9 @@ class RequestContextMiddleware:
         comment = COMMENT_PATH_RE.match(str(scope.get("path") or "")) if scope.get("method") == "POST" else None
         if comment and (comment.group(1) is None or _admin_header_ok(scope, headers)):
             max_body = COMMENT_BODY_MAX_BYTES
+        if (scope.get("method") == "POST" and QUIZ_IMPORT_PATH_RE.match(str(scope.get("path") or ""))
+                and _admin_header_ok(scope, headers)):
+            max_body = QUIZ_IMPORT_BODY_MAX_BYTES
         too_big = error_body("payload_too_large", f"request body exceeds {max_body // 1024} KB", rid)
 
         length = headers.get(b"content-length")
@@ -546,17 +577,22 @@ def build_router() -> APIRouter:
     @r.post("/quiz/check")
     def quiz_check(body: QuizCheckRequest, request: Request, background: BackgroundTasks) -> JSONResponse:
         agent = _agent(request)
-        try:
-            res = agent.features.quiz.check(body.id, body.option, kb=agent.kb)
-        except KeyError:
-            raise ApiError("not_found", 404, f"unknown quiz id {body.id}") from None
-        except ValueError as exc:
-            raise ApiError("validation_error", 400, str(exc), "option") from None
+        if body.id.startswith("M"):  # P20: a practice-set item, only for an intern who can see the open set
+            out = check_set_answer(request, body.id, body.option, body.profile_id)
+            correct = out.correct
+        else:
+            try:
+                res = agent.features.quiz.check(body.id, body.option, kb=agent.kb)
+            except KeyError:
+                raise ApiError("not_found", 404, f"unknown quiz id {body.id}") from None
+            except ValueError as exc:
+                raise ApiError("validation_error", 400, str(exc), "option") from None
+            out, correct = res.to_schema(), res.correct
         if body.profile_id:
             store, pid = _store(request), body.profile_id
             background.add_task(_safe_store, "quiz_attempt",
-                                lambda: store.add_quiz_attempt(pid, body.id, body.option, res.correct))
-        return _json(res.to_schema())
+                                lambda: store.add_quiz_attempt(pid, body.id, body.option, correct))
+        return _json(out)
 
     # -------------------------------------------------------------------------- knowledge base
     @r.get("/kb")
@@ -779,7 +815,9 @@ def build_router() -> APIRouter:
             return row.topic if row is not None else None
 
         extra = _request_stamps(store, str(intern["id"])).get(str(intern["id"]), [])
-        return _json(interns_view.detail(intern, profiles, act, agent.features.plan, scenario_value, kb_topic, extra))
+        detail = interns_view.detail(intern, profiles, act, agent.features.plan, scenario_value, kb_topic, extra)
+        detail.checkpoints = intern_checkpoints(store, intern)  # P20: checkpoint quizzes only (D-P20-checkpoint)
+        return _json(detail)
 
     # -------------------------------------------------------------------------- mentor requests (P13.2)
     @r.get("/requests")
@@ -996,6 +1034,7 @@ def build_router() -> APIRouter:
         return _json(body)
 
     add_question_routes(r)  # P18.1 questions inbox
+    add_quiz_set_routes(r)  # P20 practice quizzes
     return r
 
 
@@ -1105,6 +1144,364 @@ def add_question_routes(r: APIRouter) -> None:
         return _json(questions_view.view(rec, _kb_source(request)))
 
 
+# ======================================================================================= practice quizzes (P20)
+def _quiz_or_503(value: Any) -> Any:
+    if value is None:
+        raise ApiError("requests_unavailable", 503, "practice quizzes are not available on this store now")
+    return value
+
+
+def _intern_of(store: Any, intern_id: str | None = None) -> dict[str, str]:
+    """profile id -> intern id for ACTIVE interns' profiles (anonymous demo profiles never count)."""
+    active = {str(i["id"]) for i in (store.list_interns() or []) if i["active"]}
+    return {str(p["id"]): str(p["intern_id"]) for p in store.intern_profiles(intern_id)
+            if str(p.get("intern_id")) in active}
+
+
+def _quiz_set_or_404(store: Any, set_id: str) -> dict[str, Any]:
+    found = _quiz_or_503(store.quiz_sets(ids=[set_id])) if re.match(PROFILE_ID_RE, set_id) else []
+    if not found:
+        raise ApiError("not_found", 404, "unknown quiz set")
+    return found[0]  # type: ignore[no-any-return]
+
+
+def _set_items(store: Any, set_id: str) -> list[dict[str, Any]]:
+    return list(_quiz_or_503(store.quiz_items(set_ids=[set_id])))
+
+
+def _own_item(store: Any, set_id: str, item_id: str) -> dict[str, Any]:
+    found = _quiz_or_503(store.quiz_items(ids=[item_id])) if re.match(QUIZ_ITEM_ID_RE, item_id) else []
+    if not found or found[0]["set_id"] != set_id:
+        raise ApiError("not_found", 404, "unknown quiz item")
+    return found[0]  # type: ignore[no-any-return]
+
+
+def _admin_set_view(store: Any, rec: dict[str, Any], items: list[dict[str, Any]],
+                    answers: list[dict[str, Any]] | None = None, intern_of: dict[str, str] | None = None) -> Any:
+    ids = [i["id"] for i in items]
+    if answers is None:
+        answers = (store.quiz_answers(ids) or []) if ids else []
+    practised = quiz_sets.interns_practised(answers, intern_of if intern_of is not None else _intern_of(store), ids)
+    return quiz_sets.admin_set(rec, len(items), practised)
+
+
+def _set_detail(request: Request, store: Any, rec: dict[str, Any]) -> AdminQuizSetDetail:
+    items = _set_items(store, rec["id"])
+    kb_row = _kb_source(request)
+    return AdminQuizSetDetail(set=_admin_set_view(store, rec, items),
+                              items=[quiz_sets.admin_item(i, kb_row) for i in items])
+
+
+def _check_interns(store: Any, intern_ids: list[str]) -> None:
+    active = {str(i["id"]) for i in (store.list_interns() or []) if i["active"]}
+    if any(i not in active for i in intern_ids):
+        raise ApiError("validation_error", 400, "choose active interns only", "intern_ids")
+
+
+def _audience_fields(fields: dict[str, Any]) -> dict[str, Any]:
+    out = quiz_sets.normalise_audience(fields)
+    if out.get("audience") == "track" and out.get("track") is None:
+        raise ApiError("validation_error", 400, "track is required when the audience is a track", "track")
+    if out.get("audience") == "interns" and not out.get("intern_ids"):
+        raise ApiError("validation_error", 400, "choose at least one intern", "intern_ids")
+    return out
+
+
+def _intern_for_profile(store: Any, profile_id: str | None) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """(active intern, profile) of a session profile id; (None, None) without one or for an anonymous profile.
+    400 for a malformed id."""
+    if not profile_id:
+        return None, None
+    if not re.match(PROFILE_ID_RE, profile_id):
+        raise ApiError("validation_error", 400, "profile_id must be a lowercase UUID", "profile_id")
+    owner = next((str(p["intern_id"]) for p in store.intern_profiles() if str(p["id"]) == profile_id), None)
+    intern = store.get_intern(owner) if owner else None
+    if not intern or not intern["active"]:
+        return None, None
+    return intern, store.get_profile(profile_id)
+
+
+def _percent(request: Request, store: Any, profile_id: str, prof: dict[str, Any] | None) -> int:
+    return _progress_of(request, store, profile_id, prof).percent if prof else 0
+
+
+def _answerable(request: Request, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Items whose cited row is still in the live KB (an item without its row cannot be explained)."""
+    kb = _agent(request).kb
+    return [i for i in items if kb.get(i["source_knowledge_id"]) is not None]
+
+
+def _open_set_items(request: Request, store: Any, set_id: str, profile_id: str | None) -> list[dict[str, Any]]:
+    """The answerable items of a set this intern can see and that is open for them (404 / 400 `progress`)."""
+    intern, prof = _intern_for_profile(store, profile_id)
+    found = (store.quiz_sets(ids=[set_id]) or []) if re.match(PROFILE_ID_RE, set_id) else []
+    if not found or not quiz_sets.visible_to(found[0], intern):
+        raise ApiError("not_found", 404, "unknown quiz set")
+    rec = found[0]
+    assert profile_id is not None
+    if not quiz_sets.is_open(rec, _percent(request, store, profile_id, prof)):
+        raise ApiError("validation_error", 400, f"reason:locked:{int(rec['opens_at_percent'])}", "progress")
+    return _answerable(request, list(store.quiz_items(set_ids=[set_id]) or []))
+
+
+def check_set_answer(request: Request, item_id: str, option: str, profile_id: str | None) -> QuizCheckResponse:
+    """`POST /api/quiz/check` for an `M` item: it must belong to a set visible and open to this intern (else 404).
+    The explanation is the cited live row."""
+    store = _store(request)
+    found = (store.quiz_items(ids=[item_id]) or []) if profile_id else []
+    if not found:
+        raise ApiError("not_found", 404, f"unknown quiz id {item_id}")
+    item = found[0]
+    try:
+        allowed = {i["id"] for i in _open_set_items(request, store, item["set_id"], profile_id)}
+    except ApiError:
+        raise ApiError("not_found", 404, f"unknown quiz id {item_id}") from None
+    row = _agent(request).kb.get(item["source_knowledge_id"])
+    if item_id not in allowed or row is None:
+        raise ApiError("not_found", 404, f"unknown quiz id {item_id}")
+    return QuizResult(correct=option == item["correct_option"], correct_option=item["correct_option"],
+                      explanation_row=row).to_schema()
+
+
+def intern_checkpoints(store: Any, intern: dict[str, Any]) -> list[DetailCheckpoint]:
+    """D-P20-checkpoint: this intern's CHECKPOINT sets (published for them, or answered by them), first answers
+    only. Practice sets and the official quiz never appear. [] when the quiz tables are unavailable."""
+    sets = [s for s in (store.quiz_sets() or []) if s.get("mode") == "checkpoint"]
+    if not sets:
+        return []
+    items = store.quiz_items(set_ids=[s["id"] for s in sets]) or []
+    by_set: dict[str, list[str]] = {}
+    for i in items:
+        by_set.setdefault(i["set_id"], []).append(i["id"])
+    iid = str(intern["id"])
+    mine = _intern_of(store, iid)
+    first = quiz_sets.first_answers(store.quiz_answers([i["id"] for i in items]) or [] if items else [], mine)
+    out = []
+    for s in reversed(sets):  # oldest first
+        ids = by_set.get(s["id"], [])
+        answered, right, finished = quiz_sets.checkpoint_counts(iid, ids, first)
+        if answered or (s["status"] == "published" and quiz_sets.in_audience(s, intern)):
+            out.append(DetailCheckpoint(set_id=s["id"], title_ar=s["title_ar"], title_en=s.get("title_en"),
+                                        answered=answered, first_attempt_right=right, total=len(ids),
+                                        finished_at=finished))
+    return out
+
+
+def add_quiz_set_routes(r: APIRouter) -> None:
+    """Admin: practice sets (CRUD, items with the grounding check, model draft, CSV import, anonymous signals,
+    checkpoint results). Intern: the official quiz plus the published sets for them, opening by progress."""
+
+    # ---------------------------------------------------------------- admin
+    @r.get("/admin/quiz-sets", dependencies=ADMIN_ONLY)
+    def admin_quiz_sets(request: Request) -> JSONResponse:
+        store = _store(request)
+        sets = _quiz_or_503(store.quiz_sets())
+        items = _quiz_or_503(store.quiz_items()) if sets else []
+        official_ids = _agent(request).features.quiz.ids()
+        answers = store.quiz_answers([i["id"] for i in items] + official_ids) or []
+        intern_of = _intern_of(store)
+        by_set: dict[str, list[dict[str, Any]]] = {}
+        for i in items:
+            by_set.setdefault(i["set_id"], []).append(i)
+        views = [_admin_set_view(store, s, by_set.get(s["id"], []), answers, intern_of) for s in sets]
+        official = AdminOfficialQuiz(id="official", title_ar=OFFICIAL_QUIZ_TITLE_AR, title_en=OFFICIAL_QUIZ_TITLE_EN,
+                                     item_count=len(official_ids),
+                                     interns_practised=quiz_sets.interns_practised(answers, intern_of, official_ids))
+        return _json(AdminQuizSetList(sets=views, official=official))
+
+    @r.post("/admin/quiz-sets", status_code=201, dependencies=ADMIN_ONLY)
+    def admin_quiz_set_add(body: QuizSetCreate, request: Request) -> JSONResponse:
+        store = _store(request)
+        fields = _audience_fields(body.model_dump())
+        quiz_sets.check_titles(fields)
+        _check_interns(store, fields["intern_ids"])
+        rec = _quiz_or_503(store.quiz_set_create({**fields, "status": "draft"}))
+        log_event("quiz_set_added", request_id=_rid(request), audience=body.audience, mode=body.mode)
+        return _json(quiz_sets.admin_set(rec, 0, 0), 201)
+
+    @r.patch("/admin/quiz-sets/{set_id}", dependencies=ADMIN_ONLY)
+    def admin_quiz_set_edit(set_id: str, body: QuizSetPatch, request: Request) -> JSONResponse:
+        store = _store(request)
+        cur = _quiz_set_or_404(store, set_id)
+        changes = body.changes()
+        merged = _audience_fields({**{k: cur.get(k) for k in QUIZ_SET_FIELDS}, **changes})
+        quiz_sets.check_titles(changes)
+        if "intern_ids" in changes:
+            _check_interns(store, merged["intern_ids"])
+        items = _set_items(store, set_id)
+        if merged["status"] == "published" and not items:
+            raise ApiError("validation_error", 400, "add at least one question before publishing", "status")
+        if merged["mode"] != cur.get("mode") and items and (store.quiz_answers([i["id"] for i in items]) or []):
+            raise ApiError("validation_error", 400, "the mode cannot change after interns answered", "mode")
+        update = {k: merged[k] for k in QUIZ_SET_FIELDS if merged[k] != cur.get(k)}
+        rec = _quiz_or_503(store.quiz_set_update(set_id, update)) if update else cur
+        if not rec:
+            raise ApiError("not_found", 404, "unknown quiz set")
+        log_event("quiz_set_updated", request_id=_rid(request), fields=sorted(update))
+        return _json(_admin_set_view(store, rec, items))
+
+    @r.delete("/admin/quiz-sets/{set_id}", status_code=204, dependencies=ADMIN_ONLY)
+    def admin_quiz_set_delete(set_id: str, request: Request) -> Response:
+        store = _store(request)
+        _quiz_set_or_404(store, set_id)
+        if not _quiz_or_503(store.quiz_set_delete(set_id)):
+            raise ApiError("not_found", 404, "unknown quiz set")
+        log_event("quiz_set_deleted", request_id=_rid(request))
+        return Response(status_code=204)
+
+    @r.post("/admin/quiz-sets/draft", dependencies=ADMIN_ONLY)
+    def admin_quiz_draft(body: QuizDraftRequest, request: Request) -> JSONResponse:
+        agent = _agent(request)
+        row = agent.kb.get(body.source_knowledge_id)
+        if row is None:
+            raise ApiError("validation_error", 400, "reason:unknown_row", "source_knowledge_id")
+        llm = agent.llm
+        if not agent.llm_on() or llm is None or llm.chat is None:
+            raise ApiError("imports_unavailable", 503, "reason:llm_unavailable")
+        llm.chat.last_error = None
+        draft, why = quiz_sets.draft_question(row, llm.chat, llm.escalation)
+        agent._note_hard_failure()  # a 401/402 turns the LLM off for the next requests, as a chat turn does
+        log_event("quiz_draft", request_id=_rid(request), ok=draft is not None, reason=why or None)
+        if draft is None:
+            unavailable = why in ("no_llm", "no_key", "offline", "budget_exhausted")
+            raise ApiError("imports_unavailable", 503, "reason:llm_unavailable" if unavailable else "reason:draft_failed")
+        return _json(draft)
+
+    @r.get("/admin/quiz-sets/{set_id}", dependencies=ADMIN_ONLY)
+    def admin_quiz_set_get(set_id: str, request: Request) -> JSONResponse:
+        store = _store(request)
+        return _json(_set_detail(request, store, _quiz_set_or_404(store, set_id)))
+
+    @r.post("/admin/quiz-sets/{set_id}/items", status_code=201, dependencies=ADMIN_ONLY)
+    def admin_quiz_item_add(set_id: str, body: QuizItemIn, request: Request) -> JSONResponse:
+        store = _store(request)
+        _quiz_set_or_404(store, set_id)
+        if len(_set_items(store, set_id)) >= QUIZ_SET_ITEMS_MAX:
+            raise ApiError("validation_error", 400, "reason:set_full", "items")
+        quiz_sets.raise_first(quiz_sets.check_item(body.model_dump(), _agent(request).kb))
+        added = _quiz_or_503(store.quiz_items_add(set_id, [quiz_sets.item_fields(
+            body.question_ar, body.options, body.correct_option, body.source_knowledge_id, body.origin)]))
+        log_event("quiz_item_added", request_id=_rid(request), origin=body.origin)
+        return _json(quiz_sets.admin_item(added[0], _kb_source(request)), 201)
+
+    @r.patch("/admin/quiz-sets/{set_id}/items/{item_id}", dependencies=ADMIN_ONLY)
+    def admin_quiz_item_edit(set_id: str, item_id: str, body: QuizItemPatch, request: Request) -> JSONResponse:
+        store = _store(request)
+        _quiz_set_or_404(store, set_id)
+        cur = _own_item(store, set_id, item_id)
+        merged = {**quiz_sets.item_as_input(cur), **body.changes()}
+        quiz_sets.raise_first(quiz_sets.check_item(merged, _agent(request).kb))
+        rec = _quiz_or_503(store.quiz_item_update(item_id, quiz_sets.item_fields(
+            merged["question_ar"], merged["options"], merged["correct_option"], merged["source_knowledge_id"],
+            merged["origin"])))
+        if not rec:
+            raise ApiError("not_found", 404, "unknown quiz item")
+        log_event("quiz_item_updated", request_id=_rid(request), fields=sorted(body.model_fields_set))
+        return _json(quiz_sets.admin_item(rec, _kb_source(request)))
+
+    @r.delete("/admin/quiz-sets/{set_id}/items/{item_id}", status_code=204, dependencies=ADMIN_ONLY)
+    def admin_quiz_item_delete(set_id: str, item_id: str, request: Request) -> Response:
+        store = _store(request)
+        _quiz_set_or_404(store, set_id)
+        _own_item(store, set_id, item_id)
+        if not _quiz_or_503(store.quiz_item_delete(item_id)):
+            raise ApiError("not_found", 404, "unknown quiz item")
+        log_event("quiz_item_deleted", request_id=_rid(request))
+        return Response(status_code=204)
+
+    @r.post("/admin/quiz-sets/{set_id}/items/order", dependencies=ADMIN_ONLY)
+    def admin_quiz_items_order(set_id: str, body: QuizItemOrder, request: Request) -> JSONResponse:
+        store = _store(request)
+        rec = _quiz_set_or_404(store, set_id)
+        if not _quiz_or_503(store.quiz_items_order(set_id, list(body.ids))):
+            raise ApiError("validation_error", 400, "send every item id of the set exactly once", "ids")
+        return _json(_set_detail(request, store, rec))
+
+    @r.post("/admin/quiz-sets/{set_id}/import", dependencies=ADMIN_ONLY)
+    def admin_quiz_import(set_id: str, body: QuizImportRequest, request: Request) -> JSONResponse:
+        store = _store(request)
+        _quiz_set_or_404(store, set_id)
+        lines = quiz_sets.parse_csv(quiz_sets.decode_csv(body.content_b64))
+        room = QUIZ_SET_ITEMS_MAX - len(_set_items(store, set_id))
+        kb = _agent(request).kb
+        accepted: list[dict[str, Any]] = []
+        rejected: list[QuizImportRejected] = []
+        for line, item in lines:
+            issues = quiz_sets.check_item(item, kb) if item is not None else [quiz_sets.Issue("line", "invalid")]
+            if issues:
+                rejected.append(QuizImportRejected(line=line, reason=issues[0].reason))  # type: ignore[arg-type]
+            elif len(accepted) >= room:
+                rejected.append(QuizImportRejected(line=line, reason="set_full"))
+            else:
+                assert item is not None
+                accepted.append(quiz_sets.item_fields(item["question_ar"], item["options"], item["correct_option"],
+                                                      item["source_knowledge_id"], "csv"))
+        added = _quiz_or_503(store.quiz_items_add(set_id, accepted)) if accepted else []
+        log_event("quiz_import", request_id=_rid(request), added=len(added), rejected=len(rejected))
+        kb_row = _kb_source(request)
+        return _json(QuizImportResult(added=[quiz_sets.admin_item(i, kb_row) for i in added], rejected=rejected))
+
+    @r.get("/admin/quiz-sets/{set_id}/signals", dependencies=ADMIN_ONLY)
+    def admin_quiz_signals(set_id: str, request: Request) -> JSONResponse:
+        """Anonymous content signals (>= 3 interns, first answer per intern). Never a per-intern result."""
+        store = _store(request)
+        if set_id == OFFICIAL_QUIZ_SET_ID:
+            questions = [(i.id, i.question_ar, i.source_knowledge_id)
+                         for i in _agent(request).features.quiz.quiz_for(None)]
+        else:
+            _quiz_set_or_404(store, set_id)
+            questions = [(i["id"], i["question_ar"], i["source_knowledge_id"]) for i in _set_items(store, set_id)]
+        ids = [q[0] for q in questions]
+        answers = _quiz_or_503(store.quiz_answers(ids)) if ids else []
+        return _json(quiz_sets.signals(set_id, questions, answers, _intern_of(store)))
+
+    @r.get("/admin/quiz-sets/{set_id}/results", dependencies=ADMIN_ONLY)
+    def admin_checkpoint_results(set_id: str, request: Request) -> JSONResponse:
+        """D-P20-checkpoint: first answer per question for every intern in a CHECKPOINT set's audience."""
+        store = _store(request)
+        rec = _quiz_set_or_404(store, set_id)
+        if rec.get("mode") != "checkpoint":
+            raise ApiError("validation_error", 400, "results are shared only for checkpoint quizzes", "mode")
+        ids = [i["id"] for i in _set_items(store, set_id)]
+        answers = _quiz_or_503(store.quiz_answers(ids)) if ids else []
+        first = quiz_sets.first_answers(answers, _intern_of(store))
+        return _json(quiz_sets.checkpoint_results(rec, ids, store.list_interns() or [], first))
+
+    # ---------------------------------------------------------------- intern
+    @r.get("/quiz-sets")
+    def quiz_sets_own(request: Request, profile_id: str | None = None) -> JSONResponse:
+        """The official quiz, then the published sets for this intern (oldest first) with open/locked."""
+        store = _store(request)
+        intern, prof = _intern_for_profile(store, profile_id)
+        out = [quiz_sets.official_summary(len(_agent(request).features.quiz.ids()))]
+        if intern is not None and profile_id:
+            visible = [s for s in reversed(store.quiz_sets() or []) if quiz_sets.visible_to(s, intern)]
+            items = (store.quiz_items(set_ids=[s["id"] for s in visible]) or []) if visible else []
+            items = _answerable(request, items)
+            percent = _percent(request, store, profile_id, prof)
+            for s in visible:
+                count = sum(1 for i in items if i["set_id"] == s["id"])
+                if count:
+                    out.append(quiz_sets.set_summary(s, count, percent))
+        return _json(QuizSetList(sets=out))
+
+    @r.get("/quiz-sets/{set_id}")
+    def quiz_set_items(set_id: str, request: Request, profile_id: str | None = None) -> JSONResponse:
+        store = _store(request)
+        if set_id == OFFICIAL_QUIZ_SET_ID:
+            _, prof = _intern_for_profile(store, profile_id)
+            role = prof.get("role") if prof and prof.get("role") in ROLES else None
+            f = _agent(request).features
+            first = ([ref for a in f.plan.activities_of(role, "Day 30") for ref in a.refs if ref.startswith("Q")]
+                     if role else None)
+            official = f.quiz.quiz_for(role, first_ids=first)
+            return _json(QuizResponse(items=[i.to_schema() for i in official], label_ar=QUIZ_LABEL_AR))
+        items = _open_set_items(request, store, set_id, profile_id)
+        if not items:
+            raise ApiError("not_found", 404, "unknown quiz set")
+        return _json(QuizResponse(items=[quiz_sets.intern_item(i) for i in items], label_ar=QUIZ_LABEL_AR))
+
+
 def install_api(app: FastAPI) -> None:
     """Middleware, error handlers and every `/api` route (call before mounting the web client)."""
     app.add_middleware(RequestContextMiddleware)
@@ -1112,5 +1509,5 @@ def install_api(app: FastAPI) -> None:
     app.include_router(build_router())
 
 
-__all__ = ["COMMENT_PATH_RE", "CSP", "IMPORT_PATH", "KB_LOCK_WAIT_S", "SECURITY_HEADERS", "RequestContextMiddleware", "build_router", "error_body", "install_api",
+__all__ = ["COMMENT_PATH_RE", "QUIZ_IMPORT_PATH_RE", "add_quiz_set_routes", "CSP", "IMPORT_PATH", "KB_LOCK_WAIT_S", "SECURITY_HEADERS", "RequestContextMiddleware", "build_router", "error_body", "install_api",
            "validation_field", "wait_for_reindex"]

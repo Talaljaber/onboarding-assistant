@@ -92,6 +92,13 @@ With a key, per message, at most:
   contain; lengths; merges only between neighbours on the same page within 600 characters) before use,
   and a reply is cached only when every value passed. Without the tick nothing about the document leaves
   the laptop;
+- **practice-quiz draft «صياغة مسودة بمساعدة الذكاء الاصطناعي» (P20; admin only, only when the admin presses it,
+  only in AI mode):** one knowledge-base row (its id, topic and Arabic text). Nothing about interns, the set, its
+  audience or other questions. Flash drafts one Arabic question with three options; the server checks it (the cited
+  row only; every number of the question and the correct option in the row; the correct option mostly the row's own
+  words; no other option answerable from the row; no phone, email, link or honorific name) and, only if it fails,
+  makes one call to GLM-5.3. Only a draft that passed is cached and shown, labelled as a model draft to review; it
+  is never stored until the admin edits and saves it;
 - **document import title detection (P13.4; same tick, same warning, only in AI mode, only for `.pdf` and
   `.txt` files and a `.docx` without any Word heading):** before the passages are made, the document's text
   lines, each with a line number and its page, at most 200 lines per call (a line longer than 160 characters
@@ -137,13 +144,14 @@ policies for anonymous or signed-in clients.
 | `interns` | a fictional demo intern's Arabic and optional English name, track, active flag, created/updated time (added and edited by the admin; names that look like an email or phone are rejected) |
 | `profiles` | one per intern and track: the intern link, a generated label such as «متدرب ١» and the track. Older anonymous profiles (no intern) are removed by `scripts/purge_demo_profiles.py` |
 | `progress` | profile id, activity id, time |
-| `quiz_attempts` | profile id, question id, option chosen, correct or not |
+| `quiz_attempts` | profile id, question id (official `Q01`–`Q05`, or a practice-set item `M001`…), option chosen, correct or not |
+| `quiz_sets`, `quiz_set_items` (P20) | practice quizzes written by the admin: title (Arabic, optional English), audience (everyone, a track or chosen interns' ids), the plan progress at which it opens, draft/published, mode (practice or checkpoint); and per question the text, three options, the correct option, the cited K id and how it was written (typed, model draft, CSV line). No intern result is stored here (migration `0009_quiz_sets.sql`) |
 | `scenario_attempts` | profile id, scenario id, mode, option id, checklist ids met and missing, value label. **No free text** |
 | `turn_logs` | request id, profile id (if any), time, tool, mode, status, band, cited ids, verifier result and reason, latency, cached, model. **No message text, no answer text** |
 | `mentor_request_comments`, `mentor_request_files` (P15) | replies on a mentor request, both ways: author (intern or admin), text, time; and per attached file its name, type (PDF, Word, PNG or JPEG), size, sha256 and storage key (migration `0005_request_comments.sql`) |
 | `interns.email`, `mail_log` (P18.2) | the intern's email address (optional, entered by the admin; shown in the admin views only); per email sent, failed or skipped: event, recipient address, subject, status, a short error code and time. **No email body, no password** (migration `0007_email.sql`) |
 | Storage bucket `mentor-files` (P15, **private**) | the bytes of files attached to those replies (at most 3 per reply, 5 MB each), at `requests/{request id}/{file id}` |
-| `mentor_questions` (P18.1) | a question the intern **chose** to send to the mentor (Rumour Check or a chat refusal): intern id, source (check or chat), the text exactly as sent (≤ 600), status (open, answered, dismissed), the answer's K id or (P18.5) the mentor's private reply text (≤ 600), times (migrations `0006_questions.sql`, `0008_private_answers.sql`) |
+| `mentor_questions` (P18.1) | a question the intern **chose** to send to the mentor (Rumour Check, a chat refusal or, P20, «اسأل مشرفي عن هذا» after a wrong practice-quiz answer): intern id, source (check, chat or quiz), the text exactly as sent (≤ 600), status (open, answered, dismissed), the answer's K id or (P18.5) the mentor's private reply text (≤ 600), times (migrations `0006_questions.sql`, `0008_private_answers.sql`) |
 
 The store code refuses any turn log with a message, answer, text, prompt or reply field.
 
@@ -196,7 +204,8 @@ chat thread. «امسح بيانات هذا المتصفح» on the «حول و�
   service, a chat request (which carries the profile id only), a turn log or generated text.
 - The admin's interns list and detail page show completion, activities with their completion dates,
   scenarios practised, quiz questions answered per day, chat question counts and the K-rows cited, and a
-  timeline. No correctness and no scores (quiz attempts are stored with correctness but it is never shown),
+  timeline. No correctness and no scores (quiz attempts are stored with correctness but it is never shown;
+  the one exception is a checkpoint quiz, below),
   and never chat text (turn logs hold ids only), under the label
   «متدربون للعرض بأسماء افتراضية — أعداد الإكمال والتدريب فقط، ليست تقييماً».
 - Knowledge-base editing and the interns screens are admin only: one shared admin password
@@ -254,3 +263,26 @@ invented a contact. The earlier held-out 1 run, before the panel, gave offline 2
 - No sync between the local fallback and Supabase.
 - The Supabase project's region is still to be confirmed.
 - 18 rows only. The assistant is not an HR system and does not replace HR.
+
+## 8. Practice quizzes and checkpoints (P20)
+
+- **What the admin writes is stored**: the quiz sets and their questions (`quiz_sets`, `quiz_set_items`). Every
+  question cites one knowledge-base row and passes the same server check whether it was typed, drafted by the model
+  or uploaded as a CSV line (the row exists; lengths; three different options; no phone, email or link; every
+  number of the question and the correct option is in the row).
+- **Attempts are stored as before** (`quiz_attempts`: profile id, question id, option, correct or not), for the
+  official quiz and the admin's sets alike.
+- **Practice results stay with the intern.** For the official quiz and every practice set the admin sees only
+  practice counts (who practised, how many questions answered), never who got what right. The content signals
+  («إشارات المحتوى — ليست تقييماً للأداء») are **anonymous**: per question, how many interns tried it and the share
+  whose first answer was wrong, shown only when at least 3 interns tried it, with no names and no profile ids. They
+  are there to improve how knowledge rows and questions are written, not to judge anyone.
+- **Checkpoint quizzes (owner decision D-P20-checkpoint).** The admin may mark a set as a checkpoint. Then, and only
+  then, each intern's **first** answer to each question is shown to the admin (questions answered, right at the first
+  attempt, total, when finished), on the set's results and on that intern's detail page. **The intern is told before
+  starting** that the first answer is shared with the mentor; later answers are practice and never change the shared
+  result. A set's mode cannot change once anyone has answered one of its questions, so a practice answer never
+  becomes a shared result. The official quiz is always practice. This is a learning check for the mentor's
+  follow-up, not an employment evaluation (the real probation review in K14 belongs to HR).
+- An intern sees only the published sets for them (everyone, their track or chosen interns), opening when their
+  suggested-plan progress reaches the set's level; the correct option is never sent before they answer.

@@ -67,10 +67,26 @@ from app.store.base import (  # P18.1 questions inbox
     question_record,
     question_row,
 )
+from app.store.base import (  # P20 practice quizzes
+    ITEM_ID_RE,
+    QUIZ_ITEM_COLUMNS,
+    QUIZ_ITEM_ID_RE,
+    QUIZ_SET_COLUMNS,
+    next_item_ids,
+    quiz_answer_row,
+    quiz_item_changes,
+    quiz_item_input,
+    quiz_item_row,
+    quiz_set_changes,
+    quiz_set_record,
+    quiz_set_row,
+)
 from app.store.local import LocalStore
 
 T = TypeVar("T")
 _QUESTION_SELECT = ",".join(QUESTION_COLUMNS)  # P18.1
+_QUIZ_SET_SELECT = ",".join(QUIZ_SET_COLUMNS)  # P20
+_QUIZ_ITEM_SELECT = ",".join(QUIZ_ITEM_COLUMNS)  # P20
 
 REST_PATH = "/rest/v1"
 CALL_TIMEOUT_S = 3.0
@@ -1036,3 +1052,196 @@ class SupabaseStore:
             return question_row(data[0])
 
         return self._imports("mentor_question_update", remote, lambda s: s.mentor_question_update(qid, changes), None)
+
+    # Practice quizzes (P20) ------------------------------------------------------------------------
+    # Like the requests table: never flips to the LocalStore. Without migration 0009 (PostgREST 404) or on a failing
+    # call only the quiz-set routes are unavailable (None -> 503); the official quiz and everything else keep working.
+
+    def quiz_sets(self, ids: list[str] | None = None) -> list[dict[str, Any]] | None:
+        params = {"select": _QUIZ_SET_SELECT, "order": "created_at.desc"}
+        if ids is not None:
+            clean = [i for i in (valid_uuid(x) for x in ids) if i]
+            if not clean:
+                return []
+            params["id"] = f"in.{_in_list(clean[:_IN_CHUNK])}"
+
+        def remote() -> list[dict[str, Any]] | None:
+            rows = [quiz_set_row(r) for r in self._list("quiz_sets", params)]
+            return sorted(rows, key=lambda r: r["created_at"], reverse=True)
+
+        return self._imports("quiz_sets", remote, lambda s: s.quiz_sets(ids), None)
+
+    def quiz_set_create(self, record: dict[str, Any]) -> dict[str, Any] | None:
+        rec = quiz_set_record(record)
+        if rec is None:
+            log_event("store_rejected", store="supabase", op="quiz_set_create", reason="invalid_input")
+            return None
+
+        def remote() -> dict[str, Any] | None:
+            self._req("POST", "quiz_sets", json=rec, prefer="return=minimal")
+            return quiz_set_row(rec)
+
+        return self._imports("quiz_set_create", remote, lambda s: s.quiz_set_create(rec), None)
+
+    def quiz_set_update(self, set_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        sid = valid_uuid(set_id)
+        if sid is None:
+            return {}
+
+        def remote() -> dict[str, Any] | None:
+            found = self._list("quiz_sets", {"select": _QUIZ_SET_SELECT, "id": f"eq.{sid}"})
+            if not found:
+                return {}
+            clean = quiz_set_changes(changes, quiz_set_row(found[0]))
+            if clean is None:
+                log_event("store_rejected", store="supabase", op="quiz_set_update", reason="invalid_input")
+                return None
+            data = self._req("PATCH", "quiz_sets", params={"select": _QUIZ_SET_SELECT, "id": f"eq.{sid}"},
+                             json=clean, prefer="return=representation")
+            if not isinstance(data, list) or not data:
+                raise TypeError("quiz_sets: expected the updated row")
+            return quiz_set_row(data[0])
+
+        return self._imports("quiz_set_update", remote, lambda s: s.quiz_set_update(sid, changes), None)
+
+    def quiz_set_delete(self, set_id: str) -> bool | None:
+        sid = valid_uuid(set_id)
+        if sid is None:
+            return False
+
+        def remote() -> bool | None:
+            gone = self._req("DELETE", "quiz_sets", params={"id": f"eq.{sid}"}, prefer="return=representation")
+            return isinstance(gone, list) and len(gone) > 0  # its items cascade
+
+        return self._imports("quiz_set_delete", remote, lambda s: s.quiz_set_delete(sid), None)
+
+    def quiz_items(
+        self, *, set_ids: list[str] | None = None, ids: list[str] | None = None
+    ) -> list[dict[str, Any]] | None:
+        params = {"select": _QUIZ_ITEM_SELECT, "order": "set_id.asc,position.asc,id.asc"}
+        if set_ids is not None:
+            clean = [i for i in (valid_uuid(x) for x in set_ids) if i]
+            if not clean:
+                return []
+            params["set_id"] = f"in.{_in_list(clean[:_IN_CHUNK])}"
+        if ids is not None:
+            item_ids = [i for i in ids if isinstance(i, str) and QUIZ_ITEM_ID_RE.match(i)]
+            if not item_ids:
+                return []
+            params["id"] = f"in.{_in_list(item_ids[:_IN_CHUNK])}"
+
+        def remote() -> list[dict[str, Any]] | None:
+            rows = [quiz_item_row(r) for r in self._list("quiz_set_items", params)]
+            return sorted(rows, key=lambda r: (r["set_id"], r["position"], r["id"]))
+
+        return self._imports("quiz_items", remote, lambda s: s.quiz_items(set_ids=set_ids, ids=ids), None)
+
+    def _next_quiz_rows(self, sid: str, fields: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+        used: list[object] = [r.get("id") for r in self._list("quiz_set_items", {"select": "id"})]
+        used += [r.get("question_id") for r in self._list("quiz_attempts", {
+            "select": "question_id", "question_id": "like.M*", "order": "question_id.desc", "limit": "1"})]
+        new_ids = next_item_ids(used, len(fields))
+        if new_ids is None:
+            return None
+        mine = self._list("quiz_set_items", {"select": "position", "set_id": f"eq.{sid}"})
+        start = max((int(r.get("position") or 0) for r in mine), default=-1)
+        at = now_iso()
+        return [{**f, "id": new_ids[n], "set_id": sid, "position": start + 1 + n, "created_at": at}
+                for n, f in enumerate(fields)]
+
+    def quiz_items_add(self, set_id: str, records: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+        sid = valid_uuid(set_id)
+        fields = [quiz_item_input(r) for r in records]
+        clean = [f for f in fields if f is not None]
+        if sid is None or not fields or len(clean) != len(fields):
+            log_event("store_rejected", store="supabase", op="quiz_items_add", reason="invalid_input")
+            return None
+
+        def remote() -> list[dict[str, Any]] | None:
+            if not self._list("quiz_sets", {"select": "id", "id": f"eq.{sid}"}):
+                return None
+            for attempt in (1, 2):  # a second admin may take the same ids first (409): count again once
+                rows = self._next_quiz_rows(sid, clean)
+                if rows is None:
+                    return None
+                try:
+                    self._req("POST", "quiz_set_items", json=rows, prefer="return=minimal")
+                    return [quiz_item_row(r) for r in rows]
+                except _Conflict:
+                    if attempt == 2:
+                        raise
+            return None
+
+        return self._imports("quiz_items_add", remote, lambda s: s.quiz_items_add(sid, records), None)
+
+    def quiz_item_update(self, item_id: str, changes: dict[str, Any]) -> dict[str, Any] | None:
+        if not QUIZ_ITEM_ID_RE.match(item_id or ""):
+            return {}
+        clean = quiz_item_changes(changes)
+        if clean is None:
+            log_event("store_rejected", store="supabase", op="quiz_item_update", reason="invalid_input")
+            return None
+
+        def remote() -> dict[str, Any] | None:
+            data = self._req("PATCH", "quiz_set_items", params={"select": _QUIZ_ITEM_SELECT, "id": f"eq.{item_id}"},
+                             json=clean, prefer="return=representation")
+            if not isinstance(data, list):
+                raise TypeError("quiz_set_items: expected a list")
+            return quiz_item_row(data[0]) if data else {}
+
+        return self._imports("quiz_item_update", remote, lambda s: s.quiz_item_update(item_id, changes), None)
+
+    def _renumber(self, sid: str, ids: list[str]) -> None:
+        for n, iid in enumerate(ids):
+            self._req("PATCH", "quiz_set_items", params={"id": f"eq.{iid}", "set_id": f"eq.{sid}"},
+                      json={"position": n}, prefer="return=minimal")
+
+    def quiz_item_delete(self, item_id: str) -> bool | None:
+        if not QUIZ_ITEM_ID_RE.match(item_id or ""):
+            return False
+
+        def remote() -> bool | None:
+            gone = self._req("DELETE", "quiz_set_items", params={"id": f"eq.{item_id}"},
+                             prefer="return=representation")
+            if not isinstance(gone, list) or not gone:
+                return False
+            sid = str(gone[0].get("set_id"))
+            rest = sorted(self._list("quiz_set_items", {"select": "id,position", "set_id": f"eq.{sid}"}),
+                          key=lambda r: (int(r.get("position") or 0), str(r.get("id"))))
+            self._renumber(sid, [str(r["id"]) for r in rest])
+            return True
+
+        return self._imports("quiz_item_delete", remote, lambda s: s.quiz_item_delete(item_id), None)
+
+    def quiz_items_order(self, set_id: str, ids: list[str]) -> bool | None:
+        sid = valid_uuid(set_id)
+        if sid is None:
+            return False
+
+        def remote() -> bool | None:
+            have = [str(r["id"]) for r in self._list("quiz_set_items", {"select": "id", "set_id": f"eq.{sid}"})]
+            if sorted(have) != sorted(ids) or len(set(ids)) != len(ids):
+                return False
+            self._renumber(sid, list(ids))
+            return True
+
+        return self._imports("quiz_items_order", remote, lambda s: s.quiz_items_order(sid, ids), None)
+
+    def quiz_answers(self, question_ids: list[str]) -> list[dict[str, Any]] | None:
+        qids = sorted({q for q in question_ids if isinstance(q, str) and ITEM_ID_RE.match(q)})
+        if not qids:
+            return []
+
+        def remote() -> list[dict[str, Any]] | None:
+            out: list[dict[str, Any]] = []
+            for n in range(0, len(qids), _IN_CHUNK):
+                for page in range(_METRICS_MAX_PAGES):
+                    rows = self._list("quiz_attempts", {
+                        "select": "profile_id,question_id,correct,at", "question_id": f"in.{_in_list(qids[n:n + _IN_CHUNK])}",
+                        "order": "at.asc,id.asc", "limit": str(_PAGE), "offset": str(page * _PAGE)})
+                    out += [quiz_answer_row(r) for r in rows]
+                    if len(rows) < _PAGE:
+                        break
+            return out  # app.quiz_sets orders by the parsed time
+
+        return self._imports("quiz_answers", remote, lambda s: s.quiz_answers(qids), None)
