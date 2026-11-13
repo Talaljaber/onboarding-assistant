@@ -1,12 +1,12 @@
 # Render blueprint for the API (FastAPI). Netlify serves the web client and forwards /api/* here
 # (netlify.toml). Secrets are typed into the Render dashboard (sync: false), never committed.
-# Free plan: the server sleeps after 15 idle minutes (first request ~1 min) and outbound SMTP is
-# blocked, so emails and deadline reminders need a paid instance.
+# Starter plan: always on (the reminder loop keeps running) and outbound SMTP is allowed, so the
+# Gmail notifications and deadline reminders work. The free plan would block both.
 services:
   - type: web
     name: dada-academy-api
     runtime: python
-    plan: free
+    plan: starter
     region: frankfurt
     buildCommand: pip install -r requirements.txt
     startCommand: python -m app
