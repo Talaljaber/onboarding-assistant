@@ -17,3 +17,7 @@ __pycache__/
 .claude/settings.local.json
 .mcp.json
 results/redteam_*.csv
+
+# Local working notes, not published
+CLAUDE.md
+.claude/

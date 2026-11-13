@@ -219,7 +219,8 @@ chat thread. «امسح بيانات هذا المتصفح» on the «حول و�
 - Knowledge-base editing and the interns screens are admin only: one shared admin password
   (`ADMIN_PASSWORD`, demo default `dada2026`) gives a signed token that expires (8 h) and dies with a
   server restart. Employees never sign in and no account or personal data is stored for the admin.
-  The server listens on `127.0.0.1` only and refuses write requests that come from another website.
+  Run locally, the server listens on `127.0.0.1` only. In the hosted demo (Render + Netlify) it is public; in both
+  cases it refuses write requests from other websites, except front ends listed in `ALLOWED_ORIGINS`.
 - The assistant does not make or predict employment decisions (probation outcome, pay, firing,
   promotion). Those questions get a fixed reply that points to HR when the guard patterns match them
   (each held-out set: 5 of 7 guard questions handled as expected).

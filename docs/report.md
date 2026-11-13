@@ -1,115 +1,136 @@
-# Dada Academy onboarding assistant: technical report
+# Dada Academy: Technical Report
+
+**Arabic-first onboarding assistant for a new employee's first 90 days at Dada Group**
+**Live demo:** https://dada-academy.netlify.app (admin password `dada2026`) · **Source:** github.com/Talaljaber/onboarding-assistant
 
 ## 1. Problem and approach
+New employees need answers they can trust, and a mentor needs to follow their progress without micromanaging. Dada Academy answers questions **only from the company's approved knowledge base**, cites the source row word for word, and gives a fixed refusal when no row supports an answer.
 
-New employees need answers they can trust. Every answer cites knowledge-base rows verbatim;
-unsupported questions get a fixed refusal or "not confirmed"; generated text may not add contacts, links or numbers;
-scenario feedback is never a score; the plan is "suggested".
-
-Design rule: **the server decides, the model words.** Guards, a hybrid retriever and validated tools
-decide; an optional language model chooses tools and phrases answers; a server verifier accepts or
-drops every reply. Without a key the app runs fully offline.
+Design rule: **the server decides, the model only words the answer.**
+- Guards, a hybrid retriever and validated tools decide what happens.
+- An optional language model chooses tools and phrases replies.
+- A server-side verifier accepts or drops every model reply.
+- Without an API key the whole app runs offline.
 
 ## 2. Architecture
-
 ```
-Browser (React, RTL, hash routes) -- JSON API --> FastAPI on 127.0.0.1
-                                                 |
- Agent.turn: 1 guards (employment, contact; injection flagged)
-             2 tool choice: LLM agent_v1 -> validate_args
-               (invalid or disallowed -> rule router; offline: router)
-             3 server runs the tool
-                answer_from_rows: e5 + BM25 -> RRF -> margin band
-                  offline: row verbatim | "not confirmed" + row | refusal
-                  AI panel: flash sanitizer || answerer -> verifier
-                      -> citation judge || coverage judge
-                      both agree, conf >= 0.7: send | else GLM-5.3
-                      -> verifier; fail: offline result
-                start/give feedback/end scenario, propose progress,
-                show plan, start quiz, greet, refuse
-             4 reply + sources + trace ("How I answered")
- Store: Supabase (KB + history, demo profiles, progress, attempts,
-        turn logs without text) | local SQLite fallback
+Browser (React 19, RTL, Arabic/English) ──JSON API──► FastAPI (Python 3.13)
+  1. Guards: employment decisions, contact requests, prompt injection → fixed refusal (model never sees them)
+  2. Tool choice: LLM agent (validated args) or rule router (offline)
+  3. Server runs the tool:
+       answer_from_rows: e5 embeddings + BM25 → rank fusion → confidence band
+         AI mode: answerer → verifier → citation judge ∥ coverage judge
+                  agree (≥0.7) → send · else one escalation to a stronger model → verifier
+                  any failure → offline answer
+       scenarios · feedback · progress · plan · quiz · small talk · refuse
+  4. Reply + sources + "How I answered" trace
+Store: Supabase (Postgres, RLS on) │ local SQLite fallback
+Background: email sender (Gmail SMTP) · deadline-reminder loop
 ```
 
-## 3. Tools and AI components
+## 3. AI and retrieval components
+- **Retrieval:** `multilingual-e5-small` (int8 ONNX, runs locally) plus BM25 over normalised Arabic, fused with reciprocal-rank fusion.
+- **Confidence:** a margin against out-of-scope examples sorts each question into one of three bands: answer, "not confirmed", or refuse.
+- **Language model (optional):** `deepseek-v4.1-flash` via OpenRouter, with `glm-5.3` for escalation.
+  - Both models are pinned; temperature is 0.
+  - Data collection is denied on every call.
+  - A **USD 3 cap is enforced in code**. Actual spend for the whole build was about USD 0.45.
+- **Verifier:** every model reply must pass these checks, or it is dropped and the offline answer is used:
+  - cited ids are rows that were actually sent to the model;
+  - each id has a verbatim quote;
+  - every number exists in the cited rows;
+  - no phone number, email or link.
 
-- **Retrieval:** `intfloat/multilingual-e5-small` (int8 ONNX, local) plus hand-written BM25 over
-  normalised Arabic, fused by reciprocal-rank fusion. The five-values list is built by the server.
-- **Offline confidence:** margin = best row similarity minus best similarity to 42 out-of-scope
-  examples. Row similarity also uses four anchor questions per row, written from the row text only.
-  Two thresholds, chosen on DEV only, give three bands: answer, not confirmed, refuse.
-- **Guards:** whole-word patterns on normalised text for employment decisions (pay, firing, probation
-  outcome) and contact requests. They run first, are final, and a guarded message never reaches the model.
-- **Agent tools:** answer from rows, start scenario, give feedback, end scenario, propose progress,
-  show plan, start quiz, greet, refuse. Progress changes only after the user confirms.
-- **LLM (optional):** `deepseek/deepseek-v4.1-flash` via OpenRouter, pinned, temperature 0, seed 42,
-  reasoning off, USD 3 cap in code; `data_collection: deny` on every call.
-- **Answer panel (knowledge questions):** flash runs a sanitizer and the answerer in parallel, then a
-  citation judge and a coverage judge in parallel on the verified draft. Both agree with confidence
-  ≥ 0.7: the draft is sent; otherwise one escalation to `z-ai/glm-5.3` (low reasoning effort). Judges
-  never add text or ids; a citation-judge "extra row" only triggers escalation. A refusal is reopened
-  only in retrieval band "answer". Other turns use one flash call or none. Turn budget 9 s with the
-  panel (5 s otherwise); stages are cached only after validation.
-- **Verifier:** cited ids must be rows sent; each id needs a verbatim quote of six or more characters;
-  every number must appear in the cited rows or the question; no contacts or links; at most 700
-  characters. Every reply, flash or GLM, must pass; failure falls back to the offline result. Only
-  verified replies are cached.
-- **Scenario feedback:** the model marks checklist items met or missing; the server writes the
-  feedback from fixed sentences and the scenario's value. Offline, the user picks one of three replies
-  or sees the suggested response.
-- **Live knowledge editing:** edits re-index immediately and carry a «معدّل مباشرة» badge.
-- **Hardening:** cross-origin writes refused; keys never logged or sent to the browser.
+  Only verified replies are cached.
+- **Scenario feedback:** the model marks checklist items; the server writes the feedback from fixed sentences tied to a company value. The feedback is **never a score**.
+- **Rumour Check:** each sentence of something a colleague said is checked against the knowledge base. It is marked confirmed, different number (the source value shown), or not in the source. On 24 test rumours there were **0 false "confirmed"**.
+- **Answer Recall:** when the admin edits a fact, every intern who was already told the old value sees the exact change (17 → 18) and a button to ask again. Before saving, the admin sees who will be affected.
 
-Stack: FastAPI, Pydantic, httpx, NumPy, ONNX Runtime, tokenizers; React, Vite, Tailwind CSS, IBM
-Plex Sans Arabic. No training or fine-tuning.
+## 4. Features
+**Intern side:**
+- Sign-in by name.
+- Grounded Q&A with sources.
+- Six practice scenarios, including a "customer pushes back" follow-up.
+- A *suggested* 90-day plan.
+- Progress tracking, either by ticking items or by telling the assistant.
+- A "before your first day" card.
+- Rumour Check.
+- Questions to the mentor, sent only when the intern presses Send.
+- Tasks with deadlines.
+- Quizzes with an end-of-quiz review.
+- A full English interface.
+- Jordanian dialect understood.
+- Phone-ready, checked at 360 px.
 
-## 4. Evaluation
+**Admin / mentor side:**
+- **Knowledge-base editor:** edits re-index instantly, with "try now" and restore-official.
+- **Document import** (.txt/.md/.csv/.docx/.pdf): split into passages, approved by the admin, then added as K-rows.
+- **Interns list and detail:** completion and counts only, never chat text.
+- **Questions inbox:** an answer either becomes a new knowledge-base row or is a private reply to one intern.
+- **Mentor requests:** comments and files both ways, deadlines, and an **email reminder 10 minutes before** a deadline.
+- **Quiz builder:**
+  - Questions are written by hand, drafted by the model from a K-row, or uploaded as CSV.
+  - Every question is checked against its row (for example, a number not in the row is rejected).
+  - Practice or checkpoint mode, audience, opening at a plan %, and a time limit.
+- **Quiz runs:**
+  - Stored on the server, so the intern can resume on any device.
+  - A timer enforced by the server.
+  - During a checkpoint or timed quiz, chat and Rumour Check are locked on the server.
+- **Final report:** all interns side by side (plan %, tasks on time / late / overdue, checkpoint results) and a printable page per intern. It has **no automatic ranking**: the mentor decides.
+- **Email log and knowledge-base coverage card:** anonymous counts only.
 
-DEV (154 questions: official FAQ, paraphrases, unanswerable, guard, multi-row, scenario and
-progress cases) drove every threshold and prompt. Held-out 2 (50 questions, a new set written blind
-and sealed) was run once on frozen commit `e45fb7b` after all panel tuning. Held-out 1, an earlier
-sealed set, was run once before the panel (freeze `c6ea919`): AI 43/50, offline 25/50. The jury test
-file was never used for tuning.
+## 5. Evaluation
+Thresholds and prompts were tuned only on the DEV set (154 questions). Held-out 2 is 50 questions, written blind and sealed. It was run **once** on a frozen commit after all tuning. The jury test file was never used for tuning.
 
-| Set · mode | Correct | Answerable refused | Unanswerable refused (or not confirmed) | Invented contacts |
+| Set · mode | Correct | Answerable refused | Unanswerable refused | Invented contacts |
 |---|---|---|---|---|
-| DEV · offline | 106/154 | 0/80 | 13/43 (40/43) | 0 |
-| DEV · AI (panel) | 152/154 | 0/80 | 43/43 | 0 |
-| Held-out 2 · offline | 26/50 | 1/30 | 4/10 (10/10) | 0 |
-| Held-out 2 · AI (panel) | 45/50 | 0/30 | 10/10 | 0 |
+| DEV · offline | 106/154 | 0/80 | 13/43 (40/43 incl. "not confirmed") | 0 |
+| DEV · AI | 152/154 | 0/80 | 43/43 | 0 |
+| Held-out 2 · offline | 26/50 | 1/30 | 4/10 (10/10 incl. "not confirmed") | 0 |
+| Held-out 2 · AI | **45/50 (90%)** | 0/30 | 10/10 | 0 |
 
-DEV AI was 142/154 before the panel. On held-out 2, AI mode answered 45/50 (28/30 answerable); the goal
-of ≥ 46/50 set on 11 Nov was **missed by one**. The 5 misses: 2 answerable answered wrong, 2 guard
-rows, 1 progress row (the last three are outside the panel). Offline is clearly weaker on unseen
-wording (26/50). AI latency p50 2.6 s, p95 5.7 s; 11 of 41 panel turns escalated (27%); about 0.085 USD
-per 100 questions. DEV offline top-1 retrieval 72/80, offline p95 ≈ 14 ms. Jury block (reported only):
-9/9 in both modes. Red team: AI 17/20 (was 16/20), offline 19/20; every safety check held, misses are
-over-refusals (RT07, RT09, RT20). Browser e2e 2/2, AI API smoke OK, 683 Python tests.
+**Other measurements:**
+- **AI latency:** p50 2.6 s, p95 5.7 s; 27% of turns escalated.
+- **Cost:** about USD 0.085 per 100 questions.
+- **Offline answers:** about 14 ms.
+- **Red team (20 attacks):** offline 19/20, AI 17/20. Every safety check held; the misses are over-refusals.
+- **Without our grounding**, the same model said "founded 1995, 12 showrooms". The truth is 1991 and 17.
+- **Quality gates:**
+  - 1543 Python tests and 492 web tests;
+  - browser end-to-end storyboard 6/6;
+  - lint and type checks;
+  - a secret scan before every push.
 
-## 5. Limitations
+## 6. Data, privacy and safety
+- **Knowledge:** only the official knowledge base. It is hashed and never edited; edits are stored as a separate history.
+- **The fictional parts:** scenarios, the plan, the quiz and the personas are competition examples, not Dada procedures.
+- **What is stored:**
+  - No chat text on the server, except a question the intern chooses to send.
+  - Turn logs keep metadata only.
+  - The role never reaches the Q&A prompt.
+- **Supabase:** Row Level Security is on and there are no public policies. The server uses the secret key, which never reaches the browser.
+- **Hardening:**
+  - Cross-origin writes are refused, except for allow-listed front ends.
+  - Request size limits.
+  - Keys are never logged.
+  - The admin uses signed session tokens.
+- **No employment decisions:** hiring, firing, pay and probation questions get the fixed refusal.
 
-- Offline mode refuses few unseen unanswerable questions outright (held-out 2: 4/10); the rest get
-  "not confirmed" with the closest row.
-- AI mode missed its held-out 2 goal by one; guard and progress misses are not handled by the panel.
-- Offline answers cannot combine rows or answer part of a question (DEV multi-row 0/3).
-- Rows added live are matched less confidently offline.
-- The verifier checks grounding, not quality of wording.
-- The knowledge editor and the manager view use one shared admin password, not per-person accounts.
-- 18 rows only; no HR procedures or employment decisions.
+## 7. Stack and deployment
+- **Backend:** FastAPI, Pydantic, httpx, NumPy, ONNX Runtime, tokenizers, pypdf.
+- **Frontend:** React 19, Vite, Tailwind 4, IBM Plex Sans Arabic.
+- **Data:** Supabase (Postgres), with SQLite as the fallback.
+- **No training or fine-tuning.**
+- **Live demo:** **https://dada-academy.netlify.app**
+  - The web client is on Netlify. It forwards `/api` to the FastAPI server on Render, which runs always-on.
+  - Data is in Supabase.
+  - Interns sign in by picking a name; the admin password is **`dada2026`**.
+- **Run locally:** `start.bat`, a single command that creates the environment, installs packages and opens the browser. It works offline without any key.
+- **Source:** github.com/Talaljaber/onboarding-assistant
 
-## 6. AI use, knowledge sources and privacy
-
-- **Knowledge:** only the official `knowledge_base.csv`, hashed and unchanged; our own files are marked
-  `source=ours`. Scenarios, the plan and the quiz are fictional competition examples, not SOPs. Some
-  facts are paraphrased from Dada materials and need Dada's approval before external release.
-- **What leaves the laptop:** without a key, nothing goes to an AI service (a socket tripwire proves
-  this). With a key: the question (plus the previous one for short follow-ups), the live rows and
-  practice replies, to OpenRouter with data collection denied; on escalated turns GLM-5.3 also sees the
-  question and rows. Never the role, alias or progress.
-- **Stored:** Supabase (region to be confirmed) holds the KB with history, demo aliases, progress,
-  attempt ids and turn metadata, **no chat text**; a local SQLite file takes over, without sync, when it
-  is unreachable. The browser keeps progress and the thread locally.
-- **No real employee or customer data.** The app makes no employment decisions.
-
-Details: `docs/privacy_ai_note.md`.
+## 8. Limitations
+- Offline mode gives "not confirmed" rather than a clean refusal for many unseen unanswerable questions, and it cannot combine several rows.
+- AI mode missed its held-out goal of 46/50 by one.
+- The knowledge base has 18 official rows only.
+- The demo sign-in has no per-person accounts: interns pick their name and the admin uses one password.
+- The verifier checks grounding, not the quality of the wording.
