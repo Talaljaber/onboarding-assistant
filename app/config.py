@@ -9,6 +9,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -98,6 +99,18 @@ class Settings(BaseSettings):
     admin_email: str | None = None
     # P21.1: a request's deadline reminder goes to the intern this many minutes before the deadline.
     reminder_minutes: int = Field(default=10, ge=1, le=120)
+    # P24.1: other sites allowed to send writes (comma-separated origins, e.g. the Netlify front end that
+    # forwards /api/* here). Empty = same origin only.
+    allowed_origins: str = ""
+
+    def allowed_origin_hosts(self) -> frozenset[str]:
+        """The host[:port] of each ALLOWED_ORIGINS entry, lower-case."""
+        out = set()
+        for item in self.allowed_origins.split(","):
+            item = item.strip().lower().rstrip("/")
+            if item:
+                out.add(urlsplit(item).netloc if "://" in item else item)
+        return frozenset(h for h in out if h)
 
     @field_validator("llm_model")
     @classmethod

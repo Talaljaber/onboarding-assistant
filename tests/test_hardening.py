@@ -386,6 +386,21 @@ def test_cross_origin_writes_are_refused(client: TestClient, origin: str) -> Non
     assert client.get("/api/health", headers={"Origin": origin}).status_code == 200  # reads are harmless
 
 
+def test_allowed_origin_writes_pass_and_others_stay_refused() -> None:
+    """P24.1: a front end on another host that proxies /api here (ALLOWED_ORIGINS) may write."""
+    from app.api import cross_origin
+    from app.config import Settings
+
+    allowed = Settings(allowed_origins=" https://dada-academy.netlify.app/ , example.org:8443").allowed_origin_hosts()
+    assert allowed == {"dada-academy.netlify.app", "example.org:8443"}
+    api = b"onboarding-assistant-u8uz.onrender.com"
+    assert not cross_origin(b"https://dada-academy.netlify.app", api, allowed)
+    assert cross_origin(b"https://evil.example", api, allowed)
+    assert cross_origin(b"null", api, allowed)
+    assert cross_origin(b"https://dada-academy.netlify.app", api)  # not configured = refused
+    assert Settings(allowed_origins="").allowed_origin_hosts() == frozenset()
+
+
 def test_same_origin_writes_pass(client: TestClient) -> None:
     r = client.post("/api/chat", json={"message": QUESTION}, headers={"Origin": "http://testserver"})
     assert r.status_code == 200

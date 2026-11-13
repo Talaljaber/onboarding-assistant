@@ -95,7 +95,7 @@ def create_app(settings: Settings | None = None, *, agent: Agent | None = None, 
     app.state.mailer = Mailer(s, st)  # P18.2: email notifications (skipped while OFFLINE or unconfigured)
     app.state.reminders = Reminders(st, app.state.mailer, s.reminder_minutes)  # P21.1: deadline reminders
 
-    install_api(app)
+    install_api(app, s.allowed_origin_hosts())
     # Every API router is included above this line: the catch-all and the web mount must stay last.
     _mount_web(app, DIST)
     log_event("startup", version=__version__, mode="llm" if agent.llm_on() else "offline",

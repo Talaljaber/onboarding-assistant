@@ -22,6 +22,9 @@ services:
       # this low and set a credit limit on the OpenRouter key itself.
       - key: LLM_BUDGET_USD
         value: "1.0"
+      # The Netlify front end forwards /api/* here; its browser writes carry that origin.
+      - key: ALLOWED_ORIGINS
+        value: https://dada-academy.netlify.app
       - key: ADMIN_PASSWORD
         sync: false
       - key: SUPABASE_URL

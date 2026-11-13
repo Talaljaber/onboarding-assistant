@@ -179,12 +179,15 @@ def _error(code: str, status: int, message: str, request: Request, field: str | 
     return JSONResponse(error_body(code, message, _rid(request), field), status_code=status)
 
 
-def cross_origin(origin: bytes | None, host: bytes | None) -> bool:
+def cross_origin(origin: bytes | None, host: bytes | None, allowed: frozenset[str] = frozenset()) -> bool:
     """True when a browser sent an Origin that is not this server (CSRF from another site, `null`).
-    Requests without Origin (curl, tests, the smoke script) are not browser cross-site requests."""
+    Requests without Origin (curl, tests, the smoke script) are not browser cross-site requests.
+    `allowed` = host[:port] of trusted front ends that proxy /api here (ALLOWED_ORIGINS)."""
     if origin is None:
         return False
     netloc = urlsplit(origin.decode("latin-1").strip()).netloc.lower()
+    if netloc and netloc in allowed:
+        return False
     return not netloc or netloc != (host or b"").decode("latin-1").strip().lower()
 
 
@@ -220,9 +223,11 @@ class RequestContextMiddleware:
     """Pure ASGI: request id + X-Request-Id, security headers, the 32 KB body limit (before parsing),
     last-resort 500 (generic body; the exception type goes to the log, never a stack trace)."""
 
-    def __init__(self, app: ASGIApp, max_body: int = BODY_MAX_BYTES) -> None:
+    def __init__(self, app: ASGIApp, max_body: int = BODY_MAX_BYTES,
+                 allowed_origins: frozenset[str] = frozenset()) -> None:
         self.app = app
         self.max_body = max_body
+        self.allowed_origins = allowed_origins
 
     async def _json(self, send: Send, status: int, body: dict[str, Any], rid: str) -> None:
         raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
@@ -263,7 +268,7 @@ class RequestContextMiddleware:
         app_receive: Receive = receive
         if scope.get("method", "GET") in _BODY_METHODS:
             # No CORS: refuse writes a page on another origin makes from the user's browser.
-            if cross_origin(headers.get(b"origin"), headers.get(b"host")):
+            if cross_origin(headers.get(b"origin"), headers.get(b"host"), self.allowed_origins):
                 await self._json(send, 400, error_body("validation_error", "cross-origin request refused", rid,
                                                        "origin"), rid)
                 return
@@ -1814,9 +1819,9 @@ def add_quiz_run_routes(r: APIRouter) -> None:
         return _json(runs_view.review(run, attempts, content, mode))
 
 
-def install_api(app: FastAPI) -> None:
+def install_api(app: FastAPI, allowed_origins: frozenset[str] = frozenset()) -> None:
     """Middleware, error handlers and every `/api` route (call before mounting the web client)."""
-    app.add_middleware(RequestContextMiddleware)
+    app.add_middleware(RequestContextMiddleware, allowed_origins=allowed_origins)
     _install_errors(app)
     app.include_router(build_router())
 
