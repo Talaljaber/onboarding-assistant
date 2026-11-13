@@ -1,9 +1,14 @@
 # Netlify serves the committed web/dist (built by the release script, so no build runs here) and
 # forwards every /api/* call to the Render API, so the client stays same-origin with no code change.
+# Base is web/ so Netlify does not try to install the Python server's requirements.txt.
 # Replace the host below if Render gives the service a different URL.
 [build]
-  publish = "web/dist"
+  base = "web"
+  publish = "dist"
   command = ""
+
+[build.environment]
+  NODE_VERSION = "22"
 
 [[redirects]]
   from = "/api/*"
