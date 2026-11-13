@@ -1,0 +1,42 @@
+# Render blueprint for the API (FastAPI). Netlify serves the web client and forwards /api/* here
+# (netlify.toml). Secrets are typed into the Render dashboard (sync: false), never committed.
+# Free plan: the server sleeps after 15 idle minutes (first request ~1 min) and outbound SMTP is
+# blocked, so emails and deadline reminders need a paid instance.
+services:
+  - type: web
+    name: dada-academy-api
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.1
+      - key: HOST
+        value: 0.0.0.0
+      - key: STORE
+        value: auto
+      # The spend counter lives on the server's disk and restarts at zero on each deploy, so keep
+      # this low and set a credit limit on the OpenRouter key itself.
+      - key: LLM_BUDGET_USD
+        value: "1.0"
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false

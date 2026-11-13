@@ -1,0 +1,17 @@
+# Netlify serves the committed web/dist (built by the release script, so no build runs here) and
+# forwards every /api/* call to the Render API, so the client stays same-origin with no code change.
+# Replace the host below if Render gives the service a different URL.
+[build]
+  publish = "web/dist"
+  command = ""
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://dada-academy-api.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
